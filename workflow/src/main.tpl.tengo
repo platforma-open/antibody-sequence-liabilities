@@ -107,7 +107,24 @@ wf.body(func(args) {
 					"pl7.app/table/orderPriority": "100"
 				}
 			}
-		}	
+		},
+		{
+			column: "CDR3 aa",
+			id: "CDR3aa",
+			spec: {
+				name: "pl7.app/vdj/CDR3aa",
+				valueType: "String",
+				domain: {
+					"pl7.app/vdj/clonotypingRunId": data.spec.domain["pl7.app/vdj/clonotypingRunId"],
+					"pl7.app/vdj/chain": data.spec.domain["pl7.app/vdj/chain"]
+				},
+				annotations: {
+					"pl7.app/label": "CDR3 aa",
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "101"
+				}
+			}
+		}
 	]
 	
 	columnsNames := ["CDR3 aa", "CDR1 aa", "CDR2 aa", "FR1 aa"]
