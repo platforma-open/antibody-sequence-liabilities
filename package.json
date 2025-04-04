@@ -1,0 +1,20 @@
+{
+  "name": "@platforma-open/milaboratories.antibody sequence liabilities",
+  "version": "1.0.0",
+  "scripts": {
+    "pretty": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json,vue}\"",
+    "build:dev": "PL_PKG_DEV=local turbo run build",
+    "test": "PL_PKG_DEV=local turbo run test --concurrency 1",
+    "watch": "turbo watch build",
+    "lint": "pnpm -r lint"
+  },
+  "files": [
+    "index.d.ts",
+    "index.js"
+  ],
+  "devDependencies": {
+    "turbo": "catalog:",
+    "@changesets/cli": "catalog:"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

@@ -1,0 +1,175 @@
+wf := import("@platforma-sdk/workflow-tengo:workflow")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets:= import("@platforma-sdk/workflow-tengo:assets")
+xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+pframes := import("@platforma-sdk/workflow-tengo:pframes")
+pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
+text := import("text")
+liabilitiesCalcSw := assets.importSoftware("@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script:main")
+
+
+wf.prepare(func(args) {
+	clonotypingRunId := args.clonotypingRunId
+	chain := args.chain
+
+	query := func(label) {
+
+		r := {
+			type: "And",
+			operands:  [
+				{
+					type: "AnnotationPattern",
+					annotation: "pl7.app/label",
+					pattern: label
+				},
+				{
+					type: "Domain",
+					domain: {
+						"pl7.app/alphabet": "aminoacid",
+						"pl7.app/vdj/chain": chain,
+						"pl7.app/vdj/clonotypingRunId": clonotypingRunId
+
+					},
+					domainExactMatch: false
+				}
+			]
+		}
+
+		return r
+	}
+
+	ops := {
+		single: true
+	}
+
+	return  { 
+		data: wf.resolve(args.inputAnchor),
+		aaCDR3Col: wf.query(query("CDR3 aa"), ops),
+		aaCDR1Col: wf.query(query("CDR1 aa"), ops),
+		aaCDR2Col: wf.query(query("CDR2 aa"), ops),
+		aaFR1Col: wf.query(query("FR1 aa"), ops)
+	}
+})
+
+wf.body(func(args) {
+	data := args.data
+	aaCDR3Col := args.aaCDR3Col
+	aaCDR1Col := args.aaCDR1Col
+	aaCDR2Col := args.aaCDR2Col
+	aaFR1Col := args.aaFR1Col
+	clonotypingRunId := args.clonotypingRunId
+	chain := args.chain
+	
+	clonotypeKeySpec := data.spec.axesSpec[1]
+
+	columnsToExport := [aaCDR3Col, aaCDR1Col, aaCDR2Col, aaFR1Col]
+	tsv := xsv.exportFrame(columnsToExport, "tsv", {})
+
+	liabilitiesCalcCmd := exec.builder().
+		software(liabilitiesCalcSw).
+		addFile("input.tsv", tsv).
+		arg("input.tsv").
+		saveFile("result.tsv").
+		arg("result.tsv").
+		run()
+
+	result := liabilitiesCalcCmd.getFile("result.tsv")
+
+	trace := pSpec.makeTrace(data.spec,
+		{type: "milaboratories.antibody-sequence-liabilities", importance: 30, label: "Liabilities risk"})
+	
+	axes := [
+		{
+			column: "Clonotype key",
+			id: "clonotypeKey",
+			spec: clonotypeKeySpec
+		}
+	]
+
+	columns := [
+		{
+			column: "Liabilities risk",
+			id: "liabilitiesRisk",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/liabilitiesRisk",
+				valueType: "String",
+				domain: {
+					"pl7.app/vdj/clonotypingRunId": data.spec.domain["pl7.app/vdj/clonotypingRunId"],
+					"pl7.app/vdj/chain": data.spec.domain["pl7.app/vdj/chain"]
+				},
+				annotations: {
+					"pl7.app/trace": trace.valueStr,
+					"pl7.app/label": "Liabilities risk",
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "100"
+				}
+			}
+		}	
+	]
+	
+	columnsNames := ["CDR3 aa", "CDR1 aa", "CDR2 aa", "FR1 aa"]
+	orderPriority := 99
+	for colName in columnsNames {
+		columns += [
+			{
+			column: colName + " liabilities",
+			id: text.split(colName, " ")[0] + "liabilities",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/" + text.split(colName, " ")[0] + "liabilities",
+				valueType: "String",
+				annotations: {
+					"pl7.app/label": colName + " liabilities",
+					"pl7.app/table/orderPriority": string(orderPriority)
+					}
+				}
+			},
+			{
+			column: colName + " risk",
+			id: text.split(colName, " ")[0] + "risk",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/" + text.split(colName, " ")[0] + "risk",
+				valueType: "String",
+				annotations: {
+					"pl7.app/label": colName + " risk",
+					"pl7.app/table/orderPriority": string(orderPriority-1)
+					}
+				}
+			}
+		]
+		orderPriority -= 1
+	}
+
+	outputSpecs := 
+		{
+			axes: axes,
+			columns: columns,
+			storageFormat: "Binary",
+			partitionKeyLength: 0
+		}
+	
+	outputLiabilities := xsv.importFile(
+		result,
+		"tsv",
+		outputSpecs
+	)
+
+	return {
+		outputs: {
+			outputLiabilities: pframes.exportFrame(outputLiabilities)
+		},
+
+		exports: {
+			exportLiabilities: {
+				data: outputLiabilities["liabilitiesRisk.data"],
+				spec: outputLiabilities["liabilitiesRisk.spec"]
+			}
+		}
+	}
+})
