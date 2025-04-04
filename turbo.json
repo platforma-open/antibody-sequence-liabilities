@@ -1,0 +1,20 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["tsconfig.json"],
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$"],
+      "env": ["PL_PKG_DEV"],
+      "outputs": ["./dist/**"],
+      "dependsOn": ["^build"]
+    },
+    "build:dev": {
+      "dependsOn": ["build"],
+      "outputs": ["./dist/**"]
+    },
+    "test": {
+      "dependsOn": ["^build:dev", "build"],
+      "passThroughEnv": ["PL_ADDRESS", "PL_TEST_PASSWORD", "PL_TEST_USER", "PL_TEST_PROXY", "DEBUG"]
+    }
+  }
+}
