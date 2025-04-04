@@ -61,16 +61,16 @@ export const model = BlockModel.create()
       return undefined;
     }
     
-    const upstream = ctx.resultPool 
-      .getData()
-      .entries.map((v) => v.obj)
-      .filter(isPColumn)
-      .filter((column) => column.spec.domain?.["pl7.app/vdj/clonotypingRunId"] === ctx.args.clonotypingRunId)
-      .filter((column) => column.spec.domain?.["pl7.app/vdj/chain"] === ctx.args.chain)
-      .filter((column) => column.spec.domain?.["pl7.app/alphabet"] === "aminoacid")
-      .filter((column) => column.spec.domain?.["pl7.app/vdj/feature"] === "CDR3");
+    //const upstream = ctx.resultPool 
+    //  .getData()
+    //  .entries.map((v) => v.obj)
+    //  .filter(isPColumn)
+    //  .filter((column) => column.spec.domain?.["pl7.app/vdj/clonotypingRunId"] === ctx.args.clonotypingRunId)
+    //  .filter((column) => column.spec.domain?.["pl7.app/vdj/chain"] === ctx.args.chain)
+    //  .filter((column) => column.spec.domain?.["pl7.app/alphabet"] === "aminoacid")
+    //  .filter((column) => column.spec.domain?.["pl7.app/vdj/feature"] === "CDR3");
 
-    pCols.push(...upstream);
+    //pCols.push(...upstream);
 
     return {
       table: createPlDataTable(ctx, pCols, ctx.uiState?.tableState),

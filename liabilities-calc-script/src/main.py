@@ -11,15 +11,15 @@ CDR_LIABILITIES = {
     "Deamidation (N[AHNT])": (r"N[AHNT]", "Medium"),
     "Hydrolysis (NP)": (r"NP", "Medium"),
     "Fragmentation (TS)": (r"TS", "Medium"),
-    "Tryptophan Oxidation (W)": (r"W", "Medium"),
+   # "Tryptophan Oxidation (W)": (r"W", "Medium"),
     "Methionine Oxidation (M)": (r"M", "Medium"),
     "Deamidation ([STK]N)": (r"[STK]N", "Low"),
 }
 
 # Define cysteine checks for all sequences (with high severity)
 EXPECTED_CYSTEINE_POSITIONS = {
-    "aaSeqFR1": [23],  # Framework 1, position 23
-    "aaSeqCDR3": [1],  # CDR3, position 1
+    "FR1 aa": [22],  # Framework 1, position 23
+    "CDR3 aa": [1],  # CDR3, position 1
 }
 CYSTEINE_LIABILITIES = {
     "Missing Cysteines": "High",
@@ -32,7 +32,7 @@ EXPECTED_COLUMNS = ["CDR3 aa", "CDR1 aa", "CDR2 aa", "FR1 aa"]
 # Risk classification function for a single region's liabilities
 def classify_risk(liabilities):
     if liabilities == "None":
-        return "No risk"
+        return "None"
     liability_list = liabilities.split(", ")
     if any(liab in CYSTEINE_LIABILITIES and CYSTEINE_LIABILITIES[liab] == "High" for liab in liability_list):
         return "High"
