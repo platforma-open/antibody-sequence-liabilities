@@ -192,6 +192,7 @@ wf.body(func(args) {
 				annotations: {
 					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "Liabilities risk",
+					"pl7.app/vdj/isScore": "true",
 					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "100"
 				}
