@@ -16,6 +16,7 @@ export type BlockArgs = {
   clonotypingRunId?: string;
   chain?: string;
   title?: string;
+  isSingleCell?: boolean;
 };
 
 export type UiState = {
@@ -24,7 +25,7 @@ export type UiState = {
 };
 
 export const model = BlockModel.create()
-  .withArgs({ inputAnchor: undefined, clonotypingRunId: undefined, chain: undefined, title: undefined })
+  .withArgs({ inputAnchor: undefined })
 
   .withUiState<UiState>({
     blockTitle: 'Antibody Sequence Liabilities',
@@ -37,7 +38,7 @@ export const model = BlockModel.create()
     },
   })
 
-  .argsValid((ctx) => ctx.args.inputAnchor !== undefined)
+ // .argsValid((ctx) => ctx.args.inputAnchor !== undefined)
 
   .output('inputOptions', (ctx) =>
     ctx.resultPool.getOptions([{
@@ -59,7 +60,7 @@ export const model = BlockModel.create()
     const pCols = ctx.outputs?.resolve('outputLiabilities')?.getPColumns();
     if (pCols === undefined) {
       return undefined;
-    }
+      }
     
     //const upstream = ctx.resultPool 
     //  .getData()
@@ -77,7 +78,7 @@ export const model = BlockModel.create()
     };
   })
 
-  .title((ctx) => (ctx.args.title ? `Antibody Sequence Liabilities - ${ctx.args.title}` : 'Antibody Sequence Liabilities'))
+//  .title((ctx) => (ctx.args.title ? `Antibody Sequence Liabilities - ${ctx.args.title}` : 'Antibody Sequence Liabilities'))
 
   .sections((_) => [
     { type: 'link', href: '/', label: 'Table' },
