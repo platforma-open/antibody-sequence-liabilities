@@ -15,11 +15,16 @@ function setInput(inputRef?: PlRef) {
 
   const title = app.model.outputs.inputOptions?.find((o) => plRefsEqual(o.ref, inputRef))?.label;
 
-  if (title?.indexOf('Heavy') !== -1) {
-    app.model.args.chain = 'IGHeavy';
-  } else if (title?.indexOf('Light') !== -1) {
-    app.model.args.chain = 'IGLight';
+  if (inputRef.name.split('/')[1] == "abundance") {
+    app.model.args.isSingleCell = true;
+    app.model.args.chain = undefined;
+  } else {
+    app.model.args.isSingleCell = false;
+    app.model.args.chain = inputRef.name.split('/')[1];
   }
+                               
+  // Set title to dataset label
+  app.model.args.title = title;
 }
 
 const tableSettings = computed<PlDataTableSettings>(() => ({
@@ -28,7 +33,7 @@ const tableSettings = computed<PlDataTableSettings>(() => ({
  // sheets: app.model.outputs.pt?.sheets,
 }));
 
-const settingsIsShown = ref(app.model.outputs.inputAnchor === undefined);
+const settingsIsShown = ref(app.model.args.inputAnchor === undefined);
 
 </script>
 
@@ -44,6 +49,8 @@ const settingsIsShown = ref(app.model.outputs.inputAnchor === undefined);
       </PlBtnGhost>
     </template>
     <PlAgDataTable v-model="app.model.ui.tableState" :settings="tableSettings" show-export-button />
+
+    {{ app.model.args.isSingleCell }}
   </PlBlockPage>
 
   <PlSlideModal v-model="settingsIsShown">
@@ -57,6 +64,5 @@ const settingsIsShown = ref(app.model.outputs.inputAnchor === undefined);
       @update:model-value="setInput"
     />
 
-    <PlBtnGroup v-model="app.model.args.weight" :options="weightOptions" label="Clonotype weight"/>
   </PlSlideModal>
 </template>

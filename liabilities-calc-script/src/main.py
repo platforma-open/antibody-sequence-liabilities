@@ -11,7 +11,7 @@ CDR_LIABILITIES = {
     "Deamidation (N[AHNT])": (r"N[AHNT]", "Medium"),
     "Hydrolysis (NP)": (r"NP", "Medium"),
     "Fragmentation (TS)": (r"TS", "Medium"),
-   # "Tryptophan Oxidation (W)": (r"W", "Medium"),
+    "Tryptophan Oxidation (W)": (r"W", "Medium"),  # Now uncommented
     "Methionine Oxidation (M)": (r"M", "Medium"),
     "Deamidation ([STK]N)": (r"[STK]N", "Low"),
 }
@@ -25,9 +25,6 @@ CYSTEINE_LIABILITIES = {
     "Missing Cysteines": "High",
     "Extra Cysteines": "High",
 }
-
-# Expected sequence columns
-EXPECTED_COLUMNS = ["CDR3 aa", "CDR1 aa", "CDR2 aa", "FR1 aa"]
 
 # Risk classification function for a single region's liabilities
 def classify_risk(liabilities):
@@ -47,16 +44,23 @@ def classify_risk(liabilities):
 # Liability detection function for a given sequence and region name.
 # If no liabilities are found, it returns "None".
 def identify_liabilities(sequence, region_name):
-    # Check if sequence is empty or only whitespace
     if not sequence or sequence.strip() == "":
         return "None"
 
     liabilities = []
-    if "CDR" in region_name:
+    # Apply CDR-specific regex if the column name indicates a CDR region.
+    if any(sub in region_name for sub in ["CDR"]):
         for liability, (pattern, severity) in CDR_LIABILITIES.items():
-            if re.search(pattern, sequence):
-                liabilities.append(liability)
+            # For Tryptophan Oxidation in CDR3, ignore the last tryptophan.
+            if liability == "Tryptophan Oxidation (W)" and "CDR3" in region_name:
+                indices = [m.start() for m in re.finditer(r'W', sequence)]
+                if any(idx < len(sequence) - 1 for idx in indices):
+                    liabilities.append(liability)
+            else:
+                if re.search(pattern, sequence):
+                    liabilities.append(liability)
 
+    # Perform cysteine checks using expected positions if available.
     expected_positions = EXPECTED_CYSTEINE_POSITIONS.get(region_name, [])
     missing_cysteines = [pos for pos in expected_positions if pos <= len(sequence) and sequence[pos - 1] != "C"]
     extra_cysteines = sequence.count("C") - len(expected_positions)
@@ -88,30 +92,31 @@ def main():
 
     df = pl.read_csv(args.input_tsv, separator="\t", infer_schema_length=1000, ignore_errors=True)
 
-    # Filter out rows where CDR3 aa is empty, contains "*" or "_" or doesn't start with "C"
-    df = df.filter(
-        (pl.col("CDR3 aa").is_not_null()) &
-        (pl.col("CDR3 aa") != "") &
-        (pl.col("CDR3 aa").str.starts_with("C")) &
-        ~(pl.col("CDR3 aa").str.contains(r"\*")) &
-        ~(pl.col("CDR3 aa").str.contains("_"))
-    )
+    # Define keywords to search in column names.
+    KEYWORDS = ["CDR3", "CDR1", "CDR2", "FR1"]
 
-    available_columns = [col for col in EXPECTED_COLUMNS if col in df.columns]
+    # Identify columns whose names contain any of the keywords.
+    available_columns = [col for col in df.columns if any(keyword in col for keyword in KEYWORDS)]
     if not available_columns:
         print("No recognized sequence columns found in the input file.")
         return
 
-    # List to keep track of the names of risk columns
-    risk_columns = []
+    # Use the first CDR3 column for filtering invalid sequences.
+    cdr3_columns = [col for col in available_columns if "CDR3" in col]
+    if cdr3_columns:
+        primary_cdr3 = cdr3_columns[0]
+        df = df.filter(
+            (pl.col(primary_cdr3).is_not_null()) &
+            (pl.col(primary_cdr3) != "") &
+            (pl.col(primary_cdr3).str.starts_with("C")) &
+            ~(pl.col(primary_cdr3).str.contains(r"\*")) &
+            ~(pl.col(primary_cdr3).str.contains("_"))
+        )
 
-    # Process each expected sequence column
+    # Compute liabilities and risk columns for each identified sequence column.
     for col in available_columns:
         liability_col = f"{col} liabilities"
         risk_col = f"{col} risk"
-        risk_columns.append(risk_col)
-
-        # For columns other than "CDR3 aa", if the sequence is empty, assign "None" for liabilities.
         df = df.with_columns(
             pl.col(col)
             .cast(str)
@@ -124,21 +129,74 @@ def main():
             .alias(risk_col)
         )
 
-    # Create overall "Liabilities risk" column by aggregating risk columns from all regions.
+    # Create overall "Liabilities risk" column by aggregating risk columns.
+    risk_colnames = [col for col in df.columns if col.endswith(" risk")]
     df = df.with_columns(
-        pl.struct(risk_columns).map_elements(overall_risk_func, return_dtype=str).alias("Liabilities risk")
+        pl.struct(risk_colnames).map_elements(overall_risk_func, return_dtype=str).alias("Liabilities risk")
     )
 
-    # Select only the desired output columns:
-    # "Sample", "clonotype key", "CDR3 aa" and all columns ending with "liabilities" or "risk"
-    output_columns = [
-        col for col in df.columns
-        if col in ["Sample", "Clonotype key", "CDR3 aa"] or col.endswith("liabilities") or col.endswith("risk")
-    ]
-    if "Liabilities risk" not in output_columns:
-        output_columns.append("Liabilities risk")
+    # --- Combine Heavy/Light results for risk columns ---
+    heavy_risk = {}
+    light_risk = {}
+    for col in df.columns:
+        if col.startswith("Heavy ") and col.endswith(" risk"):
+            base = col[len("Heavy "): -len(" risk")]
+            heavy_risk[base] = col
+        elif col.startswith("Light ") and col.endswith(" risk"):
+            base = col[len("Light "): -len(" risk")]
+            light_risk[base] = col
+    for base in set(heavy_risk.keys()).intersection(light_risk.keys()):
+        combined_name = f"{base} risk"
+        df = df.with_columns(
+            pl.concat_str([
+                pl.lit("Heavy: "), pl.col(heavy_risk[base]),
+                pl.lit(" | Light: "), pl.col(light_risk[base])
+            ]).alias(combined_name)
+        )
+        df = df.drop(heavy_risk[base]).drop(light_risk[base])
 
-    df = df.select(output_columns)
+    # --- Combine Heavy/Light results for liabilities columns ---
+    heavy_liab = {}
+    light_liab = {}
+    for col in df.columns:
+        if col.startswith("Heavy ") and col.endswith(" liabilities"):
+            base = col[len("Heavy "): -len(" liabilities")]
+            heavy_liab[base] = col
+        elif col.startswith("Light ") and col.endswith(" liabilities"):
+            base = col[len("Light "): -len(" liabilities")]
+            light_liab[base] = col
+    for base in set(heavy_liab.keys()).intersection(light_liab.keys()):
+        combined_name = f"{base} liabilities"
+        df = df.with_columns(
+            pl.concat_str([
+                pl.lit("Heavy: "), pl.col(heavy_liab[base]),
+                pl.lit(" | Light: "), pl.col(light_liab[base])
+            ]).alias(combined_name)
+        )
+        df = df.drop(heavy_liab[base]).drop(light_liab[base])
+    # --- End heavy/light combination ---
+
+    # --- Finalize output ---
+    # Keep identifier columns ("Sample", "Clonotype key", "Clone label"),
+    # overall "Liabilities risk", and computed risk or liabilities columns.
+    final_columns = [col for col in df.columns if col in ["Sample", "Clonotype key", "Clone label", "Liabilities risk"] or col.endswith("risk") or col.endswith("liabilities")]
+    df = df.select(final_columns)
+
+    # Rename computed columns:
+    # For instance, "CDR3 aa Primary liabilities" -> "CDR3 liabilities" and similarly for risk.
+    rename_mapping = {}
+    for col in df.columns:
+        new_name = col
+        if "aa Primary liabilities" in col:
+            new_name = new_name.replace("aa Primary liabilities", "liabilities")
+        if "aa Primary risk" in col:
+            new_name = new_name.replace("aa Primary risk", "risk")
+        if "aa" in col:
+            new_name = new_name.replace(" aa ", " ")
+            
+        rename_mapping[col] = new_name
+    df = df.rename(rename_mapping)
+
     df.write_csv(args.output_tsv, separator="\t", quote_style="never")
 
 if __name__ == "__main__":

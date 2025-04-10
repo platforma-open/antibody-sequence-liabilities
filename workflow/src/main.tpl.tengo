@@ -12,58 +12,140 @@ liabilitiesCalcSw := assets.importSoftware("@platforma-open/milaboratories.antib
 wf.prepare(func(args) {
 	clonotypingRunId := args.clonotypingRunId
 	chain := args.chain
+	isSingleCell := args.isSingleCell
 
-	query := func(label) {
-
-		r := {
+	query := func(feature, isSingleCell) {
+		queryUniversal := {
 			type: "And",
 			operands:  [
-				{
-					type: "AnnotationPattern",
-					annotation: "pl7.app/label",
-					pattern: label
-				},
 				{
 					type: "Domain",
 					domain: {
 						"pl7.app/alphabet": "aminoacid",
-						"pl7.app/vdj/chain": chain,
-						"pl7.app/vdj/clonotypingRunId": clonotypingRunId
-
+          				"pl7.app/vdj/feature": feature
 					},
 					domainExactMatch: false
+				},
+				{
+					type: "Name",
+					name: "pl7.app/vdj/sequence"
+				},
+				{
+					type: "AxesKeys",
+					axesKeys: [
+						{
+							domain: {
+								"pl7.app/vdj/clonotypingRunId": clonotypingRunId
+							},
+							domainExactMatch: false
+						}
+					],
+					partialMatch: true
 				}
 			]
 		}
-
-		return r
+		if !is_undefined(chain) {
+			queryUniversal.operands[2].axesKeys[0].domain["pl7.app/vdj/chain"] = chain
+			queryUniversal.operands[2].axesKeys[0].name = "pl7.app/vdj/clonotypeKey"
+			return queryUniversal
+		} else if isSingleCell {
+			querySingleCell := []
+			for ch in ["A", "B"] {
+				queryTemp := {
+					type: queryUniversal.type,
+					operands: [
+						{
+							type: queryUniversal.operands[0].type,
+							domain: {
+								"pl7.app/alphabet": queryUniversal.operands[0].domain["pl7.app/alphabet"],
+								"pl7.app/vdj/feature": queryUniversal.operands[0].domain["pl7.app/vdj/feature"],
+								"pl7.app/vdj/scClonotypeChain": ch,
+								"pl7.app/vdj/scClonotypeChain/index": "primary"
+							},
+							domainExactMatch: queryUniversal.operands[0].domainExactMatch
+						},
+						{
+							type: queryUniversal.operands[2].type,
+							axesKeys: [
+								{
+									domain: {
+										"pl7.app/vdj/clonotypingRunId": queryUniversal.operands[2].axesKeys[0].domain["pl7.app/vdj/clonotypingRunId"]
+									},
+									domainExactMatch: queryUniversal.operands[2].axesKeys[0].domainExactMatch,
+									name: "pl7.app/vdj/scClonotypeKey"
+								}
+							],
+							partialMatch: queryUniversal.operands[2].partialMatch
+						}
+					]
+				}
+				querySingleCell += [queryTemp]
+			}
+			return querySingleCell
+		}
 	}
 
 	ops := {
 		single: true
 	}
 
-	return  { 
-		data: wf.resolve(args.inputAnchor),
-		aaCDR3Col: wf.query(query("CDR3 aa"), ops),
-		aaCDR1Col: wf.query(query("CDR1 aa"), ops),
-		aaCDR2Col: wf.query(query("CDR2 aa"), ops),
-		aaFR1Col: wf.query(query("FR1 aa"), ops)
+	ll.print("__THE_LOG__"+wf.query(query("CDR3", isSingleCell), ops).getDataAsJson())
+	//ll.print("__THE_LOG__"+query("CDR1", isSingleCell))
+	//ll.print("__THE_LOG__"+query("CDR2", isSingleCell))
+	//ll.print("__THE_LOG__"+query("FR1", isSingleCell))
+
+	if isSingleCell {
+		return {
+			data: wf.resolve(args.inputAnchor),
+			hasCells: true,
+			aaCDR3ColA: wf.query(query("CDR3", isSingleCell)[0], ops),
+			aaCDR1ColA: wf.query(query("CDR1", isSingleCell)[0], ops),
+			aaCDR2ColA: wf.query(query("CDR2", isSingleCell)[0], ops),
+			aaFR1ColA: wf.query(query("FR1", isSingleCell)[0], ops),
+			aaCDR3ColB: wf.query(query("CDR3", isSingleCell)[1], ops),
+			aaCDR1ColB: wf.query(query("CDR1", isSingleCell)[1], ops),
+			aaCDR2ColB: wf.query(query("CDR2", isSingleCell)[1], ops),
+			aaFR1ColB: wf.query(query("FR1", isSingleCell)[1], ops)
+		}
+	} else {
+		return {
+			data: wf.resolve(args.inputAnchor),
+			hasCells: false,
+			aaCDR3ColA: wf.query(query("CDR3", isSingleCell), ops),
+			aaCDR1ColA: wf.query(query("CDR1", isSingleCell), ops),
+			aaCDR2ColA: wf.query(query("CDR2", isSingleCell), ops),
+			aaFR1ColA: wf.query(query("FR1", isSingleCell), ops)
+		}
 	}
 })
 
 wf.body(func(args) {
-	data := args.data
-	aaCDR3Col := args.aaCDR3Col
-	aaCDR1Col := args.aaCDR1Col
-	aaCDR2Col := args.aaCDR2Col
-	aaFR1Col := args.aaFR1Col
+	hasCells := args.hasCells
+	columnsToExport := []
+	if hasCells {
+		aaCDR3ColA := args.aaCDR3ColA
+		aaCDR1ColA := args.aaCDR1ColA
+		aaCDR2ColA := args.aaCDR2ColA
+		aaFR1ColA := args.aaFR1ColA
+		aaCDR3ColB := args.aaCDR3ColB
+		aaCDR1ColB := args.aaCDR1ColB
+		aaCDR2ColB := args.aaCDR2ColB
+		aaFR1ColB := args.aaFR1ColB
+		columnsToExport = [aaCDR3ColA, aaCDR1ColA, aaCDR2ColA, aaFR1ColA, aaCDR3ColB, aaCDR1ColB, aaCDR2ColB, aaFR1ColB]
+	} else {
+		aaCDR3ColA := args.aaCDR3ColA
+		aaCDR1ColA := args.aaCDR1ColA
+		aaCDR2ColA := args.aaCDR2ColA
+		aaFR1ColA := args.aaFR1ColA
+		chain := args.chain
+		columnsToExport = [aaCDR3ColA, aaCDR1ColA, aaCDR2ColA, aaFR1ColA]
+	}
 	clonotypingRunId := args.clonotypingRunId
-	chain := args.chain
+	data := args.data
+	ll.print("__THE_LOG__"+hasCells)
 	
 	clonotypeKeySpec := data.spec.axesSpec[1]
 
-	columnsToExport := [aaCDR3Col, aaCDR1Col, aaCDR2Col, aaFR1Col]
 	tsv := xsv.exportFrame(columnsToExport, "tsv", {})
 
 	liabilitiesCalcCmd := exec.builder().
@@ -79,13 +161,24 @@ wf.body(func(args) {
 	trace := pSpec.makeTrace(data.spec,
 		{type: "milaboratories.antibody-sequence-liabilities", importance: 30, label: "Liabilities risk"})
 	
-	axes := [
-		{
-			column: "Clonotype key",
-			id: "clonotypeKey",
-			spec: clonotypeKeySpec
-		}
-	]
+	axes := []
+	if hasCells {
+		axes = [
+			{
+				column: "Clone label",
+				id: "clone-label",
+				spec: clonotypeKeySpec
+			}
+		]
+	} else {
+		axes = [
+			{
+				column: "Clonotype key",
+				id: "clonotypeKey",
+				spec: clonotypeKeySpec
+			}
+		]
+	}
 
 	columns := [
 		{
@@ -96,10 +189,6 @@ wf.body(func(args) {
 			spec: {
 				name: "pl7.app/vdj/liabilitiesRisk",
 				valueType: "String",
-				domain: {
-					"pl7.app/vdj/clonotypingRunId": data.spec.domain["pl7.app/vdj/clonotypingRunId"],
-					"pl7.app/vdj/chain": data.spec.domain["pl7.app/vdj/chain"]
-				},
 				annotations: {
 					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "Liabilities risk",
@@ -107,37 +196,20 @@ wf.body(func(args) {
 					"pl7.app/table/orderPriority": "100"
 				}
 			}
-		},
-		{
-			column: "CDR3 aa",
-			id: "CDR3aa",
-			spec: {
-				name: "pl7.app/vdj/CDR3aa",
-				valueType: "String",
-				domain: {
-					"pl7.app/vdj/clonotypingRunId": data.spec.domain["pl7.app/vdj/clonotypingRunId"],
-					"pl7.app/vdj/chain": data.spec.domain["pl7.app/vdj/chain"]
-				},
-				annotations: {
-					"pl7.app/label": "CDR3 aa",
-					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "101"
-				}
-			}
 		}
 	]
 	
-	columnsNames := ["CDR3 aa", "CDR1 aa", "CDR2 aa", "FR1 aa"]
+	columnsNames := ["CDR3", "CDR1", "CDR2", "FR1"]
 	orderPriority := 99
 	for colName in columnsNames {
 		columns += [
 			{
 			column: colName + " liabilities",
-			id: text.split(colName, " ")[0] + "liabilities",
+			id: text.to_lower(colName) + "-liabilities",
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/" + text.split(colName, " ")[0] + "liabilities",
+				name: "pl7.app/vdj/" + text.to_lower(colName) + "Liabilities",
 				valueType: "String",
 				annotations: {
 					"pl7.app/label": colName + " liabilities",
@@ -147,11 +219,11 @@ wf.body(func(args) {
 			},
 			{
 			column: colName + " risk",
-			id: text.split(colName, " ")[0] + "risk",
+			id: text.to_lower(colName) + "-risk",
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/" + text.split(colName, " ")[0] + "risk",
+				name: "pl7.app/vdj/" + text.to_lower(colName) + "Risk",
 				valueType: "String",
 				annotations: {
 					"pl7.app/label": colName + " risk",
