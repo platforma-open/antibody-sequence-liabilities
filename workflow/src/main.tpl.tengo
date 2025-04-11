@@ -1,20 +1,25 @@
-wf := import("@platforma-sdk/workflow-tengo:workflow")
-exec := import("@platforma-sdk/workflow-tengo:exec")
-assets:= import("@platforma-sdk/workflow-tengo:assets")
-xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
-ll := import("@platforma-sdk/workflow-tengo:ll")
-pframes := import("@platforma-sdk/workflow-tengo:pframes")
-pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
-text := import("text")
+// Import required modules
+wf := import("@platforma-sdk/workflow-tengo:workflow")  // Workflow utilities
+exec := import("@platforma-sdk/workflow-tengo:exec")    // Command execution utilities
+assets:= import("@platforma-sdk/workflow-tengo:assets") // Asset management
+xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
+ll := import("@platforma-sdk/workflow-tengo:ll")        // Logging utilities
+pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
+pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
+text := import("text")                                   // Text manipulation utilities
+// Import the liabilities calculation software
 liabilitiesCalcSw := assets.importSoftware("@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script:main")
 
 
+// Prepare phase of the workflow - collects and sets up required data
 wf.prepare(func(args) {
-	clonotypingRunId := args.clonotypingRunId
-	chain := args.chain
-	isSingleCell := args.isSingleCell
+	clonotypingRunId := args.clonotypingRunId  // The ID of the clonotyping run
+	chain := args.chain                        // The antibody chain (if specified)
+	isSingleCell := args.isSingleCell          // Flag indicating if data comes from a single cell analysis
 
+	// Helper function to construct data query based on feature and data type
 	query := func(feature, isSingleCell) {
+		// Base query
 		queryUniversal := {
 			type: "And",
 			operands:  [
@@ -22,7 +27,7 @@ wf.prepare(func(args) {
 					type: "Domain",
 					domain: {
 						"pl7.app/alphabet": "aminoacid",
-          				"pl7.app/vdj/feature": feature
+          				"pl7.app/vdj/feature": feature  // CDR1, CDR2, CDR3, or FR1
 					},
 					domainExactMatch: false
 				},
@@ -44,16 +49,20 @@ wf.prepare(func(args) {
 				}
 			]
 		}
+		
+		// If chain is specified -> bulk data
 		if !is_undefined(chain) {
 			queryUniversal.operands[2].axesKeys[0].domain["pl7.app/vdj/chain"] = chain
 			queryUniversal.operands[2].axesKeys[0].name = "pl7.app/vdj/clonotypeKey"
 			return queryUniversal
 		} else if isSingleCell {
+			// For single cell data, create separate queries for chains A and B
 			querySingleCell := []
 			for ch in ["A", "B"] {
 				queryTemp := {
 					type: queryUniversal.type,
 					operands: [
+						queryUniversal.operands[1],
 						{
 							type: queryUniversal.operands[0].type,
 							domain: {
@@ -85,19 +94,17 @@ wf.prepare(func(args) {
 		}
 	}
 
+	// Query options
 	ops := {
-		single: true
+		single: true  // Return a single result
 	}
 
-	ll.print("__THE_LOG__"+wf.query(query("CDR3", isSingleCell), ops).getDataAsJson())
-	//ll.print("__THE_LOG__"+query("CDR1", isSingleCell))
-	//ll.print("__THE_LOG__"+query("CDR2", isSingleCell))
-	//ll.print("__THE_LOG__"+query("FR1", isSingleCell))
-
+	// Return different data structures based on whether it's single cell data
 	if isSingleCell {
 		return {
-			data: wf.resolve(args.inputAnchor),
-			hasCells: true,
+			data: wf.resolve(args.inputAnchor),  // Input data
+			hasCells: true,  // Indicates this is single cell data
+			// Query different antibody regions for both chains A and B
 			aaCDR3ColA: wf.query(query("CDR3", isSingleCell)[0], ops),
 			aaCDR1ColA: wf.query(query("CDR1", isSingleCell)[0], ops),
 			aaCDR2ColA: wf.query(query("CDR2", isSingleCell)[0], ops),
@@ -109,8 +116,9 @@ wf.prepare(func(args) {
 		}
 	} else {
 		return {
-			data: wf.resolve(args.inputAnchor),
-			hasCells: false,
+			data: wf.resolve(args.inputAnchor),  // Input data
+			hasCells: false,  // Not single cell data
+			// Query different antibody regions for the specified chain
 			aaCDR3ColA: wf.query(query("CDR3", isSingleCell), ops),
 			aaCDR1ColA: wf.query(query("CDR1", isSingleCell), ops),
 			aaCDR2ColA: wf.query(query("CDR2", isSingleCell), ops),
@@ -120,9 +128,12 @@ wf.prepare(func(args) {
 })
 
 wf.body(func(args) {
-	hasCells := args.hasCells
+	hasCells := args.hasCells  // Flag indicating if this is single cell data
 	columnsToExport := []
+	
+	// Collect the columns to export based on data type
 	if hasCells {
+		// For single cell data, get sequences for both chains A and B
 		aaCDR3ColA := args.aaCDR3ColA
 		aaCDR1ColA := args.aaCDR1ColA
 		aaCDR2ColA := args.aaCDR2ColA
@@ -133,6 +144,7 @@ wf.body(func(args) {
 		aaFR1ColB := args.aaFR1ColB
 		columnsToExport = [aaCDR3ColA, aaCDR1ColA, aaCDR2ColA, aaFR1ColA, aaCDR3ColB, aaCDR1ColB, aaCDR2ColB, aaFR1ColB]
 	} else {
+		// For bulk data, get sequences for the specified chain
 		aaCDR3ColA := args.aaCDR3ColA
 		aaCDR1ColA := args.aaCDR1ColA
 		aaCDR2ColA := args.aaCDR2ColA
@@ -142,12 +154,14 @@ wf.body(func(args) {
 	}
 	clonotypingRunId := args.clonotypingRunId
 	data := args.data
-	ll.print("__THE_LOG__"+hasCells)
 	
+	// Get the clonotype key specification from the data
 	clonotypeKeySpec := data.spec.axesSpec[1]
 
+	// Export the sequences to a TSV file for processing
 	tsv := xsv.exportFrame(columnsToExport, "tsv", {})
 
+	// Run the liabilities calculation tool on the sequences
 	liabilitiesCalcCmd := exec.builder().
 		software(liabilitiesCalcSw).
 		addFile("input.tsv", tsv).
@@ -156,11 +170,14 @@ wf.body(func(args) {
 		arg("result.tsv").
 		run()
 
+	// Get the results from the calculation
 	result := liabilitiesCalcCmd.getFile("result.tsv")
 
+	// Create a trace for tracking the liabilities calculation
 	trace := pSpec.makeTrace(data.spec,
 		{type: "milaboratories.antibody-sequence-liabilities", importance: 30, label: "Liabilities risk"})
 	
+	// Set up the axes for the output data
 	axes := []
 	if hasCells {
 		axes = [
@@ -180,6 +197,7 @@ wf.body(func(args) {
 		]
 	}
 
+	// Define the output columns - starting with the overall liabilities risk
 	columns := [
 		{
 			column: "Liabilities risk",
@@ -200,8 +218,9 @@ wf.body(func(args) {
 		}
 	]
 	
+	// Add columns for each sequence region's liabilities and risk
 	columnsNames := ["CDR3", "CDR1", "CDR2", "FR1"]
-	orderPriority := 99
+	orderPriority := 99  // Priority for column ordering in UI
 	for colName in columnsNames {
 		columns += [
 			{
@@ -233,9 +252,10 @@ wf.body(func(args) {
 				}
 			}
 		]
-		orderPriority -= 1
+		orderPriority -= 1  // Decrement priority for subsequent columns
 	}
 
+	// Define output specifications
 	outputSpecs := 
 		{
 			axes: axes,
@@ -244,12 +264,14 @@ wf.body(func(args) {
 			partitionKeyLength: 0
 		}
 	
+	// Import the results into a data frame
 	outputLiabilities := xsv.importFile(
 		result,
 		"tsv",
 		outputSpecs
 	)
 
+	// Return the output and export the results
 	return {
 		outputs: {
 			outputLiabilities: pframes.exportFrame(outputLiabilities)
