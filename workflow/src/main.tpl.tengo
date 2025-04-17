@@ -15,7 +15,7 @@ liabilitiesCalcSw := assets.importSoftware("@platforma-open/milaboratories.antib
 wf.prepare(func(args) {
 	clonotypingRunId := args.clonotypingRunId  // The ID of the clonotyping run
 	chain := args.chain                        // The antibody chain (if specified)
-	isSingleCell := args.isSingleCell          // Flag indicating if data comes from a single cell analysis
+	isSingleCell := args.isSingleCell        // Flag indicating if data comes from a single cell analysis
 
 	// Helper function to construct data query based on feature and data type
 	query := func(feature, isSingleCell) {
@@ -109,7 +109,6 @@ wf.prepare(func(args) {
 			aaCDR1ColA: wf.query(query("CDR1", isSingleCell)[0], ops),
 			aaCDR2ColA: wf.query(query("CDR2", isSingleCell)[0], ops),
 			aaFR1ColA: wf.query(query("FR1", isSingleCell)[0], ops),
-			aaVDJRegionColA: wf.query(query("VDJRegion", isSingleCell)[0], ops),
 			aaCDR3ColB: wf.query(query("CDR3", isSingleCell)[1], ops),
 			aaCDR1ColB: wf.query(query("CDR1", isSingleCell)[1], ops),
 			aaCDR2ColB: wf.query(query("CDR2", isSingleCell)[1], ops),
@@ -217,6 +216,8 @@ wf.body(func(args) {
 				annotations: {
 					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "Liabilities risk",
+					"pl7.app/isDiscreteFilter": "true",
+            		"pl7.app/discreteValues": "['Low', 'Medium', 'High']",
 					"pl7.app/vdj/isScore": "true",
 					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "100"
@@ -233,11 +234,7 @@ wf.body(func(args) {
 				spec: {
  				name: "pl7.app/vdj/cdr3aaPrimaryHeavy",
  				valueType: "String",
- 				domain: {
- 					"pl7.app/vdj/clonotypingRunId": clonotypingRunId,
- 					"pl7.app/vdj/scClonotypeChain": "A",
-          			"pl7.app/vdj/scClonotypeChain/index": "primary"
- 				},
+ 				domain: columnsToExport[0].spec.domain,
  				annotations: {
  					"pl7.app/label": "Heavy CDR3 aa",
  					"pl7.app/table/visibility": "default",
@@ -251,11 +248,7 @@ wf.body(func(args) {
 				spec: {
  				name: "pl7.app/vdj/cdr3aaPrimaryLight",
  				valueType: "String",
- 				domain: {
- 					"pl7.app/vdj/clonotypingRunId": clonotypingRunId,
- 					"pl7.app/vdj/scClonotypeChain": "B",
-          			"pl7.app/vdj/scClonotypeChain/index": "primary"
- 				},
+ 				domain: columnsToExport[4].spec.domain,
  				annotations: {
  					"pl7.app/label": "Light CDR3 aa",
  					"pl7.app/table/visibility": "default",
@@ -272,10 +265,7 @@ wf.body(func(args) {
 				spec: {
  				name: "pl7.app/vdj/CDR3aa",
  				valueType: "String",
- 				domain: {
- 					"pl7.app/vdj/clonotypingRunId": clonotypingRunId,
- 					"pl7.app/vdj/chain": chain
- 				},
+ 				domain: columnsToExport[0].spec.domain,
  				annotations: {
  					"pl7.app/label": "CDR3 aa",
  					"pl7.app/table/visibility": "default",

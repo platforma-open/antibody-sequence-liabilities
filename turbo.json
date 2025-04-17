@@ -5,16 +5,20 @@
     "build": {
       "inputs": ["$TURBO_DEFAULT$"],
       "env": ["PL_PKG_DEV"],
-      "outputs": ["./dist/**"],
+      "outputs": ["./dist/**", "./block-pack/**", "./pkg-*.tgz"],
       "dependsOn": ["^build"]
     },
-    "build:dev": {
+    "do-pack": {
       "dependsOn": ["build"],
-      "outputs": ["./dist/**"]
+      "outputs": ["package.tgz"]
     },
     "test": {
-      "dependsOn": ["^build:dev", "build"],
+      "dependsOn": ["build"],
       "passThroughEnv": ["PL_ADDRESS", "PL_TEST_PASSWORD", "PL_TEST_USER", "PL_TEST_PROXY", "DEBUG"]
+    },
+    "mark-stable": {
+      "passThroughEnv": ["PL_REGISTRY", "AWS_*"],
+      "cache": false
     }
   }
 }
