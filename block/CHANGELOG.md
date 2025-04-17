@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 2.1.0
+
+### Minor Changes
+
+- d45b2a4: correct name
+
 ## 2.0.0
 
 ### Major Changes
