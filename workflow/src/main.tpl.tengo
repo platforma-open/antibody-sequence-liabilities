@@ -109,6 +109,7 @@ wf.prepare(func(args) {
 			aaCDR1ColA: wf.query(query("CDR1", isSingleCell)[0], ops),
 			aaCDR2ColA: wf.query(query("CDR2", isSingleCell)[0], ops),
 			aaFR1ColA: wf.query(query("FR1", isSingleCell)[0], ops),
+			aaVDJRegionColA: wf.query(query("VDJRegion", isSingleCell)[0], ops),
 			aaCDR3ColB: wf.query(query("CDR3", isSingleCell)[1], ops),
 			aaCDR1ColB: wf.query(query("CDR1", isSingleCell)[1], ops),
 			aaCDR2ColB: wf.query(query("CDR2", isSingleCell)[1], ops),
@@ -132,6 +133,7 @@ wf.body(func(args) {
 	columnsToExport := []
 	
 	// Collect the columns to export based on data type
+	chain := undefined
 	if hasCells {
 		// For single cell data, get sequences for both chains A and B
 		aaCDR3ColA := args.aaCDR3ColA
@@ -150,7 +152,12 @@ wf.body(func(args) {
 		aaCDR2ColA := args.aaCDR2ColA
 		aaFR1ColA := args.aaFR1ColA
 		chain := args.chain
+		heavyCDR3spec := aaCDR3ColA.spec
 		columnsToExport = [aaCDR3ColA, aaCDR1ColA, aaCDR2ColA, aaFR1ColA]
+	}
+
+	for col in columnsToExport {
+		col.spec.annotations["pl7.app/label"] = text.re_replace(" Primary", col.spec.annotations["pl7.app/label"], "")
 	}
 	clonotypingRunId := args.clonotypingRunId
 	data := args.data
@@ -217,6 +224,67 @@ wf.body(func(args) {
 			}
 		}
 	]
+
+	if hasCells {
+		columns += [
+			{
+				column: "Heavy CDR3 aa",
+				id: "cdr3-aa-primary-heavy",
+				spec: {
+ 				name: "pl7.app/vdj/cdr3aaPrimaryHeavy",
+ 				valueType: "String",
+ 				domain: {
+ 					"pl7.app/vdj/clonotypingRunId": clonotypingRunId,
+ 					"pl7.app/vdj/scClonotypeChain": "A",
+          			"pl7.app/vdj/scClonotypeChain/index": "primary"
+ 				},
+ 				annotations: {
+ 					"pl7.app/label": "Heavy CDR3 aa",
+ 					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "101"
+					}
+				}
+			},
+			{
+				column: "Light CDR3 aa",
+				id: "cdr3-aa-primary-light",
+				spec: {
+ 				name: "pl7.app/vdj/cdr3aaPrimaryLight",
+ 				valueType: "String",
+ 				domain: {
+ 					"pl7.app/vdj/clonotypingRunId": clonotypingRunId,
+ 					"pl7.app/vdj/scClonotypeChain": "B",
+          			"pl7.app/vdj/scClonotypeChain/index": "primary"
+ 				},
+ 				annotations: {
+ 					"pl7.app/label": "Light CDR3 aa",
+ 					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "101"
+					}
+				}
+			}
+		]
+	} else {
+		columns += [ 
+			{
+				column: "CDR3 aa",
+				id: "CDR3aa",
+				spec: {
+ 				name: "pl7.app/vdj/CDR3aa",
+ 				valueType: "String",
+ 				domain: {
+ 					"pl7.app/vdj/clonotypingRunId": clonotypingRunId,
+ 					"pl7.app/vdj/chain": chain
+ 				},
+ 				annotations: {
+ 					"pl7.app/label": "CDR3 aa",
+ 					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "101"
+					}
+				}
+			}
+		]
+	}
 	
 	// Add columns for each sequence region's liabilities and risk
 	columnsNames := ["CDR3", "CDR1", "CDR2", "FR1"]
