@@ -1,5 +1,5 @@
 {
-  "name": "@platforma-open/milaboratories.antibody sequence liabilities",
+  "name": "@platforma-open/milaboratories.antibody-sequence-liabilities",
   "version": "1.0.0",
   "scripts": {
     "pretty": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json,vue}\"",
