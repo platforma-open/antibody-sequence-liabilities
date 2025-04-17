@@ -11,15 +11,15 @@ CDR_LIABILITIES = {
     "Deamidation (N[AHNT])": (r"N[AHNT]", "Medium"),
     "Hydrolysis (NP)": (r"NP", "Medium"),
     "Fragmentation (TS)": (r"TS", "Medium"),
-    "Tryptophan Oxidation (W)": (r"W", "Medium"),  # Now uncommented
+    "Tryptophan Oxidation (W)": (r"W", "Medium"),
     "Methionine Oxidation (M)": (r"M", "Medium"),
     "Deamidation ([STK]N)": (r"[STK]N", "Low"),
 }
 
 # Define cysteine checks for all sequences (with high severity)
 EXPECTED_CYSTEINE_POSITIONS = {
-    "FR1 aa": [22],  # Framework 1, position 23
-    "CDR3 aa": [1],  # CDR3, position 1
+    "FR1": [22],  # Framework 1, position 23
+    "CDR3": [1],  # CDR3, position 1
 }
 CYSTEINE_LIABILITIES = {
     "Missing Cysteines": "High",
@@ -61,8 +61,19 @@ def identify_liabilities(sequence, region_name):
                     liabilities.append(liability)
 
     # Perform cysteine checks using expected positions if available.
-    expected_positions = EXPECTED_CYSTEINE_POSITIONS.get(region_name, [])
-    missing_cysteines = [pos for pos in expected_positions if pos <= len(sequence) and sequence[pos - 1] != "C"]
+    if "CDR3" in region_name:
+        expected_positions = EXPECTED_CYSTEINE_POSITIONS.get("CDR3", [])
+    elif "FR1" in region_name:
+        expected_positions = EXPECTED_CYSTEINE_POSITIONS.get("FR1", [])
+    else:
+        expected_positions = []
+
+    # Check for missing cysteines
+    if expected_positions:
+        missing_cysteines = sequence.count("C") < len(expected_positions)
+    else:
+        missing_cysteines = False
+    # Check for extra cysteines
     extra_cysteines = sequence.count("C") - len(expected_positions)
 
     if missing_cysteines:
@@ -101,18 +112,22 @@ def main():
         print("No recognized sequence columns found in the input file.")
         return
 
-    # Use the first CDR3 column for filtering invalid sequences.
-    cdr3_columns = [col for col in available_columns if "CDR3" in col]
-    if cdr3_columns:
-        primary_cdr3 = cdr3_columns[0]
-        df = df.filter(
-            (pl.col(primary_cdr3).is_not_null()) &
-            (pl.col(primary_cdr3) != "") &
-            (pl.col(primary_cdr3).str.starts_with("C")) &
-            ~(pl.col(primary_cdr3).str.contains(r"\*")) &
-            ~(pl.col(primary_cdr3).str.contains("_"))
+    # filter non-productive sequences
+    for col in available_columns:
+    # Build the common filters that all columns need.
+        base_filter = (
+            (pl.col(col).is_not_null()) &
+            (pl.col(col) != "") &
+            ~(pl.col(col).str.contains(r"\*")) &
+            ~(pl.col(col).str.contains("_"))
         )
-
+        
+        # For columns containing "CDR3", add the check that sequences start with "C".
+        if "CDR3" in col:
+            df = df.filter(base_filter & (pl.col(col).str.starts_with("C")))
+        else:
+            df = df.filter(base_filter)
+    
     # Compute liabilities and risk columns for each identified sequence column.
     for col in available_columns:
         liability_col = f"{col} liabilities"
@@ -179,7 +194,8 @@ def main():
     # --- Finalize output ---
     # Keep identifier columns ("Sample", "Clonotype key", "Clone label"),
     # overall "Liabilities risk", and computed risk or liabilities columns.
-    final_columns = [col for col in df.columns if col in ["Sample", "Clonotype key", "Clone label", "Liabilities risk"] or col.endswith("risk") or col.endswith("liabilities")]
+    final_columns = [col for col in df.columns if col in ["Heavy CDR3 aa Primary", "Light CDR3 aa Primary", "CDR3 aa", "Heavy CDR3 aa", "Light CDR3 aa",
+                                                          "Clonotype key", "Clone label", "Liabilities risk"] or col.endswith("risk") or col.endswith("liabilities")]
     df = df.select(final_columns)
 
     # Rename computed columns:

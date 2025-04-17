@@ -1,14 +1,11 @@
 import type {
   PlRef,
   InferOutputsType,
+  PlDataTableState,
 } from '@platforma-sdk/model';
 import {
   BlockModel,
   createPlDataTable,
-  isPColumn,
-  createPlDataTableSheet,
-  getUniquePartitionKeys,
-  PlDataTableState,
 } from '@platforma-sdk/model';
 
 export type BlockArgs = {
@@ -38,7 +35,7 @@ export const model = BlockModel.create()
     },
   })
 
- // .argsValid((ctx) => ctx.args.inputAnchor !== undefined)
+  .argsValid((ctx) => ctx.args.inputAnchor !== undefined)
 
   .output('inputOptions', (ctx) =>
     ctx.resultPool.getOptions([{
@@ -60,19 +57,7 @@ export const model = BlockModel.create()
     const pCols = ctx.outputs?.resolve('outputLiabilities')?.getPColumns();
     if (pCols === undefined) {
       return undefined;
-      }
-    
-    //const upstream = ctx.resultPool 
-    //  .getData()
-    //  .entries.map((v) => v.obj)
-    //  .filter(isPColumn)
-    //  .filter((column) => column.spec.domain?.["pl7.app/vdj/clonotypingRunId"] === ctx.args.clonotypingRunId)
-    //  .filter((column) => column.spec.domain?.["pl7.app/vdj/chain"] === ctx.args.chain)
-    //  .filter((column) => column.spec.domain?.["pl7.app/alphabet"] === "aminoacid")
-    //  .filter((column) => column.spec.domain?.["pl7.app/vdj/feature"] === "CDR3");
-
-    //pCols.push(...upstream);
-
+    }
     return {
       table: createPlDataTable(ctx, pCols, ctx.uiState?.tableState),
     };
@@ -83,7 +68,7 @@ export const model = BlockModel.create()
   .sections((_) => [
     { type: 'link', href: '/', label: 'Table' },
   ])
-  
+
   .done();
 
 export type BlockOutputs = InferOutputsType<typeof model>;
