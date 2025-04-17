@@ -4,14 +4,10 @@
   "type": "module",
   "description": "Block Workflow",
   "scripts": {
-    "pretty": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json,vue}\"",
-    "build": "turbo run build",
-    "build:dev": "PL_PKG_DEV=local turbo run build",
-    "test": "PL_PKG_DEV=local turbo run test --concurrency 1",
-    "mark-stable": "turbo run mark-stable",
-    "watch": "turbo watch build",
-    "changeset": "changeset",
-    "version-packages": "changeset version"
+    "build": "rm -rf dist && pl-tengo check && pl-tengo build",
+    "format": "/usr/bin/env emacs --script ./format.el",
+    "test": "vitest",
+    "do-pack": "rm -f *.tgz && pnpm pack && mv *.tgz package.tgz"
   },
   "dependencies": {
     "@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script": "workspace:*",
