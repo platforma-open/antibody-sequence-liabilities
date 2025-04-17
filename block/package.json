@@ -1,0 +1,46 @@
+{
+  "name": "@platforma-open/milaboratories.antibody-sequence-liabilities",
+  "version": "1.0.0",
+  "scripts": {
+    "pretty": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json,vue}\"",
+    "build": "rm -rf ./block-pack && block-tools pack",
+    "mark-stable": "block-tools mark-stable -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
+    "prepublishOnly": "block-tools pack && block-tools publish -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'"
+  },
+  "files": [
+    "index.d.ts",
+    "index.js"
+  ],
+  "dependencies": {
+    "@platforma-open/milaboratories.antibody-sequence-liabilities.workflow": "workspace:*",
+    "@platforma-open/milaboratories.antibody-sequence-liabilities.model": "workspace:*",
+    "@platforma-open/milaboratories.antibody-sequence-liabilities.ui": "workspace:*"
+  },
+  "block": {
+    "components": {
+      "workflow": "@platforma-open/milaboratories.antibody-sequence-liabilities.workflow/dist/tengo/tpl/main.plj.gz",
+      "model": "@platforma-open/milaboratories.antibody-sequence-liabilities.model/dist/model.json",
+      "ui": "@platforma-open/milaboratories.antibody-sequence-liabilities.ui/dist"
+    },
+    "meta": {
+      "title": "Antibody Sequence Liabilities",
+      "logo": "file:../logos/block-logo.png",
+      "url": "https://github.com/milaboratory/platforma-antibody-sequence-liabilities",
+      "docs": "https://github.com/milaboratory/platforma-antibody-sequence-liabilities/docs",
+      "support": "mailto:support@milaboratories.com",
+      "description": "Calculate sequence liabilities for antibody sequences.",
+      "longDescription": "file:../docs/description.md",
+      "changelog": "file:../CHANGELOG.md",
+      "tags": ["tutorial"],
+      "organization": {
+        "name": "MiLaboratories Inc",
+        "url": "https://milaboratories.com/",
+        "logo": "file:../logos/organization-logo.png"
+      }
+    }
+  },
+  "devDependencies": {
+    "@platforma-sdk/block-tools": "catalog:"
+  },
+  "packageManager": "pnpm@9.12.0"
+}
