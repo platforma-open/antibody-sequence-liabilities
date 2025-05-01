@@ -49,8 +49,6 @@ const settingsIsShown = ref(app.model.args.inputAnchor === undefined);
       </PlBtnGhost>
     </template>
     <PlAgDataTable v-model="app.model.ui.tableState" :settings="tableSettings" show-export-button />
-
-    {{ app.model.args.isSingleCell }}
   </PlBlockPage>
 
   <PlSlideModal v-model="settingsIsShown">
