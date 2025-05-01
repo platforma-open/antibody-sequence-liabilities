@@ -22,7 +22,7 @@ export type UiState = {
 };
 
 export const model = BlockModel.create()
-  .withArgs({ inputAnchor: undefined })
+  .withArgs({ inputAnchor: undefined, title: undefined })
 
   .withUiState<UiState>({
     blockTitle: 'Antibody Sequence Liabilities',
@@ -63,7 +63,7 @@ export const model = BlockModel.create()
     };
   })
 
-//  .title((ctx) => (ctx.args.title ? `Antibody Sequence Liabilities - ${ctx.args.title}` : 'Antibody Sequence Liabilities'))
+  .title((ctx) => (ctx.args.title ? `Antibody Sequence Liabilities - ${ctx.args.title}` : 'Antibody Sequence Liabilities'))
 
   .sections((_) => [
     { type: 'link', href: '/', label: 'Table' },
