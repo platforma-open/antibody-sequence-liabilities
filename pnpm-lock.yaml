@@ -120,22 +120,6 @@ importers:
         specifier: 'catalog:'
         version: 5.4.11(@types/node@22.9.0)
 
-  test:
-    dependencies:
-      this-block:
-        specifier: workspace:@platforma-open/milaboratories.antibody sequence liabilities@*
-        version: link:..
-    devDependencies:
-      '@platforma-sdk/test':
-        specifier: 'catalog:'
-        version: 1.29.18(@types/node@22.9.0)
-      typescript:
-        specifier: 'catalog:'
-        version: 5.5.4
-      vitest:
-        specifier: 'catalog:'
-        version: 2.1.9(@types/node@22.9.0)
-
   ui:
     dependencies:
       '@platforma-open/milaboratories.antibody-sequence-liabilities.model':
