@@ -6,6 +6,7 @@
     "build": "turbo run build",
     "build:dev": "PL_PKG_DEV=local turbo run build",
     "test": "PL_PKG_DEV=local turbo run test --concurrency 1",
+    "test:dry-run": "turbo run test --dry-run=json",
     "watch": "turbo watch build",
     "mark-stable": "turbo run mark-stable",
     "changeset": "changeset",
