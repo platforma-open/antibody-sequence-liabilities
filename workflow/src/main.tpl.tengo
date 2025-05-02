@@ -18,7 +18,7 @@ wf.prepare(func(args) {
 	isSingleCell := args.isSingleCell        // Flag indicating if data comes from a single cell analysis
 
 	// Helper function to construct data query based on feature and data type
-	query := func(feature, isSingleCell) {
+	query := func() {
 		// Base query
 		queryUniversal := {
 			type: "And",
@@ -26,8 +26,7 @@ wf.prepare(func(args) {
 				{
 					type: "Domain",
 					domain: {
-						"pl7.app/alphabet": "aminoacid",
-          				"pl7.app/vdj/feature": feature  // CDR1, CDR2, CDR3, or FR1
+						"pl7.app/alphabet": "aminoacid"
 					},
 					domainExactMatch: false
 				},
@@ -60,31 +59,30 @@ wf.prepare(func(args) {
 			querySingleCell := []
 			for ch in ["A", "B"] {
 				queryTemp := {
-					type: queryUniversal.type,
+					type: "And",
 					operands: [
 						queryUniversal.operands[1],
 						{
 							type: queryUniversal.operands[0].type,
 							domain: {
 								"pl7.app/alphabet": queryUniversal.operands[0].domain["pl7.app/alphabet"],
-								"pl7.app/vdj/feature": queryUniversal.operands[0].domain["pl7.app/vdj/feature"],
 								"pl7.app/vdj/scClonotypeChain": ch,
 								"pl7.app/vdj/scClonotypeChain/index": "primary"
 							},
-							domainExactMatch: queryUniversal.operands[0].domainExactMatch
+							domainExactMatch: false
 						},
 						{
-							type: queryUniversal.operands[2].type,
+							type: "AxesKeys",
 							axesKeys: [
 								{
 									domain: {
 										"pl7.app/vdj/clonotypingRunId": queryUniversal.operands[2].axesKeys[0].domain["pl7.app/vdj/clonotypingRunId"]
 									},
-									domainExactMatch: queryUniversal.operands[2].axesKeys[0].domainExactMatch,
+									domainExactMatch: false,
 									name: "pl7.app/vdj/scClonotypeKey"
 								}
 							],
-							partialMatch: queryUniversal.operands[2].partialMatch
+							partialMatch: true
 						}
 					]
 				}
@@ -96,7 +94,7 @@ wf.prepare(func(args) {
 
 	// Query options
 	ops := {
-		single: true  // Return a single result
+		single: false  // Return a single result
 	}
 
 	// Return different data structures based on whether it's single cell data
@@ -105,24 +103,15 @@ wf.prepare(func(args) {
 			data: wf.resolve(args.inputAnchor),  // Input data
 			hasCells: true,  // Indicates this is single cell data
 			// Query different antibody regions for both chains A and B
-			aaCDR3ColA: wf.query(query("CDR3", isSingleCell)[0], ops),
-			aaCDR1ColA: wf.query(query("CDR1", isSingleCell)[0], ops),
-			aaCDR2ColA: wf.query(query("CDR2", isSingleCell)[0], ops),
-			aaFR1ColA: wf.query(query("FR1", isSingleCell)[0], ops),
-			aaCDR3ColB: wf.query(query("CDR3", isSingleCell)[1], ops),
-			aaCDR1ColB: wf.query(query("CDR1", isSingleCell)[1], ops),
-			aaCDR2ColB: wf.query(query("CDR2", isSingleCell)[1], ops),
-			aaFR1ColB: wf.query(query("FR1", isSingleCell)[1], ops)
+			columnsA: wf.query(query()[0], ops),
+			columnsB: wf.query(query()[1], ops)
 		}
 	} else {
 		return {
 			data: wf.resolve(args.inputAnchor),  // Input data
 			hasCells: false,  // Not single cell data
 			// Query different antibody regions for the specified chain
-			aaCDR3ColA: wf.query(query("CDR3", isSingleCell), ops),
-			aaCDR1ColA: wf.query(query("CDR1", isSingleCell), ops),
-			aaCDR2ColA: wf.query(query("CDR2", isSingleCell), ops),
-			aaFR1ColA: wf.query(query("FR1", isSingleCell), ops)
+			columnsA: wf.query(query(), ops)
 		}
 	}
 })
@@ -135,24 +124,15 @@ wf.body(func(args) {
 	chain := undefined
 	if hasCells {
 		// For single cell data, get sequences for both chains A and B
-		aaCDR3ColA := args.aaCDR3ColA
-		aaCDR1ColA := args.aaCDR1ColA
-		aaCDR2ColA := args.aaCDR2ColA
-		aaFR1ColA := args.aaFR1ColA
-		aaCDR3ColB := args.aaCDR3ColB
-		aaCDR1ColB := args.aaCDR1ColB
-		aaCDR2ColB := args.aaCDR2ColB
-		aaFR1ColB := args.aaFR1ColB
-		columnsToExport = [aaCDR3ColA, aaCDR1ColA, aaCDR2ColA, aaFR1ColA, aaCDR3ColB, aaCDR1ColB, aaCDR2ColB, aaFR1ColB]
+		columnsA := args.columnsA
+		columnsB := args.columnsB
+		columnsToExport = columnsA + columnsB
 	} else {
 		// For bulk data, get sequences for the specified chain
-		aaCDR3ColA := args.aaCDR3ColA
-		aaCDR1ColA := args.aaCDR1ColA
-		aaCDR2ColA := args.aaCDR2ColA
-		aaFR1ColA := args.aaFR1ColA
+		columnsA := args.columnsA
 		chain := args.chain
-		heavyCDR3spec := aaCDR3ColA.spec
-		columnsToExport = [aaCDR3ColA, aaCDR1ColA, aaCDR2ColA, aaFR1ColA]
+		//heavyCDR3spec := aaCDR3ColA.spec
+		columnsToExport = columnsA
 	}
 
 	for col in columnsToExport {
@@ -234,7 +214,12 @@ wf.body(func(args) {
 				spec: {
  				name: "pl7.app/vdj/cdr3aaPrimaryHeavy",
  				valueType: "String",
- 				domain: columnsToExport[0].spec.domain,
+ 				domain: {
+          			"pl7.app/alphabet": "aminoacid",
+          			"pl7.app/vdj/feature": "CDR3",
+          			"pl7.app/vdj/scClonotypeChain": "A",
+          			"pl7.app/vdj/scClonotypeChain/index": "primary"
+        		},
  				annotations: {
  					"pl7.app/label": "Heavy CDR3 aa",
  					"pl7.app/table/visibility": "default",
@@ -248,7 +233,12 @@ wf.body(func(args) {
 				spec: {
  				name: "pl7.app/vdj/cdr3aaPrimaryLight",
  				valueType: "String",
- 				domain: columnsToExport[4].spec.domain,
+ 				domain: {
+         			"pl7.app/alphabet": "aminoacid",
+          			"pl7.app/vdj/feature": "CDR3",
+          			"pl7.app/vdj/scClonotypeChain": "B",
+          			"pl7.app/vdj/scClonotypeChain/index": "primary"
+        		},
  				annotations: {
  					"pl7.app/label": "Light CDR3 aa",
  					"pl7.app/table/visibility": "default",
@@ -265,7 +255,10 @@ wf.body(func(args) {
 				spec: {
  				name: "pl7.app/vdj/CDR3aa",
  				valueType: "String",
- 				domain: columnsToExport[0].spec.domain,
+ 				domain: {
+					"pl7.app/alphabet": "aminoacid",
+					"pl7.app/vdj/feature": "CDR3"
+				},
  				annotations: {
  					"pl7.app/label": "CDR3 aa",
  					"pl7.app/table/visibility": "default",
@@ -277,7 +270,20 @@ wf.body(func(args) {
 	}
 	
 	// Add columns for each sequence region's liabilities and risk
-	columnsNames := ["CDR3", "CDR1", "CDR2", "FR1"]
+	features := ["CDR3", "CDR1", "CDR2", "FR1"]
+	columnsNames := []
+	toAdd := {}
+	for feature in features {
+		toAdd[feature] = true
+	}
+	for col in columnsToExport {
+		spec := col.spec
+		feature := spec.domain["pl7.app/vdj/feature"]
+		if toAdd[feature] {
+			columnsNames += [feature]
+			toAdd[feature] = false
+		}
+	}
 	orderPriority := 99  // Priority for column ordering in UI
 	for colName in columnsNames {
 		columns += [
