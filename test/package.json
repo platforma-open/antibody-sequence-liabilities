@@ -1,5 +1,5 @@
 {
-  "name": "@platforma-open/milaboratories.antibody sequence liabilities.test",
+  "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.test",
   "private": true,
   "version": "2.0.0",
   "description": "Block tests",
@@ -10,7 +10,7 @@
   "files": [],
   "keywords": [],
   "dependencies": {
-    "this-block": "workspace:@platforma-open/milaboratories.antibody sequence liabilities@*"
+    "this-block": "workspace:@platforma-open/milaboratories.antibody-sequence-liabilities@*"
   },
   "devDependencies": {
     "@platforma-sdk/test": "catalog:",

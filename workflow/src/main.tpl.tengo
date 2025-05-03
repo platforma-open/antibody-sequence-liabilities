@@ -13,164 +13,93 @@ liabilitiesCalcSw := assets.importSoftware("@platforma-open/milaboratories.antib
 
 // Prepare phase of the workflow - collects and sets up required data
 wf.prepare(func(args) {
-	clonotypingRunId := args.clonotypingRunId  // The ID of the clonotyping run
-	chain := args.chain                        // The antibody chain (if specified)
-	isSingleCell := args.isSingleCell        // Flag indicating if data comes from a single cell analysis
 
-	// Helper function to construct data query based on feature and data type
-	query := func(feature, isSingleCell) {
-		// Base query
-		queryUniversal := {
-			type: "And",
-			operands:  [
-				{
-					type: "Domain",
-					domain: {
-						"pl7.app/alphabet": "aminoacid",
-          				"pl7.app/vdj/feature": feature  // CDR1, CDR2, CDR3, or FR1
-					},
-					domainExactMatch: false
-				},
-				{
-					type: "Name",
-					name: "pl7.app/vdj/sequence"
-				},
-				{
-					type: "AxesKeys",
-					axesKeys: [
-						{
-							domain: {
-								"pl7.app/vdj/clonotypingRunId": clonotypingRunId
-							},
-							domainExactMatch: false
-						}
-					],
-					partialMatch: true
-				}
-			]
-		}
-		
-		// If chain is specified -> bulk data
-		if !is_undefined(chain) {
-			queryUniversal.operands[2].axesKeys[0].domain["pl7.app/vdj/chain"] = chain
-			queryUniversal.operands[2].axesKeys[0].name = "pl7.app/vdj/clonotypeKey"
-			return queryUniversal
-		} else if isSingleCell {
-			// For single cell data, create separate queries for chains A and B
-			querySingleCell := []
-			for ch in ["A", "B"] {
-				queryTemp := {
-					type: queryUniversal.type,
-					operands: [
-						queryUniversal.operands[1],
-						{
-							type: queryUniversal.operands[0].type,
-							domain: {
-								"pl7.app/alphabet": queryUniversal.operands[0].domain["pl7.app/alphabet"],
-								"pl7.app/vdj/feature": queryUniversal.operands[0].domain["pl7.app/vdj/feature"],
-								"pl7.app/vdj/scClonotypeChain": ch,
-								"pl7.app/vdj/scClonotypeChain/index": "primary"
-							},
-							domainExactMatch: queryUniversal.operands[0].domainExactMatch
-						},
-						{
-							type: queryUniversal.operands[2].type,
-							axesKeys: [
-								{
-									domain: {
-										"pl7.app/vdj/clonotypingRunId": queryUniversal.operands[2].axesKeys[0].domain["pl7.app/vdj/clonotypingRunId"]
-									},
-									domainExactMatch: queryUniversal.operands[2].axesKeys[0].domainExactMatch,
-									name: "pl7.app/vdj/scClonotypeKey"
-								}
-							],
-							partialMatch: queryUniversal.operands[2].partialMatch
-						}
-					]
-				}
-				querySingleCell += [queryTemp]
+	bundleBuilder := wf.createPBundleBuilder()
+	bundleBuilder.ignoreMissingDomains()  // Allow missing domains in the input data
+	bundleBuilder.addAnchor("main", args.inputAnchor)  // Set the main anchor point for data
+
+	// Collect all amino acid sequences from the input data
+	bundleBuilder.addMulti({
+		axes: [{ anchor: "main", idx: 1 }],
+		name: "pl7.app/vdj/sequence",
+		domain: {
+			"pl7.app/alphabet": "aminoacid"
 			}
-			return querySingleCell
-		}
-	}
+		}, "sequences")
 
-	// Query options
-	ops := {
-		single: true  // Return a single result
-	}
-
-	// Return different data structures based on whether it's single cell data
-	if isSingleCell {
 		return {
-			data: wf.resolve(args.inputAnchor),  // Input data
-			hasCells: true,  // Indicates this is single cell data
-			// Query different antibody regions for both chains A and B
-			aaCDR3ColA: wf.query(query("CDR3", isSingleCell)[0], ops),
-			aaCDR1ColA: wf.query(query("CDR1", isSingleCell)[0], ops),
-			aaCDR2ColA: wf.query(query("CDR2", isSingleCell)[0], ops),
-			aaFR1ColA: wf.query(query("FR1", isSingleCell)[0], ops),
-			aaCDR3ColB: wf.query(query("CDR3", isSingleCell)[1], ops),
-			aaCDR1ColB: wf.query(query("CDR1", isSingleCell)[1], ops),
-			aaCDR2ColB: wf.query(query("CDR2", isSingleCell)[1], ops),
-			aaFR1ColB: wf.query(query("FR1", isSingleCell)[1], ops)
-		}
-	} else {
-		return {
-			data: wf.resolve(args.inputAnchor),  // Input data
-			hasCells: false,  // Not single cell data
-			// Query different antibody regions for the specified chain
-			aaCDR3ColA: wf.query(query("CDR3", isSingleCell), ops),
-			aaCDR1ColA: wf.query(query("CDR1", isSingleCell), ops),
-			aaCDR2ColA: wf.query(query("CDR2", isSingleCell), ops),
-			aaFR1ColA: wf.query(query("FR1", isSingleCell), ops)
+			columns: bundleBuilder.build()  // Build the column bundle for processing
 		}
 	}
-})
+)
 
 wf.body(func(args) {
-	hasCells := args.hasCells  // Flag indicating if this is single cell data
-	columnsToExport := []
+	columnsWithSequences := args.columns
+	sequences := columnsWithSequences.getColumns("sequences")
+	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
+
+	// Determine if we're working with single cell data
+	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
+
+	// Start building the table with sequence data
+	seqTable := columnsWithSequences.xsvTableBuilder()
+	seqTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
+
+	// Define which antibody regions we want to analyze
+	features := ["CDR3", "CDR1", "CDR2", "FR1"]
+	toAdd := {}
+	for feature in features {
+		toAdd[feature] = true
+	}
 	
-	// Collect the columns to export based on data type
-	chain := undefined
-	if hasCells {
-		// For single cell data, get sequences for both chains A and B
-		aaCDR3ColA := args.aaCDR3ColA
-		aaCDR1ColA := args.aaCDR1ColA
-		aaCDR2ColA := args.aaCDR2ColA
-		aaFR1ColA := args.aaFR1ColA
-		aaCDR3ColB := args.aaCDR3ColB
-		aaCDR1ColB := args.aaCDR1ColB
-		aaCDR2ColB := args.aaCDR2ColB
-		aaFR1ColB := args.aaFR1ColB
-		columnsToExport = [aaCDR3ColA, aaCDR1ColA, aaCDR2ColA, aaFR1ColA, aaCDR3ColB, aaCDR1ColB, aaCDR2ColB, aaFR1ColB]
-	} else {
-		// For bulk data, get sequences for the specified chain
-		aaCDR3ColA := args.aaCDR3ColA
-		aaCDR1ColA := args.aaCDR1ColA
-		aaCDR2ColA := args.aaCDR2ColA
-		aaFR1ColA := args.aaFR1ColA
-		chain := args.chain
-		heavyCDR3spec := aaCDR3ColA.spec
-		columnsToExport = [aaCDR3ColA, aaCDR1ColA, aaCDR2ColA, aaFR1ColA]
+	// Organize columns by feature type (CDR3, CDR1, etc.)
+	filteredColumns := {}
+	for col in sequences {
+		feature := col.spec.domain["pl7.app/vdj/feature"]
+		if toAdd[feature] {
+			if filteredColumns[feature]  {
+				filteredColumns[feature] += [col]
+			} else {
+				filteredColumns[feature] = [col]
+			}
+		}
 	}
 
-	for col in columnsToExport {
-		col.spec.annotations["pl7.app/label"] = text.re_replace(" Primary", col.spec.annotations["pl7.app/label"], "")
+	// Track which features are actually present in the data
+	coveredFeatures := []
+	for k, v in filteredColumns {
+		coveredFeatures += [k]
 	}
-	clonotypingRunId := args.clonotypingRunId
-	data := args.data
-	
+
+	// Add sequence columns to the table based on available features
+	for feature in coveredFeatures {
+		entries := filteredColumns[feature]
+		ll.print("__THE_LOG__"+entries)
+		if len(entries) == 1 {
+			// For bulk data with a single chain
+			seqTable.add(entries[0].key, {header: feature+" aa"})
+		} else if len(entries) > 1 {
+			// For single cell data with multiple chains
+			for col in entries {
+				if col.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
+					chain := col.spec.domain["pl7.app/vdj/scClonotypeChain"]
+					// Label as Heavy (A chain) or Light (B chain)
+					seqTable.add(col.key, {header: (chain == "A" ? "Heavy" : "Light") + " " + feature+" aa"})
+				}
+			}
+		}
+	}
+
+	// Build the final TSV table
+	seqTable = seqTable.build("tsv")
+		
 	// Get the clonotype key specification from the data
-	clonotypeKeySpec := data.spec.axesSpec[1]
-
-	// Export the sequences to a TSV file for processing
-	tsv := xsv.exportFrame(columnsToExport, "tsv", {})
+	clonotypeKeySpec := datasetSpec.axesSpec[1]
 
 	// Run the liabilities calculation tool on the sequences
 	liabilitiesCalcCmd := exec.builder().
 		software(liabilitiesCalcSw).
-		addFile("input.tsv", tsv).
+		addFile("input.tsv", seqTable).
 		arg("input.tsv").
 		saveFile("result.tsv").
 		arg("result.tsv").
@@ -180,28 +109,16 @@ wf.body(func(args) {
 	result := liabilitiesCalcCmd.getFile("result.tsv")
 
 	// Create a trace for tracking the liabilities calculation
-	trace := pSpec.makeTrace(data.spec,
+	trace := pSpec.makeTrace(datasetSpec,
 		{type: "milaboratories.antibody-sequence-liabilities", importance: 30, label: "Liabilities risk"})
 	
-	// Set up the axes for the output data
-	axes := []
-	if hasCells {
-		axes = [
-			{
-				column: "Clone label",
-				id: "clone-label",
-				spec: clonotypeKeySpec
-			}
-		]
-	} else {
-		axes = [
-			{
-				column: "Clonotype key",
-				id: "clonotypeKey",
-				spec: clonotypeKeySpec
-			}
-		]
-	}
+	// Set up the axes for the output data - using clonotype key
+	axes := [
+		{
+			column: "clonotypeKey",
+			spec: clonotypeKeySpec
+		}
+	]
 
 	// Define the output columns - starting with the overall liabilities risk
 	columns := [
@@ -226,7 +143,9 @@ wf.body(func(args) {
 		}
 	]
 
-	if hasCells {
+	// Add different columns based on data type (single cell vs bulk)
+	if isSingleCell {
+		// For single cell: show both heavy and light chain CDR3 sequences
 		columns += [
 			{
 				column: "Heavy CDR3 aa",
@@ -234,7 +153,12 @@ wf.body(func(args) {
 				spec: {
  				name: "pl7.app/vdj/cdr3aaPrimaryHeavy",
  				valueType: "String",
- 				domain: columnsToExport[0].spec.domain,
+ 				domain: {
+          			"pl7.app/alphabet": "aminoacid",
+          			"pl7.app/vdj/feature": "CDR3",
+          			"pl7.app/vdj/scClonotypeChain": "A",
+          			"pl7.app/vdj/scClonotypeChain/index": "primary"
+        		},
  				annotations: {
  					"pl7.app/label": "Heavy CDR3 aa",
  					"pl7.app/table/visibility": "default",
@@ -248,7 +172,12 @@ wf.body(func(args) {
 				spec: {
  				name: "pl7.app/vdj/cdr3aaPrimaryLight",
  				valueType: "String",
- 				domain: columnsToExport[4].spec.domain,
+ 				domain: {
+         			"pl7.app/alphabet": "aminoacid",
+          			"pl7.app/vdj/feature": "CDR3",
+          			"pl7.app/vdj/scClonotypeChain": "B",
+          			"pl7.app/vdj/scClonotypeChain/index": "primary"
+        		},
  				annotations: {
  					"pl7.app/label": "Light CDR3 aa",
  					"pl7.app/table/visibility": "default",
@@ -258,6 +187,7 @@ wf.body(func(args) {
 			}
 		]
 	} else {
+		// For bulk data: show single CDR3 sequence
 		columns += [ 
 			{
 				column: "CDR3 aa",
@@ -265,7 +195,10 @@ wf.body(func(args) {
 				spec: {
  				name: "pl7.app/vdj/CDR3aa",
  				valueType: "String",
- 				domain: columnsToExport[0].spec.domain,
+ 				domain: {
+					"pl7.app/alphabet": "aminoacid",
+					"pl7.app/vdj/feature": "CDR3"
+				},
  				annotations: {
  					"pl7.app/label": "CDR3 aa",
  					"pl7.app/table/visibility": "default",
@@ -277,11 +210,11 @@ wf.body(func(args) {
 	}
 	
 	// Add columns for each sequence region's liabilities and risk
-	columnsNames := ["CDR3", "CDR1", "CDR2", "FR1"]
 	orderPriority := 99  // Priority for column ordering in UI
-	for colName in columnsNames {
+	for colName in coveredFeatures {
 		columns += [
 			{
+			// Column for detailed liabilities text
 			column: colName + " liabilities",
 			id: text.to_lower(colName) + "-liabilities",
 			naRegex: "",
@@ -296,6 +229,7 @@ wf.body(func(args) {
 				}
 			},
 			{
+			// Column for risk level (Low, Medium, High)
 			column: colName + " risk",
 			id: text.to_lower(colName) + "-risk",
 			naRegex: "",
@@ -313,7 +247,7 @@ wf.body(func(args) {
 		orderPriority -= 1  // Decrement priority for subsequent columns
 	}
 
-	// Define output specifications
+	// Define output specifications for the data frame
 	outputSpecs := 
 		{
 			axes: axes,
