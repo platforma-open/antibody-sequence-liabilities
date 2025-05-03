@@ -11,17 +11,8 @@ const app = useApp();
 function setInput(inputRef?: PlRef) {
   if (!inputRef) return;
   app.model.args.inputAnchor = inputRef;
-  app.model.args.clonotypingRunId = inputRef?.blockId;
 
   const title = app.model.outputs.inputOptions?.find((o) => plRefsEqual(o.ref, inputRef))?.label;
-
-  if ((inputRef.name.split('/')[1] == 'abundance') || (inputRef.name.split('/')[1] == 'read-count')) {
-    app.model.args.isSingleCell = true;
-    app.model.args.chain = undefined;
-  } else {
-    app.model.args.isSingleCell = false;
-    app.model.args.chain = inputRef.name.split('/')[1];
-  }
 
   // Set title to dataset label
   app.model.args.title = title;
