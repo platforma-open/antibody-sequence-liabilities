@@ -10,10 +10,7 @@ import {
 
 export type BlockArgs = {
   inputAnchor?: PlRef;
-  clonotypingRunId?: string;
-  chain?: string;
   title?: string;
-  isSingleCell?: boolean;
 };
 
 export type UiState = {

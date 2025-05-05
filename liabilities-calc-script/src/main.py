@@ -195,7 +195,7 @@ def main():
     # Keep identifier columns ("Sample", "Clonotype key", "Clone label"),
     # overall "Liabilities risk", and computed risk or liabilities columns.
     final_columns = [col for col in df.columns if col in ["Heavy CDR3 aa Primary", "Light CDR3 aa Primary", "CDR3 aa", "Heavy CDR3 aa", "Light CDR3 aa",
-                                                          "Clonotype key", "Clone label", "Liabilities risk"] or col.endswith("risk") or col.endswith("liabilities")]
+                                                          "clonotypeKey", "Liabilities risk"] or col.endswith("risk") or col.endswith("liabilities")]
     df = df.select(final_columns)
 
     # Rename computed columns:
