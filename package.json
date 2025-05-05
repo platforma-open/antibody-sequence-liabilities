@@ -1,11 +1,12 @@
 {
-  "name": "@platforma-open/milaboratories.antibody sequence liabilities",
+  "name": "@platforma-open/milaboratories.antibody-sequence-liabilities",
   "version": "1.0.0",
   "scripts": {
     "pretty": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json,vue}\"",
     "build": "turbo run build",
     "build:dev": "PL_PKG_DEV=local turbo run build",
     "test": "PL_PKG_DEV=local turbo run test --concurrency 1",
+    "test:dry-run": "turbo run test --dry-run=json",
     "watch": "turbo watch build",
     "mark-stable": "turbo run mark-stable",
     "changeset": "changeset",

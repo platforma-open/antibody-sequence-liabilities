@@ -60,7 +60,7 @@ export const model = BlockModel.create()
     };
   })
 
-.title((ctx) => (ctx.args.title ? `Antibody Sequence Liabilities - ${ctx.args.title}` : 'Antibody Sequence Liabilities'))
+  .title((ctx) => (ctx.args.title ? `Antibody Sequence Liabilities - ${ctx.args.title}` : 'Antibody Sequence Liabilities'))
 
   .sections((_) => [
     { type: 'link', href: '/', label: 'Table' },
