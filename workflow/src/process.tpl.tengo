@@ -78,13 +78,13 @@ self.body(func(args) {
 				naRegex: "", 
 				allowNA: true,
 				spec: {
-					name: "pl7.app/vdj/" + text.to_lower(f_name) + "Liabilities",
+					name: "pl7.app/vdj/Liabilities",
 					valueType: "String",
 					domain: { "pl7.app/vdj/feature": f_name }, 
 					annotations: {
 						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": f_name + " Liabilities",
-						"pl7.app/table/visibility": "optional",
+						"pl7.app/table/visibility": "default",
 						"pl7.app/table/orderPriority": string(orderPriorityBase)
 					}
 				}
@@ -95,7 +95,7 @@ self.body(func(args) {
 				naRegex: "",
 				allowNA: true,
 				spec: {
-					name: "pl7.app/vdj/" + text.to_lower(f_name) + "Risk",
+					name: "pl7.app/vdj/liabilitiesRisk",
 					valueType: "String", 
 					domain: { "pl7.app/vdj/feature": f_name },
 					annotations: {
@@ -164,7 +164,8 @@ self.body(func(args) {
                             "pl7.app/table/visibility": "hidden", 
                             "pl7.app/table/orderPriority": "102",    
                             "pl7.app/sequence/annotation/mapping": string(newMapping), // Use the mapping from python
-                            "pl7.app/sequence/isAnnotation": "true"
+                            "pl7.app/sequence/isAnnotation": "true",
+                            "pl7.app/sequence/isLiabilityDone": "true"
                         }
                     }
                 }]
@@ -210,7 +211,8 @@ self.body(func(args) {
 					"pl7.app/table/visibility": "hidden",
 					"pl7.app/table/orderPriority": "102",
 					"pl7.app/sequence/annotation/mapping": string(newMapping), // Use mapping from python
-					"pl7.app/sequence/isAnnotation": "true"
+					"pl7.app/sequence/isAnnotation": "true",
+					"pl7.app/sequence/isLiabilityDone": "true"
 				    }
 			    }
 			}]
@@ -232,7 +234,7 @@ self.body(func(args) {
 	for col in columns {
 		if col.spec.name == "pl7.app/vdj/sequence/annotation" {
 			exportColumns += [col]
-		} else if col.spec.name == "pl7.app/vdj/liabilitiesRisk" {
+		} else if col.spec.annotations["pl7.app/vdj/isScore"] == "true" {
 			exportColumns += [col]
 		}
 	}
