@@ -15,7 +15,6 @@ self.body(func(args) {
 	inputTable := args.table
     mapping := args.mapping
 	liabilityTypes := args.liabilityTypes
-	ll.print("__THE_LOG__liabilityTypes: " + text.join(liabilityTypes, " "))
 
     // Run the liabilities calculation tool on the sequences
 	liabilitiesCalcCmd := exec.builder().
