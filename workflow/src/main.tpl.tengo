@@ -119,7 +119,7 @@ wf.body(func(args) {
 			} else if seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
 				chain := seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
 				chainLabel := (chain == "A" ? "Heavy" : "Light")
-				seqTableBuilder.add(seq_entry.key, {header: chainLabel + " " + feature + " aa"})
+				seqTableBuilder.add(seq_entry.key, {header: chainLabel + " " + " sequence aa"})
 			}
 		}
 		// Add primary chain annotations if they exist
