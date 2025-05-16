@@ -7,8 +7,8 @@ import sys
 import json
 import os
 
-# --- Original Liability Definitions (ORIG_...) ---
-# ... (Unchanged from the previous version) ...
+
+# Liability Definitions
 ORIG_CDR_LIABILITIES = {
     "Deamidation (N[GS])":         (r"N[GS]",    "High"),
     "Fragmentation (DP)":          (r"DP",       "High"),
@@ -27,10 +27,49 @@ ORIG_EXTRA_PATTERNS = {
 }
 ORIG_CYS_LIABILITIES = {"Missing Cysteines": "High", "Extra Cysteines": "High"}
 EXPECTED_CYS    = {"FR1": [22], "CDR3": [1]}
+FR1_SPECIFIC_LIABILITIES = {"Missing Cysteines", "Extra Cysteines"}
 
 
-# --- Helper functions (get_active_liability_definitions, identify_liabilities, classify_risk, etc.) ---
-# ... (Unchanged from the previous version) ...
+# Base-36 Utilities
+def base36_encode(n: int) -> str:
+    digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    if n == 0: return "0"
+    s = "";
+    while n > 0: n, r = divmod(n, 36); s = digits[r] + s
+    return s
+
+# Base-36 Decoding
+def base36_decode(s: str) -> int: return int(s, 36)
+
+
+# Parsing & Extraction
+def parse_annotations(ann: str):
+    segs = []
+    if not ann or not isinstance(ann, str): return segs
+    for part in ann.split("|"):
+        if ":" not in part or "+" not in part: continue
+        lab, rest = part.split(":", 1); st36, ln36 = rest.split("+", 1)
+        try: segs.append((lab, base36_decode(st36), base36_decode(ln36)))
+        except ValueError: print(f"Warning: Could not decode part '{part}' in annotation '{ann}'", file=sys.stderr); continue
+    return sorted(segs, key=lambda x: x[1])
+
+
+# Extract CDRs & FR1
+def extract_cdrs_fr1(seq: str, segments: list, region_map: dict):
+    frags, coords = {}, {}
+    for lab, start, length in segments:
+        name = region_map.get(str(lab))
+        if name:
+            if start < 0 or start + length > len(seq): 
+                print(f"Warning: Segment {name} ({start}+{length}) out of bounds for seq length {len(seq)}.", file=sys.stderr); continue
+            frags[name]  = seq[start:start+length]; coords[name] = (start, length)
+    if "CDR1" in coords: 
+        s0, _ = coords["CDR1"]
+        if s0 > 0: frags["FR1"]  = seq[:s0]; coords["FR1"] = (0, s0)
+    return frags, coords
+
+
+# Helper to get active liability definitions
 def get_active_liability_definitions(user_requested_set: set):
     if not user_requested_set: 
         return {}, {}, {}, {}
@@ -43,41 +82,80 @@ def get_active_liability_definitions(user_requested_set: set):
     }
     return active_cdr_l, active_extra_p, active_cys_l, active_liability_r
 
+
+# Liability & Risk Functions
 def identify_liabilities(seq: str, region: str, 
                          active_cdr_defs: dict, 
                          active_extra_defs: dict, 
-                         active_cys_defs: dict, 
-                         expected_cys_map: dict) -> str:
-    if not seq or not isinstance(seq, str) or not seq.strip(): return "Unknown"
+                         active_cys_defs: dict,
+                         expected_cys_map: dict,
+                         debug_col_name: str = "N/A") -> str: 
+    call_id = os.urandom(2).hex() 
+    if not seq or not isinstance(seq, str) or not seq.strip():
+        return "Unknown"
+    
     liabilities_found = []
+
+    # General "extra" patterns (applied to all regions first)
     for name, pattern in active_extra_defs.items():
-        if re.search(pattern, seq): liabilities_found.append(name)
-    if region.startswith("CDR"):
+        if re.search(pattern, seq):
+            liabilities_found.append(name)
+
+    # Region-specific logic
+    if region == "FR1":
+        print(f"DEBUG ID_LIAB (call:{call_id}, Col:'{debug_col_name}', Region:'{region}') Applying FR1-specific Cys checks.")
+        # For FR1, ONLY check specified Cys liabilities if they are active (user-requested)
+        if active_cys_defs: 
+            expected_indices = expected_cys_map.get(region, [])
+            if expected_indices:
+                actual_cys_count = seq.count("C"); expected_count = len(expected_indices)
+                if "Missing Cysteines" in active_cys_defs and actual_cys_count < expected_count:
+                    if "Missing Cysteines" not in liabilities_found: liabilities_found.append("Missing Cysteines")
+                if "Extra Cysteines" in active_cys_defs and actual_cys_count > expected_count: # Use elif if they are mutually exclusive
+                    if "Extra Cysteines" not in liabilities_found: liabilities_found.append("Extra Cysteines")
+    
+    elif region.startswith("CDR"):
+        # Apply active_cdr_defs for CDRs
         for name, (pattern, _) in active_cdr_defs.items():
             if name == "Tryptophan Oxidation (W)" and region == "CDR3":
-                if re.search(r"W(?!$)", seq): liabilities_found.append(name)
-            elif name != "Tryptophan Oxidation (W)" and re.search(pattern, seq):
-                 liabilities_found.append(name)
+                if re.search(r"W(?!$)", seq): 
+                    if name not in liabilities_found: liabilities_found.append(name)
+            elif name != "Tryptophan Oxidation (W)": # Avoid double-checking
+                if re.search(pattern, seq):
+                     if name not in liabilities_found: liabilities_found.append(name)
+        # General Tryptophan Oxidation for non-CDR3 CDRs
         if region != "CDR3" and "Tryptophan Oxidation (W)" in active_cdr_defs and \
            "Tryptophan Oxidation (W)" not in liabilities_found and \
            re.search(active_cdr_defs["Tryptophan Oxidation (W)"][0], seq):
             liabilities_found.append("Tryptophan Oxidation (W)")
-    elif region.startswith("FR"): 
-        fr_applicable_names = {"Methionine Oxidation (M)", "Tryptophan Oxidation (W)"}
-        for name in fr_applicable_names:
-            if name in active_cdr_defs: 
-                pattern, _ = active_cdr_defs[name]
-                if re.search(pattern, seq): liabilities_found.append(name)
-    if active_cys_defs:
-        expected_indices = expected_cys_map.get(region, [])
-        if expected_indices:
-            actual_cys_count = seq.count("C"); expected_count = len(expected_indices)
-            if "Missing Cysteines" in active_cys_defs and actual_cys_count < expected_count:
-                liabilities_found.append("Missing Cysteines")
-            elif "Extra Cysteines" in active_cys_defs and actual_cys_count > expected_count:
-                liabilities_found.append("Extra Cysteines")
-    return ", ".join(sorted(list(set(liabilities_found)))) if liabilities_found else "None"
+        
+        # Cysteine checks for CDRs (if defined in EXPECTED_CYS and active)
+        if active_cys_defs:
+            expected_indices = expected_cys_map.get(region, [])
+            if expected_indices:
+                actual_cys_count = seq.count("C"); expected_count = len(expected_indices)
+                if "Missing Cysteines" in active_cys_defs and actual_cys_count < expected_count:
+                    if "Missing Cysteines" not in liabilities_found: liabilities_found.append("Missing Cysteines")
+                if "Extra Cysteines" in active_cys_defs and actual_cys_count > expected_count:
+                    if "Extra Cysteines" not in liabilities_found: liabilities_found.append("Extra Cysteines")
 
+    elif region.startswith("FR"): # For other FRs (FR2, FR3, FR4)
+        print(f"DEBUG ID_LIAB (call:{call_id}, Col:'{debug_col_name}', Region:'{region}') Is FR (not FR1). Only Extra_Patterns and Cys applied if active.")
+        # Only check general Cys liabilities if defined and active
+        if active_cys_defs:
+            expected_indices = expected_cys_map.get(region, [])
+            if expected_indices:
+                actual_cys_count = seq.count("C"); expected_count = len(expected_indices)
+                if "Missing Cysteines" in active_cys_defs and actual_cys_count < expected_count:
+                    if "Missing Cysteines" not in liabilities_found: liabilities_found.append("Missing Cysteines")
+                if "Extra Cysteines" in active_cys_defs and actual_cys_count > expected_count:
+                    if "Extra Cysteines" not in liabilities_found: liabilities_found.append("Extra Cysteines")
+    
+    final_liabs_found_str = ", ".join(sorted(list(set(liabilities_found)))) if liabilities_found else "None"
+    print(f"DEBUG ID_LIAB (call:{call_id}, Col:'{debug_col_name}', Region:'{region}') Final result: '{final_liabs_found_str}'")
+    return final_liabs_found_str
+
+# Other helper functions
 def classify_risk(liabilities_str: str, 
                   active_cdr_defs: dict, 
                   active_cys_defs: dict, 
@@ -91,50 +169,24 @@ def classify_risk(liabilities_str: str,
         if item in active_cys_defs:
             item_risk_str = active_cys_defs[item]
             if risk_map[item_risk_str] > current_max_risk_level: current_max_risk_level = risk_map[item_risk_str]
-            if current_max_risk_level == risk_map["High"]: return "High"; continue
+            if current_max_risk_level == risk_map["High"]: return "High"; 
+            continue 
         if item in active_cdr_defs:
             item_risk_str = active_cdr_defs[item][1] 
             if risk_map[item_risk_str] > current_max_risk_level: current_max_risk_level = risk_map[item_risk_str]
-            if current_max_risk_level == risk_map["High"]: return "High"; continue
+            if current_max_risk_level == risk_map["High"]: return "High"; 
+            continue
         if item in active_extra_pattern_names: 
             if risk_map["High"] > current_max_risk_level: current_max_risk_level = risk_map["High"]
             if current_max_risk_level == risk_map["High"]: return "High"
     return level_to_risk[current_max_risk_level]
 
-def base36_encode(n: int) -> str:
-    digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    if n == 0: return "0"
-    s = "";
-    while n > 0: n, r = divmod(n, 36); s = digits[r] + s
-    return s
-def base36_decode(s: str) -> int: return int(s, 36)
-def parse_annotations(ann: str):
-    segs = []
-    if not ann or not isinstance(ann, str): return segs
-    for part in ann.split("|"):
-        if ":" not in part or "+" not in part: continue
-        lab, rest = part.split(":", 1); st36, ln36 = rest.split("+", 1)
-        try: segs.append((lab, base36_decode(st36), base36_decode(ln36)))
-        except ValueError: print(f"Warning: Could not decode part '{part}' in annotation '{ann}'", file=sys.stderr); continue
-    return sorted(segs, key=lambda x: x[1])
-def extract_cdrs_fr1(seq: str, segments: list, region_map: dict):
-    frags, coords = {}, {}
-    for lab, start, length in segments:
-        name = region_map.get(str(lab))
-        if name:
-            if start < 0 or start + length > len(seq):
-                print(f"Warning: Segment {name} ({start}+{length}) out of bounds for seq length {len(seq)}.", file=sys.stderr); continue
-            frags[name]  = seq[start:start+length]; coords[name] = (start, length)
-    if "CDR1" in coords:
-        s0, _ = coords["CDR1"]
-        if s0 > 0: frags["FR1"]  = seq[:s0]; coords["FR1"] = (0, s0)
-    return frags, coords
 def overall_risk_func(row_struct: dict) -> str:
     risk_values = [str(v).strip() for v in row_struct.values() if v is not None]
     if "High" in risk_values: return "High"
     if "Medium" in risk_values: return "Medium"
     if "Low" in risk_values: return "Low"
-    return "None" # Default to None if no specific risk levels found or only "Unknown"
+    return "None" 
 def _combine_heavy_light_prefixed_columns(df: pl.DataFrame, suffix: str, prefixes: tuple = ("Heavy", "Light")) -> pl.DataFrame:
     prefixed_cols_map = {prefix: {} for prefix in prefixes}
     current_df_columns = df.columns 
@@ -178,12 +230,12 @@ def _combine_heavy_light_prefixed_columns(df: pl.DataFrame, suffix: str, prefixe
 def _output_final_label_map(base_map: dict, liability_map: dict, output_path: str | None, description: str):
     final_map_all_strings = {}
     for key, value in base_map.items(): final_map_all_strings[str(key)] = str(value)
-    for liability_name, code in liability_map.items(): final_map_all_strings[str(code)] = str(liability_name) # Inverted here
+    for liability_name, code in liability_map.items(): final_map_all_strings[str(code)] = str(liability_name) 
     if output_path:
         try:
-            with open(output_path, "w") as f: json.dump(final_map_all_strings, f, indent=2, sort_keys=True) # Added sort_keys
-            print(f"✅ {description} label map written to {output_path}")
-        except IOError as e: print(f"❌ Error writing {description} label map to '{output_path}': {e}", file=sys.stderr)
+            with open(output_path, "w") as f: json.dump(final_map_all_strings, f, indent=2, sort_keys=True) 
+            print(f"{description} label map written to {output_path}")
+        except IOError as e: print(f"Error writing {description} label map to '{output_path}': {e}", file=sys.stderr)
     else: print(f"\n{description} label map:\n{json.dumps(final_map_all_strings, indent=2, sort_keys=True)}")
 
 
@@ -194,9 +246,9 @@ def main():
     p.add_argument("output_tsv", help="Output TSV")
     p.add_argument("-m", "--label-map", help="JSON file or string for numeric region labels to names.")
     p.add_argument("-o", "--output-label-map", help="Where to write JSON label map. Empty map if no input annotations or no liabilities calculated.")
-    p.add_argument("--include-liabilities", type=str,
+    p.add_argument("--include-liabilities", type=str, 
                    help="A comma-delimited string of specific liability names to calculate (e.g., \"Deamidation (N[GS]),Methionine Oxidation (M)\"). If not provided, no liabilities or risks are calculated.")
-    p.add_argument("--output-regions-found", type=str, # New argument
+    p.add_argument("--output-regions-found", type=str,
                    help="Path to output a JSON list of found regions (CDR1, CDR2, CDR3, FR1).")
     args = p.parse_args()
 
@@ -211,15 +263,13 @@ def main():
 
     if CALCULATE_LIABILITIES:
         if not (active_cdr_defs or active_extra_defs or active_cys_defs):
-            print("⚠️ --include-liabilities provided, but no recognized liability names matched internal definitions. No liabilities will be calculated.")
+            print("Warning: --include-liabilities provided, but no recognized liability names matched internal definitions. No liabilities will be calculated.")
             CALCULATE_LIABILITIES = False 
             active_cdr_defs, active_extra_defs, active_cys_defs, active_liability_regex = {}, {}, {}, {}
         else:
-            # Create a list of actually recognized and active liabilities for the print message
             recognized_active_set = set(active_cdr_defs.keys()) | set(active_extra_defs.keys()) | set(active_cys_defs.keys())
-            print(f"ℹ️ Will calculate for requested and recognized liabilities: {sorted(list(recognized_active_set))}")
     else:
-        print("ℹ️ --include-liabilities not provided or no recognized names. Liability and risk calculations will be skipped.")
+        print("Warning: --include-liabilities not provided or no recognized names. Liability and risk calculations will be skipped.")
         active_cdr_defs, active_extra_defs, active_cys_defs, active_liability_regex = {}, {}, {}, {}
 
     initial_region_map = {}
@@ -229,7 +279,7 @@ def main():
                 with open(args.label_map, 'r') as f: initial_region_map = json.load(f)
             else: initial_region_map = json.loads(args.label_map)
             if not isinstance(initial_region_map, dict): initial_region_map = {}
-        except Exception as e: print(f"❌ Error loading --label-map: {e}", file=sys.stderr); initial_region_map = {}
+        except Exception as e: print(f"Error loading --label-map: {e}", file=sys.stderr); initial_region_map = {}
 
     liability_codes = {} 
     existing_numeric_keys = [int(k) for k in initial_region_map.keys() if str(k).isdigit()] if isinstance(initial_region_map, dict) else []
@@ -238,7 +288,7 @@ def main():
     try:
         df = pl.read_csv(args.input_tsv, separator="\t", ignore_errors=True, infer_schema_length=1000)
         df.columns = [" ".join(col.strip().split()) for col in df.columns]
-    except Exception as e: sys.exit(f"❌ Error reading input TSV '{args.input_tsv}': {e}")
+    except Exception as e: sys.exit(f"Error reading input TSV '{args.input_tsv}': {e}")
     df_processed = df.clone()
     
     ann_cols = [c for c in df_processed.columns if c.lower().endswith("annotations")]
@@ -248,7 +298,7 @@ def main():
     cols_for_liability_analysis = []
     skip_extraction_due_to_preexisting_regions = False
 
-    if has_input_ann_cols: # Pre-extraction check
+    if has_input_ann_cols:
         unique_ann_prefixes = set()
         for name in ann_cols: prefix = name[:-len("annotations")].strip().rstrip("_"); unique_ann_prefixes.add(prefix)
         if unique_ann_prefixes:
@@ -258,20 +308,19 @@ def main():
                 current_prefix_all_regions_found = True
                 for region_base in ["CDR1", "CDR2", "CDR3", "FR1"]:
                     expected_col_name = " ".join(f"{prefix_for_col_lookup}{region_base} aa".split())
-                    if expected_col_name not in df_processed.columns: current_prefix_all_regions_found = False; print(f"ℹ️ Pre-existing check: '{expected_col_name}' not found for prefix '{ann_prefix_raw}'."); break 
+                    if expected_col_name not in df_processed.columns: current_prefix_all_regions_found = False; print(f"Pre-existing check: '{expected_col_name}' not found for prefix '{ann_prefix_raw}'."); break 
                     temp_cols_for_liability_if_skipping.append(expected_col_name)
                 if not current_prefix_all_regions_found: all_prefix_sets_found_preexisting = False; break 
             if all_prefix_sets_found_preexisting:
                 skip_extraction_due_to_preexisting_regions = True
                 cols_for_liability_analysis.extend(temp_cols_for_liability_if_skipping)
                 cols_for_liability_analysis = sorted(list(set(cols_for_liability_analysis)))
-                print(f"✅ Pre-existing CDR/FR columns found. Skipping extraction. Using: {cols_for_liability_analysis}")
+                print(f"Pre-existing CDR/FR columns found. Skipping extraction. Using: {cols_for_liability_analysis}")
 
     if skip_extraction_due_to_preexisting_regions:
-        print(f"ℹ️ Proceeding with pre-existing columns: {cols_for_liability_analysis}")
+        print(f"Proceeding with pre-existing columns: {cols_for_liability_analysis}")
     elif has_input_ann_cols: 
-        print(f"ℹ️ Path A: Extracting regions and updating annotations (if liabilities are calculated).")
-        # --- PATH A ---
+        print(f"Path A: Extracting regions and updating annotations (with FR1 specific logic if liabilities are calculated).")
         chain_prefixes_found = set()
         for ann_col_name_for_prefix_check in ann_cols:
             if " " in ann_col_name_for_prefix_check: chain_prefixes_found.add(ann_col_name_for_prefix_check.split(" ")[0])
@@ -291,15 +340,35 @@ def main():
                 parsed_segments = parse_annotations(ann_data)
                 extracted_frags, frag_coords = extract_cdrs_fr1(seq_data, parsed_segments, str_key_initial_region_map)
                 current_ann_parts = [p for p in (ann_data.split("|") if ann_data and ann_data.strip() else []) if p]
+                
                 if CALCULATE_LIABILITIES: 
                     for region_name, fragment_seq in extracted_frags.items():
                         start_coord, _ = frag_coords[region_name]
-                        for liability_name, pattern in active_liability_regex.items(): 
-                            for match in re.finditer(pattern, fragment_seq):
-                                global_start, global_length = start_coord + match.start(), match.end() - match.start()
-                                if liability_name not in liability_codes: liability_codes[liability_name] = str(next_code); next_code += 1
-                                code = liability_codes[liability_name]
-                                current_ann_parts.append(f"{code}:{base36_encode(global_start)}+{base36_encode(global_length)}")
+                        if region_name == "FR1":
+                            # FR1: Only check for "Missing Cysteines" and "Extra Cysteines" IF they are in active_cys_defs
+                            print(f"DEBUG PathA Annotate: FR1 detected. active_cys_defs: {active_cys_defs.keys()}")
+                            if active_cys_defs:
+                                expected_indices_fr1 = EXPECTED_CYS.get("FR1", [])
+                                if expected_indices_fr1:
+                                    actual_cys_fr1 = fragment_seq.count("C")
+                                    expected_cys_fr1 = len(expected_indices_fr1)
+                                    cys_liability_name = None
+                                    if actual_cys_fr1 < expected_cys_fr1: cys_liability_name = "Missing Cysteines"
+                                    elif actual_cys_fr1 > expected_cys_fr1: cys_liability_name = "Extra Cysteines"
+                                    
+                                    if cys_liability_name and cys_liability_name in active_cys_defs:
+                                        print(f"DEBUG PathA Annotate: FR1 Cys liability '{cys_liability_name}' found and active.")
+                                        if cys_liability_name not in liability_codes:
+                                            liability_codes[cys_liability_name] = str(next_code); next_code +=1
+                                        code = liability_codes[cys_liability_name]
+                                        current_ann_parts.append(f"{code}:{base36_encode(start_coord)}+{base36_encode(0)}")
+                        else:
+                            for liability_name, pattern in active_liability_regex.items(): 
+                                for match in re.finditer(pattern, fragment_seq):
+                                    global_start, global_length = start_coord + match.start(), match.end() - match.start()
+                                    if liability_name not in liability_codes: liability_codes[liability_name] = str(next_code); next_code += 1
+                                    code = liability_codes[liability_name]
+                                    current_ann_parts.append(f"{code}:{base36_encode(global_start)}+{base36_encode(global_length)}")
                 updated_annotations_for_col.append("|".join(sorted(list(set(current_ann_parts)))))
                 row_dict = {}
                 prefix_for_frag_col = f"{current_prefix_raw.capitalize()} " if current_prefix_raw and multiple_chains_present else ""
@@ -319,32 +388,33 @@ def main():
         path_a_frag_cols = [c for c in df_processed.columns if c.lower().endswith(" aa") and any(k in c.lower() for k in ["cdr1","cdr2","cdr3","fr1"]) and not c.lower().endswith("sequence aa")]
         cols_for_liability_analysis.extend(path_a_frag_cols); cols_for_liability_analysis = sorted(list(set(cols_for_liability_analysis)))
     elif not has_input_ann_cols: 
-        print(f"ℹ️ Path B (No Annotations Mode): Using direct sequence columns.")
+        print(f"Path B (No Annotations Mode): Using direct sequence columns.")
         candidate_seq_cols_for_path_b = [c for c in all_seq_cols if any(key_suffix in c.lower() for key_suffix in TARGET_REGION_KEYS)]
         if not candidate_seq_cols_for_path_b:
-            print("ℹ️ Path B: No standard sequence columns found. Writing input unchanged."); df_processed.write_csv(args.output_tsv, separator="\t"); return
+            print("Path B: No standard sequence columns found. Writing input unchanged."); df_processed.write_csv(args.output_tsv, separator="\t"); return
         cols_for_liability_analysis.extend(candidate_seq_cols_for_path_b); cols_for_liability_analysis = sorted(list(set(cols_for_liability_analysis)))
     
     if not cols_for_liability_analysis and CALCULATE_LIABILITIES: 
-        print(f"⚠️ No columns identified for liability analysis, but liabilities were requested.")
+        print(f"No columns identified for liability analysis, but liabilities were requested.")
     elif not cols_for_liability_analysis and not CALCULATE_LIABILITIES:
-        print(f"ℹ️ No columns identified for liability analysis (and none were requested).")
+        print(f"No columns identified for liability analysis (and none were requested).")
 
     if CALCULATE_LIABILITIES and cols_for_liability_analysis:
-        # ... (Common Downstream Processing for Liabilities and Risks - unchanged from previous version) ...
-        print(f"ℹ️ Generating liabilities for columns: {cols_for_liability_analysis}")
+        print(f"Generating liabilities for columns: {cols_for_liability_analysis}")
         liability_expressions, risk_expressions = [], []
         generated_liability_summary_col_names, generated_risk_col_names = [], []
+
         for frag_seq_col in cols_for_liability_analysis:
             if frag_seq_col not in df_processed.columns: continue
             match = re.search(r"(FR1|CDR1|CDR2|CDR3)", frag_seq_col, re.IGNORECASE)
-            core_region_name = match.group(1).upper() if match else "UNKNOWN_REGION"
+            core_region_name = match.group(1).upper() if match else "UNKNOWN_REGION"            
             new_liab_col = f"{frag_seq_col} liabilities"
             generated_liability_summary_col_names.append(new_liab_col)
             liability_expressions.append(pl.col(frag_seq_col).cast(pl.Utf8).map_elements(
-                lambda s: identify_liabilities(s, core_region_name, active_cdr_defs, active_extra_defs, active_cys_defs, EXPECTED_CYS),
+                lambda s, fsc=frag_seq_col, crn=core_region_name: identify_liabilities(s, crn, active_cdr_defs, active_extra_defs, active_cys_defs, EXPECTED_CYS, debug_col_name=fsc),
                 return_dtype=pl.Utf8, skip_nulls=False).fill_null("Unknown").alias(new_liab_col))
         if liability_expressions: df_processed = df_processed.with_columns(liability_expressions)
+
         for liab_col in generated_liability_summary_col_names:
             if liab_col not in df_processed.columns: continue
             new_risk_col = liab_col.replace(" liabilities", " risk")
@@ -353,17 +423,18 @@ def main():
                 lambda l_str: classify_risk(l_str, active_cdr_defs, active_cys_defs, set(active_extra_defs.keys())),
                 return_dtype=pl.Utf8, skip_nulls=False).fill_null("None").alias(new_risk_col))
         if risk_expressions: df_processed = df_processed.with_columns(risk_expressions)
+
         existing_risk_cols_for_struct = [c for c in generated_risk_col_names if c in df_processed.columns]
         if existing_risk_cols_for_struct:
             df_processed = df_processed.with_columns(pl.struct([pl.col(c) for c in existing_risk_cols_for_struct])
                 .map_elements(overall_risk_func, return_dtype=pl.Utf8, skip_nulls=False).fill_null("None").alias("Liabilities risk"))
         elif "Liabilities risk" not in df_processed.columns: 
              df_processed = df_processed.with_columns(pl.lit("None").cast(pl.Utf8).alias("Liabilities risk"))
+        
         df_processed = _combine_heavy_light_prefixed_columns(df_processed, "risk")
         df_processed = _combine_heavy_light_prefixed_columns(df_processed, "liabilities")
         
-    # --- Output Column Selection & Final Write ---
-    # ... (Unchanged from previous version, will naturally exclude liability/risk cols if not calculated) ...
+    # Output Column Selection & Final Write
     output_cols_core = ["clonotypeKey"] if "clonotypeKey" in df_processed.columns else []
     final_annotation_cols_list = ann_cols if has_input_ann_cols else [] 
     final_annotation_cols = sorted(list(set(final_annotation_cols_list))) 
@@ -394,39 +465,46 @@ def main():
         individual_frag_risks + combined_region_risks + combined_chain_risks +
         overall_liab_risk_col ))
     output_cols_existing = [c for c in output_cols_ordered if c in df_processed.columns]
-    df_out = df_processed.select(output_cols_existing) if output_cols_existing else df_processed
-    if not output_cols_existing and df_processed.width > 0: print("⚠️ No columns for final output. Writing entire table.", file=sys.stderr)
+    df_out = df_processed.select(output_cols_existing) if output_cols_existing and len(output_cols_existing) > 0 else df_processed
+    if not output_cols_existing and df_processed.width > 0 : print("No columns selected for final output based on defined order criteria. Writing entire processed DataFrame.", file=sys.stderr)
     
-    try:
-        df_out.write_csv(args.output_tsv, separator="\t", quote_style="never")
-        print(f"✅ Output table written to {args.output_tsv}")
-    except Exception as e: print(f"❌ Error writing output TSV: {e}", file=sys.stderr)
+    if df_out.width == 0 and df_processed.width > 0: 
+        print("Output selection resulted in an empty DataFrame, but processed data exists. Writing full processed DataFrame instead.")
+        df_out = df_processed
+    elif df_out.width == 0: 
+        print("Processed DataFrame is empty or output selection is empty. Nothing to write to TSV.", file=sys.stderr)
+    
+    if df_out.width > 0:
+        try:
+            df_out.write_csv(args.output_tsv, separator="\t", quote_style="never")
+            print(f"Output table written to {args.output_tsv}")
+        except Exception as e: print(f"Error writing output TSV: {e}", file=sys.stderr)
+    else:
+        if args.output_tsv:
+            try:
+                with open(args.output_tsv, 'w') as f_empty:
+                    if output_cols_existing: f_empty.write("\t".join(output_cols_existing) + "\n")
+                    elif len(df_processed.columns) > 0 : f_empty.write("\t".join(df_processed.columns) + "\n")
+                print(f"Empty output table (or headers only) written to {args.output_tsv} as no data rows were processed/selected.")
+            except Exception as e:
+                 print(f"Error writing empty output TSV to '{args.output_tsv}': {e}", file=sys.stderr)
 
-    # --- Generate and Write List of Found Regions (New Output) ---
     if args.output_regions_found:
         found_regions_set = set()
         CANONICAL_REGIONS = ["CDR1", "CDR2", "CDR3", "FR1"]
-        # Use cols_for_liability_analysis as it should contain the relevant region sequence columns
         if cols_for_liability_analysis:
             for col_name in cols_for_liability_analysis:
                 for region_canonical_name in CANONICAL_REGIONS:
-                    # \b ensures whole word match for the region name
                     if re.search(r'\b' + re.escape(region_canonical_name) + r'\b', col_name, re.IGNORECASE):
                         found_regions_set.add(region_canonical_name)
                         break 
             list_of_found_regions = sorted(list(found_regions_set))
-        else:
-            list_of_found_regions = []
-            print("ℹ️ No columns were identified for liability analysis, so the list of found regions will be empty.")
+        else: list_of_found_regions = []
         try:
-            with open(args.output_regions_found, 'w') as f:
-                json.dump(list_of_found_regions, f, indent=2)
-            print(f"✅ List of found regions {list_of_found_regions} written to {args.output_regions_found}")
-        except IOError as e:
-            print(f"❌ Error writing found regions list to '{args.output_regions_found}': {e}", file=sys.stderr)
-    # --- End of Generate and Write List of Found Regions ---
+            with open(args.output_regions_found, 'w') as f: json.dump(list_of_found_regions, f, indent=2, sort_keys=True)
+            print(f"List of found regions {list_of_found_regions} written to {args.output_regions_found}")
+        except IOError as e: print(f"Error writing found regions list to '{args.output_regions_found}': {e}", file=sys.stderr)
 
-    # Conditional output of label map
     if not has_input_ann_cols:
         _output_final_label_map({}, {}, args.output_label_map, "Empty Label Map")
     elif not CALCULATE_LIABILITIES: 
