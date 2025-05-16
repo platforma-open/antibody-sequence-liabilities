@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // @ts-nocheck - Disable TypeScript checking for this file
-import { PlBlockPage, PlDropdownRef, PlAgDataTable, PlSlideModal, PlBtnGhost, PlMaskIcon24 } from '@platforma-sdk/ui-vue';
+import { PlBlockPage, PlDropdownRef, PlAgDataTable, PlSlideModal, PlBtnGhost, PlMaskIcon24, PlDropdownMulti } from '@platforma-sdk/ui-vue';
 import type { PlRef, PlDataTableSettings } from '@platforma-sdk/model';
 import { plRefsEqual } from '@platforma-sdk/model';
 import { computed, ref } from 'vue';
@@ -35,6 +35,31 @@ const tableSettings = computed<PlDataTableSettings>(() => ({
 
 const settingsIsShown = ref(app.model.args.inputAnchor === undefined);
 
+const liabilityTypesOptions = computed(() => {
+  const liabilities = [
+    { value: 'Deamidation (N[GS])', label: 'Deamidation (N[GS])' },
+    { value: 'Fragmentation (DP)', label: 'Fragmentation (DP)' },
+    { value: 'Isomerization (D[DGHST])', label: 'Isomerization (D[DGHST])' },
+    { value: 'N-linked Glycosylation (N[^P][ST])', label: 'N-linked Glycosylation (N[^P][ST])' },
+    { value: 'Deamidation (N[AHNT])', label: 'Deamidation (N[AHNT])' },
+    { value: 'Hydrolysis (NP)', label: 'Hydrolysis (NP)' },
+    { value: 'Fragmentation (TS)', label: 'Fragmentation (TS)' },
+    { value: 'Tryptophan Oxidation (W)', label: 'Tryptophan Oxidation (W)' },
+    { value: 'Methionine Oxidation (M)', label: 'Methionine Oxidation (M)' },
+    { value: 'Deamidation ([STK]N)', label: 'Deamidation ([STK]N)' },
+    { value: 'Missing Cysteines', label: 'Missing Cysteines' },
+    { value: 'Extra Cysteines', label: 'Extra Cysteines' },
+  ];
+  return liabilities;
+});
+
+const liabilityTypesModel = computed({
+  get: () => (app.model.args.liabilityTypes ?? []),
+  set: (value) => {
+    app.model.args.liabilityTypes = value ?? [];
+  },
+});
+
 </script>
 
 <template>
@@ -63,6 +88,10 @@ const settingsIsShown = ref(app.model.args.inputAnchor === undefined);
       required
       @update:model-value="setInput"
     />
-
+    <PlDropdownMulti v-model="liabilityTypesModel" label="Liability types" :options="liabilityTypesOptions" >
+      <template #tooltip>
+        Select the liability types to include in the analysis.
+      </template>
+    </PlDropdownMulti>
   </PlSlideModal>
 </template>
