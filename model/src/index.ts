@@ -13,7 +13,7 @@ export type BlockArgs = {
   clonotypingRunId?: string;
   chain?: string;
   title?: string;
-  isSingleCell?: boolean;
+  liabilityTypes?: string[];
 };
 
 export type UiState = {

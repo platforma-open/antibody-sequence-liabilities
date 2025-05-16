@@ -1,5 +1,8 @@
 // Import required modules
-wf := import("@platforma-sdk/workflow-tengo:workflow")  // Workflow utilities
+wf := import("@platforma-sdk/workflow-tengo:workflow")
+render := import("@platforma-sdk/workflow-tengo:render")
+smart := import("@platforma-sdk/workflow-tengo:smart")
+file := import("@platforma-sdk/workflow-tengo:file")
 exec := import("@platforma-sdk/workflow-tengo:exec")    // Command execution utilities
 assets:= import("@platforma-sdk/workflow-tengo:assets") // Asset management
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
@@ -7,339 +10,185 @@ ll := import("@platforma-sdk/workflow-tengo:ll")        // Logging utilities
 pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
 text := import("text")                                   // Text manipulation utilities
-// Import the liabilities calculation software
-liabilitiesCalcSw := assets.importSoftware("@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script:main")
+json := import("json") // Import json module for encoding
 
-
+calculateLiabilitiesTpl := assets.importTemplate(":liabilities-calculation")
+processTpl := assets.importTemplate(":process")
 // Prepare phase of the workflow - collects and sets up required data
 wf.prepare(func(args) {
-	clonotypingRunId := args.clonotypingRunId  // The ID of the clonotyping run
-	chain := args.chain                        // The antibody chain (if specified)
-	isSingleCell := args.isSingleCell        // Flag indicating if data comes from a single cell analysis
 
-	// Helper function to construct data query based on feature and data type
-	query := func(feature, isSingleCell) {
-		// Base query
-		queryUniversal := {
-			type: "And",
-			operands:  [
-				{
-					type: "Domain",
-					domain: {
-						"pl7.app/alphabet": "aminoacid",
-          				"pl7.app/vdj/feature": feature  // CDR1, CDR2, CDR3, or FR1
-					},
-					domainExactMatch: false
-				},
-				{
-					type: "Name",
-					name: "pl7.app/vdj/sequence"
-				},
-				{
-					type: "AxesKeys",
-					axesKeys: [
-						{
-							domain: {
-								"pl7.app/vdj/clonotypingRunId": clonotypingRunId
-							},
-							domainExactMatch: false
-						}
-					],
-					partialMatch: true
-				}
-			]
-		}
-		
-		// If chain is specified -> bulk data
-		if !is_undefined(chain) {
-			queryUniversal.operands[2].axesKeys[0].domain["pl7.app/vdj/chain"] = chain
-			queryUniversal.operands[2].axesKeys[0].name = "pl7.app/vdj/clonotypeKey"
-			return queryUniversal
-		} else if isSingleCell {
-			// For single cell data, create separate queries for chains A and B
-			querySingleCell := []
-			for ch in ["A", "B"] {
-				queryTemp := {
-					type: queryUniversal.type,
-					operands: [
-						queryUniversal.operands[1],
-						{
-							type: queryUniversal.operands[0].type,
-							domain: {
-								"pl7.app/alphabet": queryUniversal.operands[0].domain["pl7.app/alphabet"],
-								"pl7.app/vdj/feature": queryUniversal.operands[0].domain["pl7.app/vdj/feature"],
-								"pl7.app/vdj/scClonotypeChain": ch,
-								"pl7.app/vdj/scClonotypeChain/index": "primary"
-							},
-							domainExactMatch: queryUniversal.operands[0].domainExactMatch
-						},
-						{
-							type: queryUniversal.operands[2].type,
-							axesKeys: [
-								{
-									domain: {
-										"pl7.app/vdj/clonotypingRunId": queryUniversal.operands[2].axesKeys[0].domain["pl7.app/vdj/clonotypingRunId"]
-									},
-									domainExactMatch: queryUniversal.operands[2].axesKeys[0].domainExactMatch,
-									name: "pl7.app/vdj/scClonotypeKey"
-								}
-							],
-							partialMatch: queryUniversal.operands[2].partialMatch
-						}
-					]
-				}
-				querySingleCell += [queryTemp]
+	bundleBuilder := wf.createPBundleBuilder()
+	bundleBuilder.ignoreMissingDomains()  // Allow missing domains in the input data
+	bundleBuilder.addAnchor("main", args.inputAnchor)  // Set the main anchor point for data
+
+	// Collect all amino acid sequences from the input data
+	bundleBuilder.addMulti({
+		axes: [{ anchor: "main", idx: 1 }],
+	//	name: "pl7.app/vdj/sequence",
+		annotations: {
+			"pl7.app/vdj/isAssemblingFeature": "true"
+		},
+		domain: {
+			"pl7.app/alphabet": "aminoacid"
 			}
-			return querySingleCell
-		}
-	}
+		}, "sequences")
 
-	// Query options
-	ops := {
-		single: true  // Return a single result
-	}
+	bundleBuilder.addMulti({
+		axes: [{ anchor: "main", idx: 1 }],
+		name: "pl7.app/vdj/sequence/annotation",
+		annotations: {
+			"pl7.app/sequence/isAnnotation": "true"
+		},
+		domain: {
+			"pl7.app/alphabet": "aminoacid",
+          	"pl7.app/sequence/annotation/type": "CDRs"
+		}
+	}, "annotations")
 
-	// Return different data structures based on whether it's single cell data
-	if isSingleCell {
-		return {
-			data: wf.resolve(args.inputAnchor),  // Input data
-			hasCells: true,  // Indicates this is single cell data
-			// Query different antibody regions for both chains A and B
-			aaCDR3ColA: wf.query(query("CDR3", isSingleCell)[0], ops),
-			aaCDR1ColA: wf.query(query("CDR1", isSingleCell)[0], ops),
-			aaCDR2ColA: wf.query(query("CDR2", isSingleCell)[0], ops),
-			aaFR1ColA: wf.query(query("FR1", isSingleCell)[0], ops),
-			aaCDR3ColB: wf.query(query("CDR3", isSingleCell)[1], ops),
-			aaCDR1ColB: wf.query(query("CDR1", isSingleCell)[1], ops),
-			aaCDR2ColB: wf.query(query("CDR2", isSingleCell)[1], ops),
-			aaFR1ColB: wf.query(query("FR1", isSingleCell)[1], ops)
+	bundleBuilder.addMulti({
+		axes: [{ anchor: "main", idx: 1 }],
+		name: "pl7.app/vdj/sequence",
+		domain: {
+			"pl7.app/alphabet": "aminoacid"
 		}
-	} else {
+	}, "additionalSequences")
+
 		return {
-			data: wf.resolve(args.inputAnchor),  // Input data
-			hasCells: false,  // Not single cell data
-			// Query different antibody regions for the specified chain
-			aaCDR3ColA: wf.query(query("CDR3", isSingleCell), ops),
-			aaCDR1ColA: wf.query(query("CDR1", isSingleCell), ops),
-			aaCDR2ColA: wf.query(query("CDR2", isSingleCell), ops),
-			aaFR1ColA: wf.query(query("FR1", isSingleCell), ops)
+			columns: bundleBuilder.build()  // Build the column bundle for processing
 		}
 	}
-})
+)
 
 wf.body(func(args) {
-	hasCells := args.hasCells  // Flag indicating if this is single cell data
-	columnsToExport := []
-	
-	// Collect the columns to export based on data type
-	chain := undefined
-	if hasCells {
-		// For single cell data, get sequences for both chains A and B
-		aaCDR3ColA := args.aaCDR3ColA
-		aaCDR1ColA := args.aaCDR1ColA
-		aaCDR2ColA := args.aaCDR2ColA
-		aaFR1ColA := args.aaFR1ColA
-		aaCDR3ColB := args.aaCDR3ColB
-		aaCDR1ColB := args.aaCDR1ColB
-		aaCDR2ColB := args.aaCDR2ColB
-		aaFR1ColB := args.aaFR1ColB
-		columnsToExport = [aaCDR3ColA, aaCDR1ColA, aaCDR2ColA, aaFR1ColA, aaCDR3ColB, aaCDR1ColB, aaCDR2ColB, aaFR1ColB]
+	columnsWithSequences := args.columns
+	sequences := columnsWithSequences.getColumns("sequences")
+	annotations := columnsWithSequences.getColumns("annotations")
+	additionalSequences := columnsWithSequences.getColumns("additionalSequences")
+	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
+	liabilityTypes := args.liabilityTypes
+
+	ll.print("__THE_LOG__liabilityTypes: " + liabilityTypes)
+
+
+	// Determine if we're working with single cell data
+	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
+
+	// Start building the table with sequence data
+	seqTableBuilder := columnsWithSequences.xsvTableBuilder() // Use a different name to avoid confusion before build()
+	seqTableBuilder.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
+
+	// Determine the primary assembling feature (e.g., CDR3)
+	// This assumes all 'sequences' share the same core feature or takes the first one's.
+	feature := ""
+	if len(sequences) > 0 {
+		feature = sequences[0].spec.domain["pl7.app/vdj/feature"]
 	} else {
-		// For bulk data, get sequences for the specified chain
-		aaCDR3ColA := args.aaCDR3ColA
-		aaCDR1ColA := args.aaCDR1ColA
-		aaCDR2ColA := args.aaCDR2ColA
-		aaFR1ColA := args.aaFR1ColA
-		chain := args.chain
-		heavyCDR3spec := aaCDR3ColA.spec
-		columnsToExport = [aaCDR3ColA, aaCDR1ColA, aaCDR2ColA, aaFR1ColA]
+		ll.panic("No sequences found to determine the primary feature.") // Or handle as an error/empty case
 	}
 
-	for col in columnsToExport {
-		col.spec.annotations["pl7.app/label"] = text.re_replace(" Primary", col.spec.annotations["pl7.app/label"], "")
-	}
-	clonotypingRunId := args.clonotypingRunId
-	data := args.data
-	
-	// Get the clonotype key specification from the data
-	clonotypeKeySpec := data.spec.axesSpec[1]
+	hasAnnotations := len(annotations) > 0
 
-	// Export the sequences to a TSV file for processing
-	tsv := xsv.exportFrame(columnsToExport, "tsv", {})
+	ll.print("__THE_LOG__annotations: " + hasAnnotations)
+	ll.print("__THE_LOG__isSingleCell: " + isSingleCell)
+	ll.print("__THE_LOG__sequences: " + sequences)
 
-	// Run the liabilities calculation tool on the sequences
-	liabilitiesCalcCmd := exec.builder().
-		software(liabilitiesCalcSw).
-		addFile("input.tsv", tsv).
-		arg("input.tsv").
-		saveFile("result.tsv").
-		arg("result.tsv").
-		run()
+	// Track which features are actually present in the data
+	coveredFeatures := {}
 
-	// Get the results from the calculation
-	result := liabilitiesCalcCmd.getFile("result.tsv")
-
-	// Create a trace for tracking the liabilities calculation
-	trace := pSpec.makeTrace(data.spec,
-		{type: "milaboratories.antibody-sequence-liabilities", importance: 30, label: "Liabilities risk"})
-	
-	// Set up the axes for the output data
-	axes := []
-	if hasCells {
-		axes = [
-			{
-				column: "Clone label",
-				id: "clone-label",
-				spec: clonotypeKeySpec
+	if isSingleCell {
+		// Single-cell data handling
+		// Add primary chain sequences
+		for seq_entry in sequences {
+			if seq_entry.spec.name == "pl7.app/vdj/scFv-sequence" {
+				for additionalSeq in additionalSequences {
+					if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
+						for fr in ["CDR1", "CDR2", "CDR3", "FR1"] {
+							if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr {
+								chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
+								chainLabel := (chain == "A" ? "Heavy" : "Light")	
+								seqTableBuilder.add(additionalSeq.key, {header: chainLabel + " " + fr + " aa"})
+								if coveredFeatures[fr] {
+									coveredFeatures[fr] += 1
+								} else {
+									coveredFeatures[fr] = 1
+								}
+							}
+						}
+					}
+				}
+			} else if seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
+				chain := seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
+				chainLabel := (chain == "A" ? "Heavy" : "Light")
+				seqTableBuilder.add(seq_entry.key, {header: chainLabel + " " + feature + " aa"})
 			}
-		]
-	} else {
-		axes = [
-			{
-				column: "Clonotype key",
-				id: "clonotypeKey",
-				spec: clonotypeKeySpec
-			}
-		]
-	}
-
-	// Define the output columns - starting with the overall liabilities risk
-	columns := [
-		{
-			column: "Liabilities risk",
-			id: "liabilitiesRisk",
-			naRegex: "",
-			allowNA: true,
-			spec: {
-				name: "pl7.app/vdj/liabilitiesRisk",
-				valueType: "String",
-				annotations: {
-					"pl7.app/trace": trace.valueStr,
-					"pl7.app/label": "Liabilities risk",
-					"pl7.app/isDiscreteFilter": "true",
-            		"pl7.app/discreteValues": "['Low', 'Medium', 'High']",
-					"pl7.app/vdj/isScore": "true",
-					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "100"
+		}
+		// Add primary chain annotations if they exist
+		if hasAnnotations {
+			for ann_entry in annotations {
+				if ann_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
+					chain := ann_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
+					chainLabel := (chain == "A" ? "Heavy" : "Light")
+					// Python script expects annotation columns to end with "annotations"
+					// and might derive prefix like "Heavy CDRs" or "Light CDRs"
+					seqTableBuilder.add(ann_entry.key, {header: chainLabel + " annotations"})
 				}
 			}
 		}
-	]
-
-	if hasCells {
-		columns += [
-			{
-				column: "Heavy CDR3 aa",
-				id: "cdr3-aa-primary-heavy",
-				spec: {
- 				name: "pl7.app/vdj/cdr3aaPrimaryHeavy",
- 				valueType: "String",
- 				domain: columnsToExport[0].spec.domain,
- 				annotations: {
- 					"pl7.app/label": "Heavy CDR3 aa",
- 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "101"
-					}
-				}
-			},
-			{
-				column: "Light CDR3 aa",
-				id: "cdr3-aa-primary-light",
-				spec: {
- 				name: "pl7.app/vdj/cdr3aaPrimaryLight",
- 				valueType: "String",
- 				domain: columnsToExport[4].spec.domain,
- 				annotations: {
- 					"pl7.app/label": "Light CDR3 aa",
- 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "101"
-					}
-				}
-			}
-		]
-	} else {
-		columns += [ 
-			{
-				column: "CDR3 aa",
-				id: "CDR3aa",
-				spec: {
- 				name: "pl7.app/vdj/CDR3aa",
- 				valueType: "String",
- 				domain: columnsToExport[0].spec.domain,
- 				annotations: {
- 					"pl7.app/label": "CDR3 aa",
- 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "101"
-					}
-				}
-			}
-		]
-	}
-	
-	// Add columns for each sequence region's liabilities and risk
-	columnsNames := ["CDR3", "CDR1", "CDR2", "FR1"]
-	orderPriority := 99  // Priority for column ordering in UI
-	for colName in columnsNames {
-		columns += [
-			{
-			column: colName + " liabilities",
-			id: text.to_lower(colName) + "-liabilities",
-			naRegex: "",
-			allowNA: true,
-			spec: {
-				name: "pl7.app/vdj/" + text.to_lower(colName) + "Liabilities",
-				valueType: "String",
-				annotations: {
-					"pl7.app/label": colName + " liabilities",
-					"pl7.app/table/orderPriority": string(orderPriority)
-					}
-				}
-			},
-			{
-			column: colName + " risk",
-			id: text.to_lower(colName) + "-risk",
-			naRegex: "",
-			allowNA: true,
-			spec: {
-				name: "pl7.app/vdj/" + text.to_lower(colName) + "Risk",
-				valueType: "String",
-				annotations: {
-					"pl7.app/label": colName + " risk",
-					"pl7.app/table/orderPriority": string(orderPriority-1)
-					}
-				}
-			}
-		]
-		orderPriority -= 1  // Decrement priority for subsequent columns
-	}
-
-	// Define output specifications
-	outputSpecs := 
-		{
-			axes: axes,
-			columns: columns,
-			storageFormat: "Binary",
-			partitionKeyLength: 0
+	} else { // Bulk data handling
+		// Add the primary sequence
+		if len(sequences) > 0 {
+			seqTableBuilder.add(sequences[0].key, {header: "sequence aa"})
 		}
-	
-	// Import the results into a data frame
-	outputLiabilities := xsv.importFile(
-		result,
-		"tsv",
-		outputSpecs
-	)
+		// Add annotations if they exist
+		if hasAnnotations {
+			// Python script expects annotation column to end with "annotations"
+			seqTableBuilder.add(annotations[0].key, {header: "Annotations"})
+		}
+	}
+
+	features := []
+	for k, v in coveredFeatures {
+		features += [k]
+	}
+
+	// Build the final TSV table
+	seqTableBuilder = seqTableBuilder.build("tsv") // Assign to a new variable
+
+	ll.print("__THE_LOG__seqTableBuilder: " + annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"])
+
+	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
+		table: seqTableBuilder,
+		mapping: hasAnnotations ? annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"] : undefined,
+		liabilityTypes: liabilityTypes
+	})
+
+	liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
+	newMapping := liabilitiesResultCalc.output("newMapping", 24 * 60 * 60 * 1000)
+	regionsFound := liabilitiesResultCalc.output("regionsFound", 24 * 60 * 60 * 1000)
+
+	processResult := render.create(processTpl, {
+		liabilitiesTable: liabilitiesResult,
+		newMapping: newMapping,
+		regionsFound: regionsFound,
+		params: smart.createJsonResource({
+			datasetSpec: datasetSpec,
+			isSingleCell: isSingleCell,
+			coveredFeatures: features,
+			hasAnnotations: hasAnnotations,
+			liabilityTypes: liabilityTypes
+		})
+	})
+
+	outputLiabilities := processResult.output("outputLiabilities", 24 * 60 * 60 * 1000)
+	exportPframe := processResult.output("exportPframe", 24 * 60 * 60 * 1000)
 
 	// Return the output and export the results
 	return {
 		outputs: {
-			outputLiabilities: pframes.exportFrame(outputLiabilities)
+			outputLiabilities: outputLiabilities
 		},
-
 		exports: {
-			exportLiabilities: {
-				data: outputLiabilities["liabilitiesRisk.data"],
-				spec: outputLiabilities["liabilitiesRisk.spec"]
-			}
+			exportPframe: exportPframe
 		}
 	}
 })
