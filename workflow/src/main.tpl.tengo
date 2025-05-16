@@ -67,8 +67,6 @@ wf.body(func(args) {
 	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
 	liabilityTypes := args.liabilityTypes
 
-	ll.print("__THE_LOG__liabilityTypes: " + liabilityTypes)
-
 
 	// Determine if we're working with single cell data
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
@@ -87,10 +85,6 @@ wf.body(func(args) {
 	}
 
 	hasAnnotations := len(annotations) > 0
-
-	ll.print("__THE_LOG__annotations: " + hasAnnotations)
-	ll.print("__THE_LOG__isSingleCell: " + isSingleCell)
-	ll.print("__THE_LOG__sequences: " + sequences)
 
 	// Track which features are actually present in the data
 	coveredFeatures := {}
@@ -153,8 +147,6 @@ wf.body(func(args) {
 
 	// Build the final TSV table
 	seqTableBuilder = seqTableBuilder.build("tsv") // Assign to a new variable
-
-	ll.print("__THE_LOG__seqTableBuilder: " + annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"])
 
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
 		table: seqTableBuilder,

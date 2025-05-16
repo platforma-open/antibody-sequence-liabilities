@@ -11,10 +11,6 @@ json := import("json")
 
 self.defineOutputs("outputLiabilities", "exportPframe")
 
-// self.awaitState("InputsLocked")
-// self.awaitState("liabilitiesTable", "ResourceReady")
-// self.awaitState("newMapping", "ResourceReady")
-// self.awaitState("params", "ResourceReady")
 
 self.body(func(args) {
 
