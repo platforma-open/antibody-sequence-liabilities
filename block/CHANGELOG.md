@@ -1,5 +1,19 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 2.3.0
+
+### Minor Changes
+
+- 8528363: Allow liability selection
+
+### Patch Changes
+
+- Updated dependencies [c96e10a]
+- Updated dependencies [8528363]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.workflow@3.0.0
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@3.0.0
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.ui@3.0.0
+
 ## 2.2.0
 
 ### Minor Changes
