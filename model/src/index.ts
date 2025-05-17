@@ -1,31 +1,45 @@
 import type {
-  PlRef,
   InferOutputsType,
   PlDataTableState,
+  PlRef,
 } from '@platforma-sdk/model';
 import {
   BlockModel,
-  createPlDataTable,
+  createPlDataTableV2,
 } from '@platforma-sdk/model';
 
 export type BlockArgs = {
   inputAnchor?: PlRef;
-  clonotypingRunId?: string;
-  chain?: string;
-  title?: string;
-  isSingleCell?: boolean;
+  liabilityTypes?: string[];
 };
 
 export type UiState = {
-  blockTitle: string;
+  title: string;
   tableState?: PlDataTableState;
 };
 
+export const liabilityTypes = [
+  { value: 'Deamidation (N[GS])', label: 'Deamidation (N[GS])' },
+  { value: 'Fragmentation (DP)', label: 'Fragmentation (DP)' },
+  { value: 'Isomerization (D[DGHST])', label: 'Isomerization (D[DGHST])' },
+  { value: 'N-linked Glycosylation (N[^P][ST])', label: 'N-linked Glycosylation (N[^P][ST])' },
+  { value: 'Deamidation (N[AHNT])', label: 'Deamidation (N[AHNT])' },
+  { value: 'Hydrolysis (NP)', label: 'Hydrolysis (NP)' },
+  { value: 'Fragmentation (TS)', label: 'Fragmentation (TS)' },
+  { value: 'Tryptophan Oxidation (W)', label: 'Tryptophan Oxidation (W)' },
+  { value: 'Methionine Oxidation (M)', label: 'Methionine Oxidation (M)' },
+  { value: 'Deamidation ([STK]N)', label: 'Deamidation ([STK]N)' },
+  { value: 'Missing Cysteines', label: 'Missing Cysteines' },
+  { value: 'Extra Cysteines', label: 'Extra Cysteines' },
+];
+
 export const model = BlockModel.create()
-  .withArgs({ inputAnchor: undefined, title: undefined })
+  .withArgs<BlockArgs>({
+    liabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
+  })
 
   .withUiState<UiState>({
-    blockTitle: 'Antibody Sequence Liabilities',
+    title: 'Antibody Sequence Liabilities',
     tableState: {
       gridState: {},
       pTableParams: {
@@ -58,12 +72,12 @@ export const model = BlockModel.create()
     if (pCols === undefined) {
       return undefined;
     }
-    return {
-      table: createPlDataTable(ctx, pCols, ctx.uiState?.tableState),
-    };
+    return createPlDataTableV2(ctx, pCols, (_) => true, ctx.uiState?.tableState);
   })
 
-  .title((ctx) => (ctx.args.title ? `Antibody Sequence Liabilities - ${ctx.args.title}` : 'Antibody Sequence Liabilities'))
+  .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
+
+  .title((ctx) => ctx.uiState.title)
 
   .sections((_) => [
     { type: 'link', href: '/', label: 'Table' },

@@ -1,0 +1,55 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+smart := import("@platforma-sdk/workflow-tengo:smart")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+text := import("text")
+
+liabilitiesCalcSw := assets.importSoftware("@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script:main")
+
+self.defineOutputs("result", "newMapping", "regionsFound")
+
+
+self.body(func(args) {
+
+	inputTable := args.table
+    mapping := args.mapping
+	liabilityTypes := args.liabilityTypes
+
+    // Run the liabilities calculation tool on the sequences
+	liabilitiesCalcCmd := exec.builder().
+		software(liabilitiesCalcSw).
+		addFile("input.tsv", inputTable). // Use the built file
+		arg("input.tsv").
+		arg("result.tsv").
+		saveFile("result.tsv").
+		arg("-o").arg("output.json").
+		saveFileContent("output.json").
+		arg("--output-regions-found").arg("regions-found.json").
+		saveFileContent("regions-found.json")
+
+	if mapping {
+		liabilitiesCalcCmd.arg("-m").arg(mapping)
+	}
+
+	if liabilityTypes {
+		liabilitiesCalcCmd.arg("--include-liabilities").arg(text.join(liabilityTypes, ","))
+	}
+
+	liabilitiesResult := liabilitiesCalcCmd.run()
+
+	// Get the results from the calculation
+	result := liabilitiesResult.getFile("result.tsv")
+	
+	newMapping := liabilitiesResult.getFileContent("output.json")
+
+	regionsFound := liabilitiesResult.getFileContent("regions-found.json")
+
+    return {
+        result: result,
+        newMapping: newMapping,
+		regionsFound: regionsFound
+    }
+	
+	
+})
