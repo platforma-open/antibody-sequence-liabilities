@@ -32,13 +32,16 @@
       "longDescription": "file:../docs/description.md",
       "changelog": "file:../CHANGELOG.md",
       "tags": [
-        "tutorial"
+        "airr",
+        "antibody",
+        "downstream"
       ],
       "organization": {
         "name": "MiLaboratories Inc",
         "url": "https://milaboratories.com/",
         "logo": "file:../logos/organization-logo.png"
-      }
+      },
+      "marketplaceRanking": 15000
     }
   },
   "devDependencies": {
