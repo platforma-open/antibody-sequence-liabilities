@@ -1,0 +1,286 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+file := import("@platforma-sdk/workflow-tengo:file")
+exec := import("@platforma-sdk/workflow-tengo:exec")    // Command execution utilities
+assets:= import("@platforma-sdk/workflow-tengo:assets") // Asset management
+xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
+ll := import("@platforma-sdk/workflow-tengo:ll")        // Logging utilities
+pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
+pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
+text := import("text")                                   // Text manipulation utilities
+json := import("json")
+
+self.defineOutputs("outputLiabilities", "exportPframe")
+
+
+self.body(func(args) {
+
+    
+    params := args.params
+    liabilitiesTable := args.liabilitiesTable
+    datasetSpec := params.datasetSpec
+    isSingleCell := params.isSingleCell
+    coveredFeatures := params.coveredFeatures
+    hasAnnotations := params.hasAnnotations
+    liabilityTypes := params.liabilityTypes
+    newMapping := json.encode(args.newMapping.getDataAsJson())
+    regionsFound := args.regionsFound.getDataAsJson()
+
+    clonotypeKeySpec := datasetSpec.axesSpec[1]
+
+    // Create a trace for tracking the liabilities calculation
+	trace := pSpec.makeTrace(datasetSpec,
+		{type: "milaboratories.antibody-sequence-liabilities", importance: 30, label: "Liabilities risk"})
+
+    // Set up the axes for the output data - using clonotype key
+	axes := [
+		{
+			column: "clonotypeKey",
+			spec: clonotypeKeySpec
+		}
+	]
+
+	discreteValues := string(json.encode(["None", "Low", "Medium", "High"]))	
+
+    // Define the output columns - starting with the overall liabilities risk
+    liabilityColumns := [
+		{
+			column: "Liabilities risk",
+			id: "liabilitiesRisk",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/liabilitiesRisk",
+				valueType: "String",
+				annotations: {
+					"pl7.app/label": "Liabilities risk",
+					"pl7.app/isDiscreteFilter": "true",
+            		"pl7.app/discreteValues": discreteValues,
+					"pl7.app/isScore": "true",
+					"pl7.app/score/rankValues": "decreasing",
+					"pl7.app/score/defaultCutoff": string(json.encode(["None"])),
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "100"
+				}
+			}
+		}
+	]
+
+    orderPriorityBase := 99 
+
+	for f_name in regionsFound {
+		liabColNameFromPy := f_name + " aa liabilities"
+		riskColNameFromPy := f_name + " aa risk"      
+
+		liabilityColumns += [
+			{
+				column: liabColNameFromPy, 
+				id: text.to_lower(f_name) + "-liabilities",
+				naRegex: "", 
+				allowNA: true,
+				spec: {
+					name: "pl7.app/vdj/Liabilities",
+					valueType: "String",
+					domain: { "pl7.app/vdj/feature": f_name }, 
+					annotations: {
+						"pl7.app/trace": trace.valueStr,
+						"pl7.app/label": f_name + " Liabilities",
+						"pl7.app/table/visibility": "default",
+						"pl7.app/table/orderPriority": string(orderPriorityBase)
+					}
+				}
+			},
+			{
+				column: riskColNameFromPy, 
+				id: text.to_lower(f_name) + "-risk",
+				naRegex: "",
+				allowNA: true,
+				spec: {
+					name: "pl7.app/vdj/liabilitiesRisk",
+					valueType: "String", 
+					domain: { "pl7.app/vdj/feature": f_name },
+					annotations: {
+						"pl7.app/trace": trace.valueStr,
+						"pl7.app/label": f_name + " Risk",
+						"pl7.app/table/visibility": "default",
+						"pl7.app/isDiscreteFilter": "true",
+						"pl7.app/discreteValues": discreteValues,
+						"pl7.app/table/orderPriority": string(orderPriorityBase - 1)
+					}
+				}
+			}
+		]
+		orderPriorityBase -= 2 
+	}
+
+    sequenceColumns := []
+
+	// Add sequence and annotation columns. Python script always outputs annotation columns.
+	if isSingleCell {
+		// For single cell: show both heavy and light chain sequences and their annotations
+		for chain_val in ["A", "B"] {
+			chainLabel := (chain_val == "A" ? "Heavy" : "Light")
+			chainNamePart := (chain_val == "A" ? "Heavy" : "Light")
+			
+			// Sequence column (Python script selects these based on input like "Heavy CDR3 aa")
+			sequenceColumns += [{
+				column: chainLabel + " " + "CDR3 aa",
+				id: "cdr3-aa-primary-" + text.to_lower(chainLabel),
+				spec: {
+					name: "pl7.app/vdj/sequence",
+					valueType: "String",
+					domain: {
+						"pl7.app/alphabet": "aminoacid",
+						"pl7.app/vdj/feature": "CDR3",
+						"pl7.app/vdj/scClonotypeChain": chain_val,
+						"pl7.app/vdj/scClonotypeChain/index": "primary"
+					},
+					annotations: {
+						"pl7.app/trace": trace.valueStr,
+						"pl7.app/label": chainLabel + " " + "CDR3 aa",
+						"pl7.app/table/visibility": "default",
+						"pl7.app/table/orderPriority": "101"
+					}
+				}
+			}]
+
+			// Annotation column (Python script outputs e.g., "Heavy CDRs Annotations")
+            if hasAnnotations {
+                sequenceColumns += [{
+                    column: chainLabel + " annotations", 
+                    id: "annotations-cdrs-primary-" + text.to_lower(chainLabel),
+                    spec: {
+                        name: "pl7.app/vdj/sequence/annotation", 
+                        valueType: "String", 
+                        domain: { // This domain describes the *source* of the annotation if it were from platforma
+                            "pl7.app/alphabet": "aminoacid",
+                            "pl7.app/vdj/feature": "CDR3", 
+                            "pl7.app/vdj/scClonotypeChain": chain_val,
+                            "pl7.app/vdj/scClonotypeChain/index": "primary",
+                            "pl7.app/sequence/annotation/type": "CDRs" // Type of annotation
+                        },
+                        annotations: {
+                            "pl7.app/trace": trace.valueStr,
+                            "pl7.app/label": chainLabel + " CDRs Annotations",
+                            "pl7.app/table/visibility": "hidden", 
+                            "pl7.app/table/orderPriority": "102",    
+                            "pl7.app/sequence/annotation/mapping": string(newMapping), // Use the mapping from python
+                            "pl7.app/sequence/isAnnotation": "true",
+                            "pl7.app/sequence/isLiabilityDone": "true"
+                        }
+                    }
+                }]
+            }
+        } 
+	} else { // Bulk data
+		// Sequence column (Python script outputs e.g., "CDR3 aa")
+		sequenceColumns += [{
+			column: "CDR3 aa", 
+			id: "cdr3-aa",
+			spec: {
+				name: "pl7.app/vdj/sequence",
+				valueType: "String",
+				domain: {
+					"pl7.app/alphabet": "aminoacid",
+					"pl7.app/vdj/feature": "CDR3"
+				},
+				annotations: {
+					"pl7.app/trace": trace.valueStr,
+					"pl7.app/label": "CDR3 aa",
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "101"
+				}
+			}
+		}]
+
+		// Annotation column (Python script outputs "CDRs Annotations")
+		if hasAnnotations {
+			sequenceColumns += [{
+				column: "Annotations", 
+				id: "annotations-cdrs", 
+				spec: {
+				name: "pl7.app/vdj/sequence/annotation",
+				valueType: "String",
+				domain: {
+					"pl7.app/alphabet": "aminoacid",
+					"pl7.app/vdj/feature": "CDR3", 
+					"pl7.app/sequence/annotation/type": "CDRs"
+				},
+				annotations: {
+					"pl7.app/trace": trace.valueStr,
+					"pl7.app/label": "annotations",
+					"pl7.app/table/visibility": "hidden",
+					"pl7.app/table/orderPriority": "102",
+					"pl7.app/sequence/annotation/mapping": string(newMapping), // Use mapping from python
+					"pl7.app/sequence/isAnnotation": "true",
+					"pl7.app/sequence/isLiabilityDone": "true"
+				    }
+			    }
+			}]
+		}
+	}
+
+    columns := []
+
+    if len(liabilityTypes) > 0 {
+        columns = liabilityColumns + sequenceColumns
+    } else {
+        columns = sequenceColumns
+    }
+
+	
+
+
+	exportColumns := []
+	for col in columns {
+		if col.spec.name == "pl7.app/vdj/sequence/annotation" {
+			exportColumns += [col]
+		} else if col.spec.annotations["pl7.app/isScore"] == "true" {
+			exportColumns += [col]
+		}
+	}
+
+	exportSpecs := {
+		axes: axes,
+		columns: exportColumns,
+		storageFormat: "Binary",
+		partitionKeyLength: 0
+	}
+
+
+	// Define output specifications for the data frame
+	outputSpecs := {
+		axes: axes,
+		columns: columns,
+		storageFormat: "Binary",
+		partitionKeyLength: 0
+		}
+		
+	// Import the results into a data frame
+	outputLiabilities := xsv.importFile(
+		liabilitiesTable, 
+		"tsv",
+		outputSpecs 
+	)
+
+	exportOutput := xsv.importFile(
+		liabilitiesTable,
+		"tsv",
+		exportSpecs,
+        {splitDataAndSpec: true}
+	)
+
+	exportPframe := pframes.pFrameBuilder()
+
+	for k, v in exportOutput {
+		exportPframe.add(k, trace.inject(v.spec), v.data)
+	}
+
+	exportPframe = exportPframe.build()
+
+	// Return the output and export the results
+	return {
+		outputLiabilities: pframes.exportFrame(outputLiabilities),
+		exportPframe: exportPframe
+	}
+
+})
