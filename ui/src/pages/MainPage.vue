@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { liabilityTypes } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
-import type { PlRef } from '@platforma-sdk/model';
+import type { PlRef, PTableColumnSpec } from '@platforma-sdk/model';
 import { plRefsEqual } from '@platforma-sdk/model';
 import type { PlAgDataTableSettings } from '@platforma-sdk/ui-vue';
-import { PlAgDataTableV2, PlBlockPage, PlBtnGhost, PlDropdownMulti, PlDropdownRef, PlMaskIcon24, PlSlideModal } from '@platforma-sdk/ui-vue';
+import { PlAgDataTableToolsPanel, PlAgDataTableV2, PlBlockPage, PlBtnGhost, PlDropdownMulti, PlDropdownRef, PlMaskIcon24, PlSlideModal, PlTableFilters } from '@platforma-sdk/ui-vue';
 import { computed, ref } from 'vue';
 import { useApp } from '../app';
 
@@ -40,12 +40,16 @@ const liabilityTypesModel = computed({
   },
 });
 
+const columns = ref<PTableColumnSpec[]>([]);
 </script>
 
 <template>
   <PlBlockPage>
     <template #title> Antibody sequence liabilities </template>
     <template #append>
+      <PlAgDataTableToolsPanel>
+        <PlTableFilters v-model="app.model.ui.filterModel" :columns="columns" />
+      </PlAgDataTableToolsPanel>
       <PlBtnGhost @click.stop="settingsIsShown = true">
         Settings
         <template #append>
@@ -53,7 +57,14 @@ const liabilityTypesModel = computed({
         </template>
       </PlBtnGhost>
     </template>
-    <PlAgDataTableV2 v-model="app.model.ui.tableState" :settings="tableSettings" show-export-button />
+    <PlAgDataTableV2
+      v-model="app.model.ui.tableState"
+      :settings="tableSettings"
+      show-export-button
+      not-ready-text="Block is not started"
+      show-columns-panel
+      @columns-changed="(newColumns) => (columns = newColumns)"
+    />
   </PlBlockPage>
 
   <PlSlideModal v-model="settingsIsShown">
