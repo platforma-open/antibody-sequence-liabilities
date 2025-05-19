@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 3.0.1
+
+### Patch Changes
+
+- 47fe485: Add columns manager and filters
+- Updated dependencies [47fe485]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@3.0.1
+
 ## 3.0.0
 
 ### Major Changes
