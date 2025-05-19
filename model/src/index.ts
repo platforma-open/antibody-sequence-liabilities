@@ -2,6 +2,7 @@ import type {
   InferOutputsType,
   PlDataTableState,
   PlRef,
+  PlTableFiltersModel,
 } from '@platforma-sdk/model';
 import {
   BlockModel,
@@ -16,6 +17,7 @@ export type BlockArgs = {
 export type UiState = {
   title: string;
   tableState?: PlDataTableState;
+  filterModel: PlTableFiltersModel;
 };
 
 export const liabilityTypes = [
@@ -47,6 +49,7 @@ export const model = BlockModel.create()
         filters: [],
       },
     },
+    filterModel: {},
   })
 
   .argsValid((ctx) => ctx.args.inputAnchor !== undefined)
@@ -72,7 +75,7 @@ export const model = BlockModel.create()
     if (pCols === undefined) {
       return undefined;
     }
-    return createPlDataTableV2(ctx, pCols, (_) => true, ctx.uiState?.tableState);
+    return createPlDataTableV2(ctx, pCols, (_) => true, ctx.uiState?.tableState, ctx.uiState?.filterModel);
   })
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
