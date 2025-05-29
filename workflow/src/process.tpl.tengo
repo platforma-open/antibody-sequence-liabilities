@@ -39,10 +39,12 @@ self.body(func(args) {
 		}
 	]
 
-	discreteValues := string(json.encode(["None", "Low", "Medium", "High"]))	
+	discreteValues := string(json.encode(["None", "Low", "Medium", "High"]))
+
+	liabilityColumns := []	
 
     // Define the output columns - starting with the overall liabilities risk
-    liabilityColumns := [
+    liabilityColumns += [
 		{
 			column: "Liabilities risk",
 			id: "liabilitiesRisk",
@@ -60,6 +62,22 @@ self.body(func(args) {
 					"pl7.app/score/defaultCutoff": string(json.encode(["None"])),
 					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "100"
+				}
+			}
+		},
+		{
+			column: "Sequence liabilities summary",
+			id: "sequence-liabilities-summary",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/sequenceLiabilitiesSummary",
+				valueType: "String",
+				annotations: {
+					"pl7.app/label": "Sequence liabilities summary",
+					"pl7.app/isSummary": "true",
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "101"
 				}
 			}
 		}
@@ -235,6 +253,8 @@ self.body(func(args) {
 		if col.spec.name == "pl7.app/vdj/sequence/annotation" {
 			exportColumns += [col]
 		} else if col.spec.annotations["pl7.app/isScore"] == "true" {
+			exportColumns += [col]
+		} else if col.spec.annotations["pl7.app/isSummary"] == "true" {
 			exportColumns += [col]
 		}
 	}
