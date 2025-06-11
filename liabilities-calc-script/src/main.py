@@ -267,8 +267,12 @@ def _create_sequence_liabilities_summary_str(row_dict: dict) -> str:
 
     for col_name, liability_value in row_dict.items():
         # Standardize missing/unknown liability values for the summary string
-        if liability_value is None or liability_value == "Unknown" or str(liability_value).strip() == "":
+        if liability_value is None or liability_value == "Unknown" or str(liability_value).strip() == "" or liability_value == "None":
             liability_value = "None"
+
+        # Omit segments with no liabilities from the summary string
+        if liability_value == "None":
+            continue
 
         current_col_name = col_name
         current_prefix = "" # Heavy, Light, or empty (for bulk or common regions)
