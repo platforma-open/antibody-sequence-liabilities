@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 3.1.0
+
+### Minor Changes
+
+- de16445: Liabilities summary column
+
 ## 3.0.0
 
 ### Major Changes
