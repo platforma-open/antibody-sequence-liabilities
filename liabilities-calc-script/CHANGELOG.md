@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 3.1.1
+
+### Patch Changes
+
+- b2e27c6: chore: update deps
+
 ## 3.1.0
 
 ### Minor Changes
