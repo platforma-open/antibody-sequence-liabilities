@@ -7,11 +7,11 @@ packages:
   - block
 
 catalog:
-  "@platforma-sdk/model": ^1.33.10
-  "@platforma-sdk/ui-vue": ^1.33.13
+  "@platforma-sdk/model": 1.30.26
+  "@platforma-sdk/ui-vue": 1.30.26
   "@platforma-sdk/workflow-tengo": ^4.7.1
   "@platforma-sdk/block-tools": ^2.5.52
-  "@platforma-sdk/test": ^1.30.36
+  "@platforma-sdk/test": 1.30.36
   "@platforma-sdk/tengo-builder": ^2.1.7
   "@platforma-sdk/package-builder": ^2.16.0
   "@platforma-sdk/eslint-config": ^1.0.3
