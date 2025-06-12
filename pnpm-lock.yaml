@@ -19,7 +19,7 @@ catalogs:
       specifier: ^1.0.3
       version: 1.0.3
     '@platforma-sdk/model':
-      specifier: ^1.33.10
+      specifier: ^1.30.26
       version: 1.33.10
     '@platforma-sdk/package-builder':
       specifier: ^2.16.0
@@ -31,7 +31,7 @@ catalogs:
       specifier: ^1.30.36
       version: 1.30.36
     '@platforma-sdk/ui-vue':
-      specifier: ^1.33.13
+      specifier: ^1.30.26
       version: 1.33.13
     '@platforma-sdk/workflow-tengo':
       specifier: ^4.7.1
@@ -1050,9 +1050,6 @@ packages:
       globals: ^15.13.0
       typescript: ~5.5.4
       typescript-eslint: ^8.17.0
-
-  '@platforma-sdk/model@1.30.26':
-    resolution: {integrity: sha512-RCEcev/fRUZGN/Z56yKE7dNeXPGCh1Qo3r0q9LICpa1zq3V7SSv3zNJslDqUgcnPApku4cKQ7OonpS8szqlSig==}
 
   '@platforma-sdk/model@1.33.10':
     resolution: {integrity: sha512-FPEGQoyv8hR6DHnkTWK7IrRF776uI83KwuSkJ3hOo+DlA+xfGDJ6Meet3zLeuKXgnXyzT2RX69KLfqKKsH6lSw==}
@@ -6124,7 +6121,7 @@ snapshots:
       '@milaboratories/resolve-helper': 1.1.0
       '@milaboratories/ts-helpers': 1.2.0
       '@platforma-sdk/block-tools': 2.5.47
-      '@platforma-sdk/model': 1.30.26
+      '@platforma-sdk/model': 1.33.10
       '@platforma-sdk/workflow-tengo': 4.5.0
       canonicalize: 2.1.0
       denque: 2.1.0
@@ -6350,14 +6347,6 @@ snapshots:
       typescript: 5.5.4
       typescript-eslint: 8.24.0(eslint@9.20.1)(typescript@5.5.4)
 
-  '@platforma-sdk/model@1.30.26':
-    dependencies:
-      '@milaboratories/pl-error-like': 1.12.1
-      '@milaboratories/pl-model-common': 1.15.0
-      canonicalize: 2.1.0
-      utility-types: 3.11.0
-      zod: 3.23.8
-
   '@platforma-sdk/model@1.33.10':
     dependencies:
       '@milaboratories/pl-error-like': 1.12.1
@@ -6399,7 +6388,7 @@ snapshots:
       '@milaboratories/pl-middle-layer': 1.37.27
       '@milaboratories/pl-tree': 1.6.1
       '@milaboratories/ts-helpers': 1.2.0
-      '@platforma-sdk/model': 1.30.26
+      '@platforma-sdk/model': 1.33.10
       vitest: 2.1.9(@types/node@22.9.0)
     transitivePeerDependencies:
       - '@edge-runtime/vm'
