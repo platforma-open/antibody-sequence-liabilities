@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 2.3.4
+
+### Patch Changes
+
+- 93a57e2: chore: revert for MSA
+
 ## 2.3.3
 
 ### Patch Changes
