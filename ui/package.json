@@ -18,6 +18,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "catalog:",
     "typescript": "catalog:",
+    "eslint": "catalog:",
     "vite": "catalog:",
     "vue-tsc": "catalog:",
     "@platforma-sdk/eslint-config": "catalog:"
