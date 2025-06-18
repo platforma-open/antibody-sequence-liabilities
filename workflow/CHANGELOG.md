@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.workflow
 
+## 3.1.2
+
+### Patch Changes
+
+- 0db0703: SDK Upgrade & Code migration
+- Updated dependencies [0db0703]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script@3.1.2
+
 ## 3.1.1
 
 ### Patch Changes
