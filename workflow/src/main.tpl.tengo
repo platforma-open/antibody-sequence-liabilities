@@ -7,8 +7,8 @@ exec := import("@platforma-sdk/workflow-tengo:exec")    // Command execution uti
 assets:= import("@platforma-sdk/workflow-tengo:assets") // Asset management
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
 ll := import("@platforma-sdk/workflow-tengo:ll")        // Logging utilities
-pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
+pFrames := import("@platforma-sdk/workflow-tengo:pframes")
 text := import("text")                                   // Text manipulation utilities
 json := import("json") // Import json module for encoding
 
@@ -72,8 +72,8 @@ wf.body(func(args) {
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
 
 	// Start building the table with sequence data
-	seqTableBuilder := columnsWithSequences.xsvTableBuilder() // Use a different name to avoid confusion before build()
-	seqTableBuilder.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
+	seqTableBuilder := pFrames.tsvFileBuilder() // Use a different name to avoid confusion before build()
+	seqTableBuilder.setAxisHeader(datasetSpec.axesSpec[1], "clonotypeKey")
 
 	// Determine the primary assembling feature (e.g., CDR3)
 	// This assumes all 'sequences' share the same core feature or takes the first one's.
@@ -99,8 +99,8 @@ wf.body(func(args) {
 						for fr in ["CDR1", "CDR2", "CDR3", "FR1"] {
 							if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr {
 								chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
-								chainLabel := (chain == "A" ? "Heavy" : "Light")	
-								seqTableBuilder.add(additionalSeq.key, {header: chainLabel + " " + fr + " aa"})
+								chainLabel := (chain == "A" ? "Heavy" : "Light")
+								seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: chainLabel + " " + fr + " aa"})
 								if coveredFeatures[fr] {
 									coveredFeatures[fr] += 1
 								} else {
@@ -113,7 +113,7 @@ wf.body(func(args) {
 			} else if seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
 				chain := seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
 				chainLabel := (chain == "A" ? "Heavy" : "Light")
-				seqTableBuilder.add(seq_entry.key, {header: chainLabel + " " + " sequence aa"})
+				seqTableBuilder.add(columnsWithSequences.getColumn(seq_entry.key), {header: chainLabel + " " + " sequence aa"})
 			}
 		}
 		// Add primary chain annotations if they exist
@@ -124,19 +124,19 @@ wf.body(func(args) {
 					chainLabel := (chain == "A" ? "Heavy" : "Light")
 					// Python script expects annotation columns to end with "annotations"
 					// and might derive prefix like "Heavy CDRs" or "Light CDRs"
-					seqTableBuilder.add(ann_entry.key, {header: chainLabel + " annotations"})
+					seqTableBuilder.add(columnsWithSequences.getColumn(ann_entry.key), {header: chainLabel + " annotations"})
 				}
 			}
 		}
 	} else { // Bulk data handling
 		// Add the primary sequence
 		if len(sequences) > 0 {
-			seqTableBuilder.add(sequences[0].key, {header: "sequence aa"})
+			seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "sequence aa"})
 		}
 		// Add annotations if they exist
 		if hasAnnotations {
 			// Python script expects annotation column to end with "annotations"
-			seqTableBuilder.add(annotations[0].key, {header: "Annotations"})
+			seqTableBuilder.add(columnsWithSequences.getColumn(annotations[0].key), {header: "Annotations"})
 		}
 	}
 
@@ -146,10 +146,10 @@ wf.body(func(args) {
 	}
 
 	// Build the final TSV table
-	seqTableBuilder = seqTableBuilder.build("tsv") // Assign to a new variable
+	seqTable := seqTableBuilder.build() // Assign to a new variable
 
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
-		table: seqTableBuilder,
+		table: seqTable,
 		mapping: hasAnnotations ? annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"] : undefined,
 		liabilityTypes: liabilityTypes
 	})
