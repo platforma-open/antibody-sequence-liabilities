@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.model",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "Block model",
   "type": "module",
   "main": "dist/index.cjs",
