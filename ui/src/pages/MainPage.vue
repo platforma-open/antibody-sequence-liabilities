@@ -2,8 +2,18 @@
 import { liabilityTypes } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import type { PlRef, PTableColumnSpec } from '@platforma-sdk/model';
 import { plRefsEqual } from '@platforma-sdk/model';
-import type { PlAgDataTableSettings } from '@platforma-sdk/ui-vue';
-import { PlAgDataTableToolsPanel, PlAgDataTableV2, PlBlockPage, PlBtnGhost, PlDropdownMulti, PlDropdownRef, PlMaskIcon24, PlSlideModal, PlTableFilters } from '@platforma-sdk/ui-vue';
+import {
+  PlAgDataTableToolsPanel,
+  PlAgDataTableV2,
+  PlBlockPage,
+  PlBtnGhost,
+  PlDropdownMulti,
+  PlDropdownRef,
+  PlMaskIcon24,
+  PlSlideModal,
+  PlTableFilters,
+  usePlDataTableSettingsV2,
+} from '@platforma-sdk/ui-vue';
 import { computed, ref } from 'vue';
 import { useApp } from '../app';
 
@@ -19,16 +29,8 @@ function setInput(inputRef?: PlRef) {
   app.model.ui.title = 'Antibody Sequence Liabilities - ' + label;
 }
 
-const tableSettings = computed<PlAgDataTableSettings>(() => {
-  const pTable = app.model.outputs.pt;
-  if (pTable === undefined && !app.model.outputs.isRunning) {
-    // special case: when block is not yet started at all (no table calculated)
-    return undefined;
-  }
-  return {
-    sourceType: 'ptable',
-    model: pTable,
-  };
+const tableSettings = usePlDataTableSettingsV2({
+  model: () => app.model.outputs.pt,
 });
 
 const settingsIsShown = ref(app.model.args.inputAnchor === undefined);
@@ -61,9 +63,9 @@ const columns = ref<PTableColumnSpec[]>([]);
       v-model="app.model.ui.tableState"
       :settings="tableSettings"
       show-export-button
-      not-ready-text="Block is not started"
+      not-ready-text="Data is not computed"
       show-columns-panel
-      @columns-changed="(newColumns) => (columns = newColumns)"
+      @columns-changed="(info) => (columns = info.columns)"
     />
   </PlBlockPage>
 

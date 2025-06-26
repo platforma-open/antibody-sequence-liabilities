@@ -1,11 +1,12 @@
 import type {
   InferOutputsType,
-  PlDataTableState,
+  PlDataTableStateV2,
   PlRef,
   PlTableFiltersModel,
 } from '@platforma-sdk/model';
 import {
   BlockModel,
+  createPlDataTableStateV2,
   createPlDataTableV2,
 } from '@platforma-sdk/model';
 
@@ -16,7 +17,7 @@ export type BlockArgs = {
 
 export type UiState = {
   title: string;
-  tableState?: PlDataTableState;
+  tableState: PlDataTableStateV2;
   filterModel: PlTableFiltersModel;
 };
 
@@ -42,13 +43,7 @@ export const model = BlockModel.create()
 
   .withUiState<UiState>({
     title: 'Antibody Sequence Liabilities',
-    tableState: {
-      gridState: {},
-      pTableParams: {
-        sorting: [],
-        filters: [],
-      },
-    },
+    tableState: createPlDataTableStateV2(),
     filterModel: {},
   })
 
@@ -75,7 +70,12 @@ export const model = BlockModel.create()
     if (pCols === undefined) {
       return undefined;
     }
-    return createPlDataTableV2(ctx, pCols, (_) => true, ctx.uiState?.tableState, ctx.uiState?.filterModel);
+    return createPlDataTableV2(
+      ctx,
+      pCols,
+      ctx.uiState.tableState,
+      { filters: ctx.uiState.filterModel?.filters },
+    );
   })
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
