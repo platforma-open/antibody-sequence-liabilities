@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 2.4.0
+
+### Minor Changes
+
+- 69f8369: allow prepare venv on Windows
+
 ## 2.3.6
 
 ### Patch Changes
