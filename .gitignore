@@ -9,3 +9,6 @@ log/
 .turbo
 vite.config.*.timestamp-*
 .DS_Store
+# BUG in vue-tsc, it enables incremental builds when we do not ask it
+ui/tsconfig.app.tsbuildinfo
+ui/tsconfig.node.tsbuildinfo
