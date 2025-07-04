@@ -131,7 +131,11 @@ wf.body(func(args) {
 	} else { // Bulk data handling
 		// Add the primary sequence
 		if len(sequences) > 0 {
-			seqTableBuilder.add(sequences[0], {header: "sequence aa"})
+			if sequences[0].spec.domain["pl7.app/vdj/feature"] == "CDR3" {
+				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "CDR3 aa"})
+			} else {
+				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "sequence aa"})
+			}
 		}
 		// Add annotations if they exist
 		if hasAnnotations {
