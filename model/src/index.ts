@@ -2,7 +2,6 @@ import type {
   InferOutputsType,
   PlDataTableStateV2,
   PlRef,
-  PlTableFiltersModel,
 } from '@platforma-sdk/model';
 import {
   BlockModel,
@@ -18,7 +17,6 @@ export type BlockArgs = {
 export type UiState = {
   title: string;
   tableState: PlDataTableStateV2;
-  filterModel: PlTableFiltersModel;
 };
 
 export const liabilityTypes = [
@@ -44,7 +42,6 @@ export const model = BlockModel.create()
   .withUiState<UiState>({
     title: 'Antibody Sequence Liabilities',
     tableState: createPlDataTableStateV2(),
-    filterModel: {},
   })
 
   .argsValid((ctx) => ctx.args.inputAnchor !== undefined)
@@ -74,7 +71,6 @@ export const model = BlockModel.create()
       ctx,
       pCols,
       ctx.uiState.tableState,
-      { filters: ctx.uiState.filterModel?.filters },
     );
   })
 
