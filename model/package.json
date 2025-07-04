@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.model",
-  "version": "3.0.1",
+  "version": "3.0.3",
   "description": "Block model",
   "type": "module",
   "main": "dist/index.cjs",
@@ -18,7 +18,8 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "tsup": "catalog:",
-    "@platforma-sdk/eslint-config": "catalog:"
+    "@platforma-sdk/eslint-config": "catalog:",
+    "eslint": "catalog:"
   },
   "tsup": {
     "entry": [

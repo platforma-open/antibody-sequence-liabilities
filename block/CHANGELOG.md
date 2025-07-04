@@ -1,5 +1,29 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 2.4.0
+
+### Minor Changes
+
+- 69f8369: allow prepare venv on Windows
+
+## 2.3.6
+
+### Patch Changes
+
+- Updated dependencies [d5abe27]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@3.0.3
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.ui@3.0.3
+
+## 2.3.5
+
+### Patch Changes
+
+- 0db0703: SDK Upgrade & Code migration
+- Updated dependencies [0db0703]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.workflow@3.1.2
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@3.0.2
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.ui@3.0.2
+
 ## 2.3.4
 
 ### Patch Changes

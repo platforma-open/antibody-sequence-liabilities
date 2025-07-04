@@ -1,5 +1,21 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 3.0.3
+
+### Patch Changes
+
+- d5abe27: Migrate to use updated PlAgDataTableV2
+- Updated dependencies [d5abe27]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@3.0.3
+
+## 3.0.2
+
+### Patch Changes
+
+- 0db0703: SDK Upgrade & Code migration
+- Updated dependencies [0db0703]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@3.0.2
+
 ## 3.0.1
 
 ### Patch Changes
