@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.workflow
 
+## 3.2.0
+
+### Minor Changes
+
+- 2ca30b9: Migrate to pframes.tsvFileBuilder()
+
 ## 3.1.2
 
 ### Patch Changes
