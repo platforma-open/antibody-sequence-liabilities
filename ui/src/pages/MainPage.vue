@@ -1,17 +1,14 @@
 <script setup lang="ts">
 import { liabilityTypes } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
-import type { PlRef, PTableColumnSpec } from '@platforma-sdk/model';
+import type { PlRef } from '@platforma-sdk/model';
 import { plRefsEqual } from '@platforma-sdk/model';
 import {
-  PlAgDataTableToolsPanel,
   PlAgDataTableV2,
   PlBlockPage,
   PlBtnGhost,
   PlDropdownMulti,
   PlDropdownRef,
-  PlMaskIcon24,
   PlSlideModal,
-  PlTableFilters,
   usePlDataTableSettingsV2,
 } from '@platforma-sdk/ui-vue';
 import { computed, ref } from 'vue';
@@ -42,30 +39,19 @@ const liabilityTypesModel = computed({
   },
 });
 
-const columns = ref<PTableColumnSpec[]>([]);
 </script>
 
 <template>
   <PlBlockPage>
     <template #title> Antibody sequence liabilities </template>
     <template #append>
-      <PlAgDataTableToolsPanel>
-        <PlTableFilters v-model="app.model.ui.filterModel" :columns="columns" />
-      </PlAgDataTableToolsPanel>
-      <PlBtnGhost @click.stop="settingsIsShown = true">
-        Settings
-        <template #append>
-          <PlMaskIcon24 name="settings" />
-        </template>
-      </PlBtnGhost>
+      <PlBtnGhost icon="settings" @click.stop="settingsIsShown = true" />
     </template>
     <PlAgDataTableV2
       v-model="app.model.ui.tableState"
       :settings="tableSettings"
       show-export-button
       not-ready-text="Data is not computed"
-      show-columns-panel
-      @columns-changed="(info) => (columns = info.columns)"
     />
   </PlBlockPage>
 
