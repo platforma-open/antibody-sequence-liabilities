@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.workflow
 
+## 3.3.0
+
+### Minor Changes
+
+- 7c52fa8: support batch system
+
 ## 3.2.0
 
 ### Minor Changes
