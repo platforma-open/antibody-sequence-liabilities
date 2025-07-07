@@ -150,6 +150,8 @@ wf.body(func(args) {
 	}
 
 	// Build the final TSV table
+	seqTableBuilder.mem("16GiB")
+	seqTableBuilder.cpu(1)
 	seqTable := seqTableBuilder.build() // Assign to a new variable
 
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {

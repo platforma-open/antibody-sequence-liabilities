@@ -19,6 +19,8 @@ self.body(func(args) {
     // Run the liabilities calculation tool on the sequences
 	liabilitiesCalcCmd := exec.builder().
 		software(liabilitiesCalcSw).
+		mem("16GiB").
+		cpu(1).
 		addFile("input.tsv", inputTable). // Use the built file
 		arg("input.tsv").
 		arg("result.tsv").
