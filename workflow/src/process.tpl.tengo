@@ -278,14 +278,15 @@ self.body(func(args) {
 	outputLiabilities := xsv.importFile(
 		liabilitiesTable,
 		"tsv",
-		outputSpecs
+		outputSpecs,
+		{ cpu: 1, mem: "16GiB" }
 	)
 
 	exportOutput := xsv.importFile(
 		liabilitiesTable,
 		"tsv",
 		exportSpecs,
-        {splitDataAndSpec: true}
+        {splitDataAndSpec: true, cpu: 1, mem: "16GiB"}
 	)
 
 	exportPframe := pframes.pFrameBuilder()
