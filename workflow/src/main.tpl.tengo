@@ -60,6 +60,7 @@ wf.prepare(func(args) {
 )
 
 wf.body(func(args) {
+	blockId := wf.blockId().getDataAsJson()
 	columnsWithSequences := args.columns
 	sequences := columnsWithSequences.getColumns("sequences")
 	annotations := columnsWithSequences.getColumns("annotations")
@@ -175,7 +176,8 @@ wf.body(func(args) {
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations,
 			liabilityTypes: liabilityTypes,
-			pageTitle: pageTitle
+			pageTitle: pageTitle,
+			blockId: blockId
 		})
 	})
 

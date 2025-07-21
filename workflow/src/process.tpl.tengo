@@ -17,6 +17,7 @@ self.body(func(args) {
     params := args.params
     liabilitiesTable := args.liabilitiesTable
     datasetSpec := params.datasetSpec
+    blockId := params.blockId
     isSingleCell := params.isSingleCell
     coveredFeatures := params.coveredFeatures
     hasAnnotations := params.hasAnnotations
@@ -38,7 +39,6 @@ self.body(func(args) {
 		traceLabel = "Antibody Sequence Liabilities"
 	}
 
-	// When creating the trace, use traceLabel
 	trace := pSpec.makeTrace(datasetSpec, { type: "milaboratories.antibody-sequence-liabilities", importance: 20, label: traceLabel })
 
 
@@ -64,7 +64,11 @@ self.body(func(args) {
 			spec: {
 				name: "pl7.app/vdj/liabilitiesRisk",
 				valueType: "String",
+				domain: {
+					"pl7.app/blockId": blockId
+				},
 				annotations: {
+					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "Liabilities risk",
 					"pl7.app/isDiscreteFilter": "true",
             		"pl7.app/discreteValues": discreteValues,
@@ -84,7 +88,11 @@ self.body(func(args) {
 			spec: {
 				name: "pl7.app/vdj/sequenceLiabilitiesSummary",
 				valueType: "String",
+				domain: {
+					"pl7.app/blockId": blockId
+				},
 				annotations: {
+					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "Sequence liabilities summary",
 					"pl7.app/isSummary": "true",
 					"pl7.app/table/visibility": "default",
@@ -109,7 +117,10 @@ self.body(func(args) {
 				spec: {
 					name: "pl7.app/vdj/Liabilities",
 					valueType: "String",
-					domain: { "pl7.app/vdj/feature": f_name },
+					domain: { 
+						"pl7.app/vdj/feature": f_name,
+						"pl7.app/blockId": blockId
+					},
 					annotations: {
 						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": f_name + " Liabilities",
@@ -126,7 +137,10 @@ self.body(func(args) {
 				spec: {
 					name: "pl7.app/vdj/liabilitiesRisk",
 					valueType: "String",
-					domain: { "pl7.app/vdj/feature": f_name },
+					domain: { 
+						"pl7.app/vdj/feature": f_name,
+						"pl7.app/blockId": blockId
+					},
 					annotations: {
 						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": f_name + " Risk",
@@ -161,7 +175,8 @@ self.body(func(args) {
 						"pl7.app/alphabet": "aminoacid",
 						"pl7.app/vdj/feature": "CDR3",
 						"pl7.app/vdj/scClonotypeChain": chain_val,
-						"pl7.app/vdj/scClonotypeChain/index": "primary"
+						"pl7.app/vdj/scClonotypeChain/index": "primary",
+						"pl7.app/blockId": blockId
 					},
 					annotations: {
 						"pl7.app/trace": trace.valueStr,
@@ -185,7 +200,8 @@ self.body(func(args) {
                             "pl7.app/vdj/feature": "CDR3",
                             "pl7.app/vdj/scClonotypeChain": chain_val,
                             "pl7.app/vdj/scClonotypeChain/index": "primary",
-                            "pl7.app/sequence/annotation/type": "CDRs" // Type of annotation
+                            "pl7.app/sequence/annotation/type": "CDRs", // Type of annotation
+                            "pl7.app/blockId": blockId
                         },
                         annotations: {
                             "pl7.app/trace": trace.valueStr,
@@ -210,7 +226,8 @@ self.body(func(args) {
 				valueType: "String",
 				domain: {
 					"pl7.app/alphabet": "aminoacid",
-					"pl7.app/vdj/feature": "CDR3"
+					"pl7.app/vdj/feature": "CDR3",
+					"pl7.app/blockId": blockId
 				},
 				annotations: {
 					"pl7.app/trace": trace.valueStr,
@@ -232,7 +249,8 @@ self.body(func(args) {
 				domain: {
 					"pl7.app/alphabet": "aminoacid",
 					"pl7.app/vdj/feature": "CDR3",
-					"pl7.app/sequence/annotation/type": "CDRs"
+					"pl7.app/sequence/annotation/type": "CDRs",
+					"pl7.app/blockId": blockId
 				},
 				annotations: {
 					"pl7.app/trace": trace.valueStr,
