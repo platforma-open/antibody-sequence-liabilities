@@ -12,6 +12,7 @@ import {
 export type BlockArgs = {
   inputAnchor?: PlRef;
   liabilityTypes?: string[];
+  title?: string;
 };
 
 export type UiState = {
@@ -76,7 +77,7 @@ export const model = BlockModel.create()
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
 
-  .title((ctx) => ctx.uiState.title)
+  .title((ctx) => ctx.uiState.title ?? 'Antibody Sequence Liabilities')
 
   .sections((_) => [
     { type: 'link', href: '/', label: 'Table' },

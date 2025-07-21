@@ -66,6 +66,7 @@ wf.body(func(args) {
 	additionalSequences := columnsWithSequences.getColumns("additionalSequences")
 	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
 	liabilityTypes := args.liabilityTypes
+	pageTitle := args.title
 
 
 	// Determine if we're working with single cell data
@@ -173,7 +174,8 @@ wf.body(func(args) {
 			isSingleCell: isSingleCell,
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations,
-			liabilityTypes: liabilityTypes
+			liabilityTypes: liabilityTypes,
+			pageTitle: pageTitle
 		})
 	})
 

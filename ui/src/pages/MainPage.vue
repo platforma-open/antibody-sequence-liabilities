@@ -8,13 +8,19 @@ import {
   PlBtnGhost,
   PlDropdownMulti,
   PlDropdownRef,
+  PlEditableTitle,
   PlSlideModal,
   usePlDataTableSettingsV2,
 } from '@platforma-sdk/ui-vue';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useApp } from '../app';
 
 const app = useApp();
+
+// Watch for changes in the UI title and sync to model args
+watch(() => app.model.ui.title, (newTitle) => {
+  app.model.args.title = newTitle;
+}, { immediate: true });
 
 function setInput(inputRef?: PlRef) {
   if (!inputRef) return;
@@ -23,7 +29,9 @@ function setInput(inputRef?: PlRef) {
   const label = app.model.outputs.inputOptions?.find((o) => plRefsEqual(o.ref, inputRef))?.label ?? '';
 
   // Set title to dataset label
-  app.model.ui.title = 'Antibody Sequence Liabilities - ' + label;
+  const title = 'Antibody Sequence Liabilities - ' + label;
+  app.model.ui.title = title;
+  app.model.args.title = title;
 }
 
 const tableSettings = usePlDataTableSettingsV2({
@@ -43,7 +51,15 @@ const liabilityTypesModel = computed({
 
 <template>
   <PlBlockPage>
-    <template #title> Antibody sequence liabilities </template>
+    <template #title>
+      <PlEditableTitle
+        v-model="app.model.ui.title"
+        placeholder="Antibody Sequence Liabilities"
+        max-width="800px"
+        :max-length="100"
+        :min-length="4"
+      />
+    </template>
     <template #append>
       <PlBtnGhost icon="settings" @click.stop="settingsIsShown = true" />
     </template>

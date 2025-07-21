@@ -26,9 +26,21 @@ self.body(func(args) {
 
     clonotypeKeySpec := datasetSpec.axesSpec[1]
 
-    // Create a trace for tracking the liabilities calculation
+/*     // Create a trace for tracking the liabilities calculation
 	trace := pSpec.makeTrace(datasetSpec,
 		{type: "milaboratories.antibody-sequence-liabilities", importance: 30, label: "Liabilities risk"})
+ */
+
+	pageTitle := args.pageTitle
+	// Use the title for the trace label if provided
+	traceLabel := pageTitle
+	if is_undefined(traceLabel) || traceLabel == "" {
+		traceLabel = "Antibody Sequence Liabilities"
+	}
+
+	// When creating the trace, use traceLabel
+	trace := pSpec.makeTrace(datasetSpec, { type: "milaboratories.antibody-sequence-liabilities", importance: 20, label: traceLabel })
+
 
     // Set up the axes for the output data - using clonotype key
 	axes := [
