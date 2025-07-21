@@ -38,6 +38,7 @@ export const liabilityTypes = [
 export const model = BlockModel.create()
   .withArgs<BlockArgs>({
     liabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
+    title: 'Antibody Sequence Liabilities',
   })
 
   .withUiState<UiState>({

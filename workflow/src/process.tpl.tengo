@@ -31,7 +31,7 @@ self.body(func(args) {
 		{type: "milaboratories.antibody-sequence-liabilities", importance: 30, label: "Liabilities risk"})
  */
 
-	pageTitle := args.pageTitle
+	pageTitle := params.pageTitle
 	// Use the title for the trace label if provided
 	traceLabel := pageTitle
 	if is_undefined(traceLabel) || traceLabel == "" {

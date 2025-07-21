@@ -17,9 +17,16 @@ import { useApp } from '../app';
 
 const app = useApp();
 
-// Watch for changes in the UI title and sync to model args
+// Bidirectional sync between UI title and args title
 watch(() => app.model.ui.title, (newTitle) => {
   app.model.args.title = newTitle;
+}, { immediate: true });
+
+// Sync args title to UI title on mount (in case args title is set but UI title isn't)
+watch(() => app.model.args.title, (newTitle) => {
+  if (newTitle && !app.model.ui.title) {
+    app.model.ui.title = newTitle;
+  }
 }, { immediate: true });
 
 function setInput(inputRef?: PlRef) {
