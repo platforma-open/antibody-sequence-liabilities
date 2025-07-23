@@ -68,7 +68,6 @@ self.body(func(args) {
 					"pl7.app/blockId": blockId
 				},
 				annotations: {
-					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "Liabilities risk",
 					"pl7.app/isDiscreteFilter": "true",
             		"pl7.app/discreteValues": discreteValues,
@@ -92,7 +91,6 @@ self.body(func(args) {
 					"pl7.app/blockId": blockId
 				},
 				annotations: {
-					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "Sequence liabilities summary",
 					"pl7.app/isSummary": "true",
 					"pl7.app/table/visibility": "default",
@@ -122,7 +120,6 @@ self.body(func(args) {
 						"pl7.app/blockId": blockId
 					},
 					annotations: {
-						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": f_name + " Liabilities",
 						"pl7.app/table/visibility": "default",
 						"pl7.app/table/orderPriority": string(orderPriorityBase)
@@ -142,7 +139,6 @@ self.body(func(args) {
 						"pl7.app/blockId": blockId
 					},
 					annotations: {
-						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": f_name + " Risk",
 						"pl7.app/table/visibility": "default",
 						"pl7.app/isDiscreteFilter": "true",
@@ -179,7 +175,6 @@ self.body(func(args) {
 						"pl7.app/blockId": blockId
 					},
 					annotations: {
-						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": chainLabel + " " + "CDR3 aa",
 						"pl7.app/table/visibility": "default",
 						"pl7.app/table/orderPriority": "101"
@@ -204,7 +199,6 @@ self.body(func(args) {
                             "pl7.app/blockId": blockId
                         },
                         annotations: {
-                            "pl7.app/trace": trace.valueStr,
                             "pl7.app/label": chainLabel + " CDRs Annotations",
                             "pl7.app/table/visibility": "hidden",
                             "pl7.app/table/orderPriority": "102",
@@ -230,7 +224,6 @@ self.body(func(args) {
 					"pl7.app/blockId": blockId
 				},
 				annotations: {
-					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "CDR3 aa",
 					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "101"
@@ -253,7 +246,6 @@ self.body(func(args) {
 					"pl7.app/blockId": blockId
 				},
 				annotations: {
-					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "annotations",
 					"pl7.app/table/visibility": "hidden",
 					"pl7.app/table/orderPriority": "102",
