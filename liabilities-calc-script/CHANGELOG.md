@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 3.1.3
+
+### Patch Changes
+
+- 96899ef: fix requirements.txt
+
 ## 3.1.2
 
 ### Patch Changes
