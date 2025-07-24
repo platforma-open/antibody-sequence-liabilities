@@ -14,6 +14,8 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 
 self.body(func(args) {
 
+    blockId := args.blockId
+	
     params := args.params
     liabilitiesTable := args.liabilitiesTable
     datasetSpec := params.datasetSpec
@@ -240,14 +242,18 @@ self.body(func(args) {
 
 
 
-
+	// Pick export columns and add blockId to the domain
 	exportColumns := []
 	for col in columns {
-		if col.spec.name == "pl7.app/vdj/sequence/annotation" {
-			exportColumns += [col]
-		} else if col.spec.annotations["pl7.app/isScore"] == "true" {
-			exportColumns += [col]
-		} else if col.spec.annotations["pl7.app/isSummary"] == "true" {
+		if col.spec.name == "pl7.app/vdj/sequence/annotation" ||
+			(col.spec.annotations && col.spec.annotations["pl7.app/isScore"] == "true") ||
+			(col.spec.annotations && col.spec.annotations["pl7.app/isSummary"] == "true") {
+
+			if !col.spec.domain {
+				col.spec.domain = {}
+			}
+			col.spec.domain["pl7.app/blockId"] = blockId
+			
 			exportColumns += [col]
 		}
 	}
