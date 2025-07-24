@@ -99,7 +99,6 @@ self.body(func(args) {
 					valueType: "String",
 					domain: { "pl7.app/vdj/feature": f_name },
 					annotations: {
-						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": f_name + " Liabilities",
 						"pl7.app/table/visibility": "default",
 						"pl7.app/table/orderPriority": string(orderPriorityBase)
@@ -116,7 +115,6 @@ self.body(func(args) {
 					valueType: "String",
 					domain: { "pl7.app/vdj/feature": f_name },
 					annotations: {
-						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": f_name + " Risk",
 						"pl7.app/table/visibility": "default",
 						"pl7.app/isDiscreteFilter": "true",
@@ -152,7 +150,6 @@ self.body(func(args) {
 						"pl7.app/vdj/scClonotypeChain/index": "primary"
 					},
 					annotations: {
-						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": chainLabel + " " + "CDR3 aa",
 						"pl7.app/table/visibility": "default",
 						"pl7.app/table/orderPriority": "101"
@@ -176,7 +173,6 @@ self.body(func(args) {
                             "pl7.app/sequence/annotation/type": "CDRs" // Type of annotation
                         },
                         annotations: {
-                            "pl7.app/trace": trace.valueStr,
                             "pl7.app/label": chainLabel + " CDRs Annotations",
                             "pl7.app/table/visibility": "hidden",
                             "pl7.app/table/orderPriority": "102",
@@ -201,7 +197,6 @@ self.body(func(args) {
 					"pl7.app/vdj/feature": "CDR3"
 				},
 				annotations: {
-					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "CDR3 aa",
 					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "101"
@@ -223,7 +218,6 @@ self.body(func(args) {
 					"pl7.app/sequence/annotation/type": "CDRs"
 				},
 				annotations: {
-					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "annotations",
 					"pl7.app/table/visibility": "hidden",
 					"pl7.app/table/orderPriority": "102",
