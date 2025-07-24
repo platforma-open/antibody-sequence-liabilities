@@ -28,10 +28,6 @@ self.body(func(args) {
 
     clonotypeKeySpec := datasetSpec.axesSpec[1]
 
-    // Create a trace for tracking the liabilities calculation
-	trace := pSpec.makeTrace(datasetSpec,
-		{type: "milaboratories.antibody-sequence-liabilities", importance: 30, label: "Liabilities risk"})
-
     // Set up the axes for the output data - using clonotype key
 	axes := [
 		{
@@ -289,10 +285,33 @@ self.body(func(args) {
         {splitDataAndSpec: true, cpu: 1, mem: "16GiB"}
 	)
 
+	// Create the base block-level trace
+	traceSteps := [{
+		type: "milaboratories.antibody-sequence-liabilities",
+		importance: 30,
+		label: "Liabilities risk",
+		id: blockId
+	}]
+
+	// Add individual trace steps for each liability type with decreasing importance
+	importance := 29
+	for liabilityType in liabilityTypes {
+		traceSteps += [{
+			type: "milaboratories.antibody-sequence-liabilities/" + text.to_lower(text.re_replace(" ", liabilityType , "-")),
+			importance: importance,
+			label: liabilityType,
+			id: blockId
+		}]
+		importance -= 1
+	}
+
+	// Create the trace with all steps. Spread operator is used to pass the trace steps as individual arguments.
+	liabilityTrace := pSpec.makeTrace(datasetSpec, traceSteps...)
+
 	exportPframe := pframes.pFrameBuilder()
 
 	for k, v in exportOutput {
-		exportPframe.add(k, trace.inject(v.spec), v.data)
+		exportPframe.add(k, liabilityTrace.inject(v.spec), v.data)
 	}
 
 	exportPframe = exportPframe.build()
