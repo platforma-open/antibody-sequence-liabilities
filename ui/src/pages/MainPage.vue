@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { liabilityTypes } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import type { PlRef } from '@platforma-sdk/model';
-import { plRefsEqual } from '@platforma-sdk/model';
+import { plRefsEqual, getRawPlatformaInstance } from '@platforma-sdk/model';
 import {
   PlAgDataTableV2,
   PlBlockPage,
@@ -10,7 +10,9 @@ import {
   PlDropdownRef,
   PlSlideModal,
   usePlDataTableSettingsV2,
+  PlAlert,
 } from '@platforma-sdk/ui-vue';
+import { asyncComputed } from '@vueuse/core';
 import { computed, ref } from 'vue';
 import { useApp } from '../app';
 
@@ -39,6 +41,11 @@ const liabilityTypesModel = computed({
   },
 });
 
+const isEmpty = asyncComputed(async () => {
+  if (app.model.outputs.liabilitiesRiskTable === undefined) return undefined;
+  return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.liabilitiesRiskTable)).rows === 0;
+});
+
 </script>
 
 <template>
@@ -47,6 +54,10 @@ const liabilityTypesModel = computed({
     <template #append>
       <PlBtnGhost icon="settings" @click.stop="settingsIsShown = true" />
     </template>
+    <PlAlert v-if="isEmpty === true" type="error" style="margin-top: 1rem;">
+      {{ "Error: The input dataset you have selected is empty. \
+      Please choose a different dataset." }}
+    </PlAlert>
     <PlAgDataTableV2
       v-model="app.model.ui.tableState"
       :settings="tableSettings"
@@ -57,6 +68,8 @@ const liabilityTypesModel = computed({
 
   <PlSlideModal v-model="settingsIsShown">
     <template #title>Settings</template>
+
+    {{ isEmpty }}
 
     <PlDropdownRef
       v-model="app.model.args.inputAnchor"

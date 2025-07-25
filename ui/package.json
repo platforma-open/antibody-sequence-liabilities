@@ -13,7 +13,8 @@
     "@platforma-open/milaboratories.antibody-sequence-liabilities.model": "workspace:*",
     "@platforma-sdk/ui-vue": "catalog:",
     "@platforma-sdk/model": "catalog:",
-    "vue": "catalog:"
+    "vue": "catalog:",
+    "@vueuse/core": "catalog:"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "catalog:",
