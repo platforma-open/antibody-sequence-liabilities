@@ -54,10 +54,6 @@ const isEmpty = asyncComputed(async () => {
     <template #append>
       <PlBtnGhost icon="settings" @click.stop="settingsIsShown = true" />
     </template>
-    <PlAlert v-if="isEmpty === true" type="error" style="margin-top: 1rem;">
-      {{ "Error: The input dataset you have selected is empty. \
-      Please choose a different dataset." }}
-    </PlAlert>
     <PlAgDataTableV2
       v-model="app.model.ui.tableState"
       :settings="tableSettings"
@@ -68,9 +64,6 @@ const isEmpty = asyncComputed(async () => {
 
   <PlSlideModal v-model="settingsIsShown">
     <template #title>Settings</template>
-
-    {{ isEmpty }}
-
     <PlDropdownRef
       v-model="app.model.args.inputAnchor"
       :options="app.model.outputs.inputOptions ?? []"
@@ -78,6 +71,11 @@ const isEmpty = asyncComputed(async () => {
       required
       @update:model-value="setInput"
     />
+    <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
+      <template #title>Empty dataset selection</template>
+      The input dataset you have selected is empty.
+      Please choose a different dataset.
+    </PlAlert>
     <PlDropdownMulti v-model="liabilityTypesModel" label="Liability types" :options="liabilityTypes" >
       <template #tooltip>
         Select the liability types to include in the analysis.
