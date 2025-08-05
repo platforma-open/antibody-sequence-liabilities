@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.workflow
 
+## 3.4.0
+
+### Minor Changes
+
+- 6d674ed: Add blockId to domain of exported cols, improve trace annotation to be able distinguish between exports of different liabilities blocks
+
 ## 3.3.1
 
 ### Patch Changes
