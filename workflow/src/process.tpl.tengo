@@ -14,6 +14,8 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 
 self.body(func(args) {
 
+    blockId := args.blockId
+	
     params := args.params
     liabilitiesTable := args.liabilitiesTable
     datasetSpec := params.datasetSpec
@@ -25,10 +27,6 @@ self.body(func(args) {
     regionsFound := args.regionsFound.getDataAsJson()
 
     clonotypeKeySpec := datasetSpec.axesSpec[1]
-
-    // Create a trace for tracking the liabilities calculation
-	trace := pSpec.makeTrace(datasetSpec,
-		{type: "milaboratories.antibody-sequence-liabilities", importance: 30, label: "Liabilities risk"})
 
     // Set up the axes for the output data - using clonotype key
 	axes := [
@@ -99,7 +97,6 @@ self.body(func(args) {
 					valueType: "String",
 					domain: { "pl7.app/vdj/feature": f_name },
 					annotations: {
-						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": f_name + " Liabilities",
 						"pl7.app/table/visibility": "default",
 						"pl7.app/table/orderPriority": string(orderPriorityBase)
@@ -116,7 +113,6 @@ self.body(func(args) {
 					valueType: "String",
 					domain: { "pl7.app/vdj/feature": f_name },
 					annotations: {
-						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": f_name + " Risk",
 						"pl7.app/table/visibility": "default",
 						"pl7.app/isDiscreteFilter": "true",
@@ -152,7 +148,6 @@ self.body(func(args) {
 						"pl7.app/vdj/scClonotypeChain/index": "primary"
 					},
 					annotations: {
-						"pl7.app/trace": trace.valueStr,
 						"pl7.app/label": chainLabel + " " + "CDR3 aa",
 						"pl7.app/table/visibility": "default",
 						"pl7.app/table/orderPriority": "101"
@@ -176,7 +171,6 @@ self.body(func(args) {
                             "pl7.app/sequence/annotation/type": "CDRs" // Type of annotation
                         },
                         annotations: {
-                            "pl7.app/trace": trace.valueStr,
                             "pl7.app/label": chainLabel + " CDRs Annotations",
                             "pl7.app/table/visibility": "hidden",
                             "pl7.app/table/orderPriority": "102",
@@ -201,7 +195,6 @@ self.body(func(args) {
 					"pl7.app/vdj/feature": "CDR3"
 				},
 				annotations: {
-					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "CDR3 aa",
 					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "101"
@@ -223,7 +216,6 @@ self.body(func(args) {
 					"pl7.app/sequence/annotation/type": "CDRs"
 				},
 				annotations: {
-					"pl7.app/trace": trace.valueStr,
 					"pl7.app/label": "annotations",
 					"pl7.app/table/visibility": "hidden",
 					"pl7.app/table/orderPriority": "102",
@@ -246,14 +238,18 @@ self.body(func(args) {
 
 
 
-
+	// Pick export columns and add blockId to the domain
 	exportColumns := []
 	for col in columns {
-		if col.spec.name == "pl7.app/vdj/sequence/annotation" {
-			exportColumns += [col]
-		} else if col.spec.annotations["pl7.app/isScore"] == "true" {
-			exportColumns += [col]
-		} else if col.spec.annotations["pl7.app/isSummary"] == "true" {
+		if col.spec.name == "pl7.app/vdj/sequence/annotation" ||
+			(col.spec.annotations && col.spec.annotations["pl7.app/isScore"] == "true") ||
+			(col.spec.annotations && col.spec.annotations["pl7.app/isSummary"] == "true") {
+
+			if !col.spec.domain {
+				col.spec.domain = {}
+			}
+			col.spec.domain["pl7.app/blockId"] = blockId
+			
 			exportColumns += [col]
 		}
 	}
@@ -289,10 +285,33 @@ self.body(func(args) {
         {splitDataAndSpec: true, cpu: 1, mem: "16GiB"}
 	)
 
+	// Create the base block-level trace
+	traceSteps := [{
+		type: "milaboratories.antibody-sequence-liabilities",
+		importance: 30,
+		label: "Liabilities risk",
+		id: blockId
+	}]
+
+	// Add individual trace steps for each liability type with decreasing importance
+	importance := 29
+	for liabilityType in liabilityTypes {
+		traceSteps += [{
+			type: "milaboratories.antibody-sequence-liabilities/" + text.to_lower(text.re_replace(" ", liabilityType , "-")),
+			importance: importance,
+			label: liabilityType,
+			id: blockId
+		}]
+		importance -= 1
+	}
+
+	// Create the trace with all steps. Spread operator is used to pass the trace steps as individual arguments.
+	liabilityTrace := pSpec.makeTrace(datasetSpec, traceSteps...)
+
 	exportPframe := pframes.pFrameBuilder()
 
 	for k, v in exportOutput {
-		exportPframe.add(k, trace.inject(v.spec), v.data)
+		exportPframe.add(k, liabilityTrace.inject(v.spec), v.data)
 	}
 
 	exportPframe = exportPframe.build()
