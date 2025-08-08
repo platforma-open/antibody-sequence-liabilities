@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 3.2.0
+
+### Minor Changes
+
+- fda18c5: support empty input
+
 ## 3.1.3
 
 ### Patch Changes

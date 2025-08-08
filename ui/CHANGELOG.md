@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 3.1.0
+
+### Minor Changes
+
+- fda18c5: support empty input
+
+### Patch Changes
+
+- Updated dependencies [fda18c5]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@3.1.0
+
 ## 3.0.3
 
 ### Patch Changes
