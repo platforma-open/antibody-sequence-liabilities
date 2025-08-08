@@ -74,6 +74,18 @@ export const model = BlockModel.create()
     );
   })
 
+  .output('liabilitiesRiskTable', (ctx) => {
+    const pCols = ctx.outputs?.resolve('outputLiabilities')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+    const riskColumn = pCols.find((p) => p.spec.name === 'pl7.app/vdj/liabilitiesRisk');
+    if (riskColumn === undefined) {
+      return undefined;
+    }
+    return ctx.createPTable({ columns: [riskColumn] });
+  })
+
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
 
   .title((ctx) => ctx.uiState.title)

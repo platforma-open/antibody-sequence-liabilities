@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { liabilityTypes } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import type { PlRef } from '@platforma-sdk/model';
-import { plRefsEqual } from '@platforma-sdk/model';
+import { plRefsEqual, getRawPlatformaInstance } from '@platforma-sdk/model';
 import {
   PlAgDataTableV2,
   PlBlockPage,
@@ -10,7 +10,9 @@ import {
   PlDropdownRef,
   PlSlideModal,
   usePlDataTableSettingsV2,
+  PlAlert,
 } from '@platforma-sdk/ui-vue';
+import { asyncComputed } from '@vueuse/core';
 import { computed, ref } from 'vue';
 import { useApp } from '../app';
 
@@ -39,6 +41,11 @@ const liabilityTypesModel = computed({
   },
 });
 
+const isEmpty = asyncComputed(async () => {
+  if (app.model.outputs.liabilitiesRiskTable === undefined) return undefined;
+  return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.liabilitiesRiskTable)).rows === 0;
+});
+
 </script>
 
 <template>
@@ -57,7 +64,6 @@ const liabilityTypesModel = computed({
 
   <PlSlideModal v-model="settingsIsShown">
     <template #title>Settings</template>
-
     <PlDropdownRef
       v-model="app.model.args.inputAnchor"
       :options="app.model.outputs.inputOptions ?? []"
@@ -65,6 +71,11 @@ const liabilityTypesModel = computed({
       required
       @update:model-value="setInput"
     />
+    <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
+      <template #title>Empty dataset selection</template>
+      The input dataset you have selected is empty.
+      Please choose a different dataset.
+    </PlAlert>
     <PlDropdownMulti v-model="liabilityTypesModel" label="Liability types" :options="liabilityTypes" >
       <template #tooltip>
         Select the liability types to include in the analysis.

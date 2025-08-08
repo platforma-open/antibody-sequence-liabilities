@@ -511,8 +511,8 @@ def main():
         print(f"Path B (No Annotations Mode): Using direct sequence columns ending with predefined keys (e.g., 'CDR1 aa').")
         candidate_seq_cols_for_path_b = [c for c in all_seq_cols if any(key_suffix in c.lower() for key_suffix in TARGET_REGION_KEYS)]
         if not candidate_seq_cols_for_path_b:
-            print("Path B: No standard FR/CDR sequence columns (e.g., 'CDR1 aa') found. Writing input unchanged if no liabilities requested.");
-            if not CALCULATE_LIABILITIES: df_processed.write_csv(args.output_tsv, separator="\t"); return
+            print("Path B: No standard FR/CDR sequence columns (e.g., 'CDR1 aa') found.");
+            # Don't return early - continue to generate expected output columns even without liabilities
         cols_for_liability_analysis.extend(candidate_seq_cols_for_path_b); cols_for_liability_analysis = sorted(list(set(cols_for_liability_analysis)))
     
     if not cols_for_liability_analysis and CALCULATE_LIABILITIES:
@@ -572,53 +572,90 @@ def main():
         df_processed = _combine_heavy_light_prefixed_columns(df_processed, "liabilities")
 
     # Output Column Selection & Final Write
+    # Include clonotypeKey if it exists, otherwise use empty list
     output_cols_core = ["clonotypeKey"] if "clonotypeKey" in df_processed.columns else []
     final_annotation_cols_list = ann_cols if has_input_ann_cols else []
     final_annotation_cols = sorted(list(set(final_annotation_cols_list)))
+    
+    # Handle CDR3 sequence columns
     final_cdr3_seq_cols = []
-    heavy_light_cdr3 = sorted([c for c in df_processed.columns if re.search(r'^(heavy|light) cdr3 aa$', c, re.IGNORECASE)])
-    general_cdr3 = sorted([c for c in df_processed.columns if re.search(r'cdr3 aa$', c, re.IGNORECASE) and c not in heavy_light_cdr3])
-    final_cdr3_seq_cols = heavy_light_cdr3 + general_cdr3
-    if not final_cdr3_seq_cols:
-        potential_cdr3 = sorted([c for c in df_processed.columns if "cdr3" in c.lower() and c.lower().endswith("aa")])
-        if potential_cdr3: final_cdr3_seq_cols = potential_cdr3
+    if df_processed.width > 0:  # Normal case - find existing columns
+        heavy_light_cdr3 = sorted([c for c in df_processed.columns if re.search(r'^(heavy|light) cdr3 aa$', c, re.IGNORECASE)])
+        general_cdr3 = sorted([c for c in df_processed.columns if re.search(r'cdr3 aa$', c, re.IGNORECASE) and c not in heavy_light_cdr3])
+        final_cdr3_seq_cols = heavy_light_cdr3 + general_cdr3
+        if not final_cdr3_seq_cols:
+            potential_cdr3 = sorted([c for c in df_processed.columns if "cdr3" in c.lower() and c.lower().endswith("aa")])
+            if potential_cdr3: final_cdr3_seq_cols = potential_cdr3
+    else:  # Empty input case - generate expected column names
+        # For empty input, always generate bulk columns (standard CDR3 column)
+        final_cdr3_seq_cols = ["CDR3 aa"]
 
     individual_frag_liabs, individual_frag_risks = [], []
     combined_chain_liabs, combined_chain_risks = [], []
     combined_region_liabs, combined_region_risks = [], []
     
     overall_summary_cols = [] # Renamed from overall_liab_risk_col for clarity
+    print(f"DEBUG: CALCULATE_LIABILITIES={CALCULATE_LIABILITIES}, df_processed.width={df_processed.width}", file=sys.stderr)
     if CALCULATE_LIABILITIES:
-        all_liab_cols = [c for c in df_processed.columns if c.endswith(" liabilities")]
-        all_risk_cols = [c for c in df_processed.columns if c.endswith(" risk")]
-        
-        individual_frag_liabs = sorted([c for c in all_liab_cols if " aa liabilities" in c.lower() and c != "Sequence liabilities summary"])
-        individual_frag_risks = sorted([c for c in all_risk_cols if " aa risk" in c.lower() and c != "Liabilities risk"])
-        
-        combined_chain_liabs = sorted([c for c in all_liab_cols if c.lower() in ["heavy liabilities", "light liabilities"] and c not in individual_frag_liabs])
-        combined_chain_risks = sorted([c for c in all_risk_cols if c.lower() in ["heavy risk", "light risk"] and c not in individual_frag_risks])
-        
-        combined_region_liabs = sorted([c for c in all_liab_cols if c not in individual_frag_liabs and c not in combined_chain_liabs and c.lower() != "liabilities risk" and c != "Sequence liabilities summary"])
-        combined_region_risks = sorted([c for c in all_risk_cols if c not in individual_frag_risks and c not in combined_chain_risks and c.lower() != "liabilities risk"])
-        
-        # Build the overall_summary_cols list for output ordering
-        if "Liabilities risk" in df_processed.columns:
-            overall_summary_cols.append("Liabilities risk")
-        if "Sequence liabilities summary" in df_processed.columns:
-            if "Liabilities risk" in overall_summary_cols: # Try to place it after "Liabilities risk"
-                try:
-                    idx = overall_summary_cols.index("Liabilities risk")
-                    overall_summary_cols.insert(idx + 1, "Sequence liabilities summary")
-                except ValueError: # Should not happen
+        if df_processed.width > 0:  # Normal case - find existing columns
+            all_liab_cols = [c for c in df_processed.columns if c.endswith(" liabilities")]
+            all_risk_cols = [c for c in df_processed.columns if c.endswith(" risk")]
+            
+            individual_frag_liabs = sorted([c for c in all_liab_cols if " aa liabilities" in c.lower() and c != "Sequence liabilities summary"])
+            individual_frag_risks = sorted([c for c in all_risk_cols if " aa risk" in c.lower() and c != "Liabilities risk"])
+            
+            combined_chain_liabs = sorted([c for c in all_liab_cols if c.lower() in ["heavy liabilities", "light liabilities"] and c not in individual_frag_liabs])
+            combined_chain_risks = sorted([c for c in all_risk_cols if c.lower() in ["heavy risk", "light risk"] and c not in individual_frag_risks])
+            
+            combined_region_liabs = sorted([c for c in all_liab_cols if c not in individual_frag_liabs and c not in combined_chain_liabs and c.lower() != "liabilities risk" and c != "Sequence liabilities summary"])
+            combined_region_risks = sorted([c for c in all_risk_cols if c not in individual_frag_risks and c not in combined_chain_risks and c.lower() != "liabilities risk"])
+            
+            # Build the overall_summary_cols list for output ordering
+            if "Liabilities risk" in df_processed.columns:
+                overall_summary_cols.append("Liabilities risk")
+            if "Sequence liabilities summary" in df_processed.columns:
+                if "Liabilities risk" in overall_summary_cols: # Try to place it after "Liabilities risk"
+                    try:
+                        idx = overall_summary_cols.index("Liabilities risk")
+                        overall_summary_cols.insert(idx + 1, "Sequence liabilities summary")
+                    except ValueError: # Should not happen
+                        overall_summary_cols.append("Sequence liabilities summary")
+                else: # No "Liabilities risk" column, just append
                     overall_summary_cols.append("Sequence liabilities summary")
-            else: # No "Liabilities risk" column, just append
-                overall_summary_cols.append("Sequence liabilities summary")
+        else:  # Empty input case - generate expected column names
+            # For empty input, always generate bulk columns (standard liability and risk columns)
+            expected_regions = ["CDR1", "CDR2", "CDR3", "FR1"]
+            for region in expected_regions:
+                individual_frag_liabs.append(f"{region} aa liabilities")
+                individual_frag_risks.append(f"{region} aa risk")
+            
+            # Add summary columns
+            overall_summary_cols = ["Liabilities risk", "Sequence liabilities summary"]
+            
+            # Sort the generated columns
+            individual_frag_liabs = sorted(individual_frag_liabs)
+            individual_frag_risks = sorted(individual_frag_risks)
     else: # If liabilities not calculated, ensure these summary columns are not accidentally included if they somehow exist
         if "Liabilities risk" in df_processed.columns and "Liabilities risk" not in output_cols_core:
              # If user wants it even without calc, they'd need to specify it or it's a pre-existing column to keep
              pass # For now, only add if CALCULATE_LIABILITIES is true for generated ones.
         if "Sequence liabilities summary" in df_processed.columns and "Sequence liabilities summary" not in output_cols_core :
              pass
+        
+        # For empty input without liabilities, still generate expected bulk columns
+        if df_processed.width == 0:
+            # Generate expected liability and risk columns for empty input (even without calculating)
+            expected_regions = ["CDR1", "CDR2", "CDR3", "FR1"]
+            for region in expected_regions:
+                individual_frag_liabs.append(f"{region} aa liabilities")
+                individual_frag_risks.append(f"{region} aa risk")
+            
+            # Add summary columns
+            overall_summary_cols = ["Liabilities risk", "Sequence liabilities summary"]
+            
+            # Sort the generated columns
+            individual_frag_liabs = sorted(individual_frag_liabs)
+            individual_frag_risks = sorted(individual_frag_risks)
 
 
     output_cols_ordered = list(dict.fromkeys(
@@ -627,7 +664,57 @@ def main():
         individual_frag_risks + combined_region_risks + combined_chain_risks +
         overall_summary_cols )) # <-- "Sequence liabilities summary" and "Liabilities risk" included here
     
-    output_cols_existing = [c for c in output_cols_ordered if c in df_processed.columns]
+    print(f"DEBUG: Column generation - output_cols_core={output_cols_core}", file=sys.stderr)
+    print(f"DEBUG: Column generation - final_annotation_cols={final_annotation_cols}", file=sys.stderr)
+    print(f"DEBUG: Column generation - final_cdr3_seq_cols={final_cdr3_seq_cols}", file=sys.stderr)
+    print(f"DEBUG: Column generation - individual_frag_liabs={individual_frag_liabs}", file=sys.stderr)
+    print(f"DEBUG: Column generation - overall_summary_cols={overall_summary_cols}", file=sys.stderr)
+    
+    # For empty input or when no liabilities calculated, force generation of all expected bulk columns
+    # Check if we have insufficient columns (only core + annotations, no liability/risk columns)
+    has_insufficient_columns = (len(output_cols_ordered) <= 2)
+    print(f"DEBUG: has_insufficient_columns={has_insufficient_columns}, len(output_cols_ordered)={len(output_cols_ordered)}", file=sys.stderr)
+    
+    if df_processed.width == 0 or (not CALCULATE_LIABILITIES and has_insufficient_columns):
+        # Force generate all expected bulk columns
+        expected_bulk_columns = []
+        
+        # Add clonotypeKey if it exists in input
+        if "clonotypeKey" in df_processed.columns:
+            expected_bulk_columns.append("clonotypeKey")
+        
+        # Add annotation columns if they exist in input
+        if final_annotation_cols:
+            expected_bulk_columns.extend(final_annotation_cols)
+        
+        # Add all expected bulk columns
+        expected_bulk_columns.extend([
+            "CDR3 aa",
+            "CDR1 aa liabilities",
+            "CDR2 aa liabilities", 
+            "CDR3 aa liabilities",
+            "FR1 aa liabilities",
+            "CDR1 aa risk",
+            "CDR2 aa risk",
+            "CDR3 aa risk",
+            "FR1 aa risk",
+            "Liabilities risk",
+            "Sequence liabilities summary"
+        ])
+        
+        # Create missing columns with empty/default values
+        missing_columns = [c for c in expected_bulk_columns if c not in df_processed.columns]
+        if missing_columns:
+            print(f"DEBUG: Creating missing columns: {missing_columns}", file=sys.stderr)
+            # Add empty columns for missing ones
+            for col in missing_columns:
+                df_processed = df_processed.with_columns(pl.lit("").alias(col))
+        
+        output_cols_existing = expected_bulk_columns
+        print(f"DEBUG: Forcing bulk columns. df_processed.width={df_processed.width}, CALCULATE_LIABILITIES={CALCULATE_LIABILITIES}", file=sys.stderr)
+        print(f"DEBUG: All expected bulk columns: {output_cols_existing}", file=sys.stderr)
+    else:
+        output_cols_existing = [c for c in output_cols_ordered if c in df_processed.columns]
     
     df_out = df_processed.select(output_cols_existing) if output_cols_existing else df_processed.clone() # Clone if no selection to avoid issues with empty df_out if df_processed has columns
     
@@ -647,14 +734,18 @@ def main():
             print(f"Output table written to {args.output_tsv}")
         except Exception as e: print(f"Error writing output TSV: {e}", file=sys.stderr)
     else: # df_out.width == 0
-        if args.output_tsv: # If output path is given, write empty file or headers
+        if args.output_tsv: # If output path is given, write empty file with headers
             try:
                 with open(args.output_tsv, 'w') as f_empty:
-                    # Write headers if they could be determined
-                    if output_cols_existing: f_empty.write("\t".join(output_cols_existing) + "\n")
-                    elif df_processed.width > 0 : f_empty.write("\t".join(df_processed.columns) + "\n")
-                    # else, an empty file is created
-                print(f"Empty output table (or headers only) written to {args.output_tsv} as no data rows were processed/selected.")
+                    # Always write headers if they could be determined, even for empty input
+                    if output_cols_existing:
+                        f_empty.write("\t".join(output_cols_existing) + "\n")
+                    elif df_processed.width > 0:
+                        f_empty.write("\t".join(df_processed.columns) + "\n")
+                    elif df_processed.columns:  # Even if width is 0, columns might exist
+                        f_empty.write("\t".join(df_processed.columns) + "\n")
+                    # else, an empty file is created (no headers possible)
+                print(f"Empty output table with headers written to {args.output_tsv} as no data rows were processed/selected.")
             except Exception as e:
                  print(f"Error writing empty output TSV to '{args.output_tsv}': {e}", file=sys.stderr)
 
