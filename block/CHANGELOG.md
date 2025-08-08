@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 2.4.6
+
+### Patch Changes
+
+- @platforma-open/milaboratories.antibody-sequence-liabilities.workflow@3.4.2
+
 ## 2.4.5
 
 ### Patch Changes
