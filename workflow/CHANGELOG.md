@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.workflow
 
+## 3.4.3
+
+### Patch Changes
+
+- a32a024: Update sdk to fix issue with broken python venv
+
 ## 3.4.2
 
 ### Patch Changes
