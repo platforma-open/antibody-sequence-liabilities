@@ -3,7 +3,7 @@
   "version": "3.2.1",
   "scripts": {
     "build": "pl-pkg build",
-    "prepublishOnly": "pl-pkg publish packages",
+    "prepublish": "pl-pkg prepublish",
     "do-pack": "rm -f *.tgz && pl-pkg build && pnpm pack && mv platforma-open*.tgz package.tgz",
     "changeset": "changeset",
     "version-packages": "changeset version"

@@ -11,7 +11,7 @@
     "mark-stable": "turbo run mark-stable",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "update-sdk": "node scripts/update-sdk-packages.js"
+    "update-sdk": "pl-blocks-deps-updater"
   },
   "files": [
     "index.d.ts",
@@ -20,7 +20,7 @@
   "devDependencies": {
     "turbo": "catalog:",
     "@changesets/cli": "catalog:",
-    "js-yaml": "catalog:"
+    "@platforma-sdk/blocks-deps-updater": "catalog:"
   },
   "packageManager": "pnpm@9.12.0"
 }
