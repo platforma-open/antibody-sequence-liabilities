@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.model
 
+## 3.1.1
+
+### Patch Changes
+
+- 9d7983b: Full SDK update
+
 ## 3.1.0
 
 ### Minor Changes
