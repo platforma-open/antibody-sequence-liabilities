@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 3.2.2
+
+### Patch Changes
+
+- 9d7983b: Full SDK update
+
 ## 3.2.1
 
 ### Patch Changes
