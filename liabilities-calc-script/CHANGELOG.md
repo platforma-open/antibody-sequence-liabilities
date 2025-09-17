@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 3.2.3
+
+### Patch Changes
+
+- 4f8afc2: Update python
+
 ## 3.2.2
 
 ### Patch Changes
