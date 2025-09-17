@@ -1,1 +1,1 @@
-polars-lts-cpu==1.30.0
+polars-lts-cpu==1.33.0
