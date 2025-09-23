@@ -27,6 +27,7 @@ ORIG_EXTRA_PATTERNS = {
 }
 ORIG_CYS_LIABILITIES = {"Missing Cysteines": "High", "Extra Cysteines": "High"}
 # Usage of EXPECTED_CYS will have to be modified if you add more than one nucleotide coordinate
+# Coordinates are added in 0-based index
 EXPECTED_CYS = {"FR1": [22], "CDR3": [0]}
 FR1_SPECIFIC_LIABILITIES = {"Missing Cysteines", "Extra Cysteines"}
 REGION_ORDER_MAP = {"FR1": 1, "CDR1": 2, "CDR2": 3, "CDR3": 4, "FR2": 5, "FR3": 6, "FR4": 7} # For sorting summary
@@ -111,9 +112,13 @@ def identify_liabilities(seq: str, region: str,
             if expected_indices: # Only check if expectations are defined for this region
                 actual_cys_count = seq.count("C")
                 expected_cys_count = len(expected_indices)
-                if "Missing Cysteines" in active_cys_defs and actual_cys_count < expected_cys_count:
+                if "Missing Cysteines" in active_cys_defs and seq[expected_indices[0]] != "C":
                     liabilities_found.append("Missing Cysteines")
-                if "Extra Cysteines" in active_cys_defs and actual_cys_count > expected_cys_count:
+                if ("Extra Cysteines" in active_cys_defs and 
+                        # More cysteines than expected
+                        ((actual_cys_count > expected_cys_count) or 
+                         # Same number as expected (or more), but the expected cysteine is lost
+                         (seq[expected_indices[0]] != "C" and actual_cys_count >= expected_cys_count))):
                     liabilities_found.append("Extra Cysteines")
 
     elif region.startswith("CDR"):
@@ -143,7 +148,7 @@ def identify_liabilities(seq: str, region: str,
                 if ("Extra Cysteines" in active_cys_defs and 
                         # More cysteines than expected
                         ((actual_cys_count > expected_cys_count) or 
-                        # Same number as expected (or more), but first expected cysteine is lost
+                        # Same number as expected (or more), but the expected cysteine is lost
                          (seq[expected_indices[0]] != "C" and actual_cys_count >= expected_cys_count))):
                     liabilities_found.append("Extra Cysteines")
 
@@ -459,8 +464,14 @@ def main():
                                     actual_cys_fr1 = fragment_seq.count("C")
                                     expected_cys_fr1 = len(expected_indices_fr1)
                                     cys_liability_name = None
-                                    if actual_cys_fr1 < expected_cys_fr1: cys_liability_name = "Missing Cysteines"
-                                    elif actual_cys_fr1 > expected_cys_fr1: cys_liability_name = "Extra Cysteines"
+                                    if fragment_seq[expected_indices_fr1[0]] != "C":
+                                        cys_liability_name = "Missing Cysteines"
+                                    elif (# More cysteines than expected
+                                        (actual_cys_fr1 > expected_cys_fr1) or 
+                                        # Same number as expected (or more), but the expected cysteine is lost
+                                        (fragment_seq[expected_indices_fr1[0]] != "C" and 
+                                            actual_cys_fr1 >= expected_cys_fr1)):
+                                        cys_liability_name = "Extra Cysteines"
                                     
                                     if cys_liability_name and cys_liability_name in active_cys_defs:
                                         # print(f"DEBUG PathA Annotate: FR1 Cys liability '{cys_liability_name}' found and active.")
