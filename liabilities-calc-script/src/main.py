@@ -26,7 +26,8 @@ ORIG_EXTRA_PATTERNS = {
     "Out of frame":        r"_",
 }
 ORIG_CYS_LIABILITIES = {"Missing Cysteines": "High", "Extra Cysteines": "High"}
-EXPECTED_CYS    = {"FR1": [22], "CDR3": [1]}
+# Usage of EXPECTED_CYS will have to be modified if you add more than one nucleotide coordinate
+EXPECTED_CYS = {"FR1": [22], "CDR3": [0]}
 FR1_SPECIFIC_LIABILITIES = {"Missing Cysteines", "Extra Cysteines"}
 REGION_ORDER_MAP = {"FR1": 1, "CDR1": 2, "CDR2": 3, "CDR3": 4, "FR2": 5, "FR3": 6, "FR4": 7} # For sorting summary
 
@@ -136,9 +137,14 @@ def identify_liabilities(seq: str, region: str,
             if expected_indices:
                 actual_cys_count = seq.count("C")
                 expected_cys_count = len(expected_indices)
-                if "Missing Cysteines" in active_cys_defs and actual_cys_count < expected_cys_count:
+                # If the expected cysteine is lost
+                if "Missing Cysteines" in active_cys_defs and seq[expected_indices[0]] != "C":
                     liabilities_found.append("Missing Cysteines")
-                if "Extra Cysteines" in active_cys_defs and actual_cys_count > expected_cys_count:
+                if ("Extra Cysteines" in active_cys_defs and 
+                        # More cysteines than expected
+                        ((actual_cys_count > expected_cys_count) or 
+                        # Same number as expected (or more), but first expected cysteine is lost
+                         (seq[expected_indices[0]] != "C" and actual_cys_count >= expected_cys_count))):
                     liabilities_found.append("Extra Cysteines")
 
     elif region.startswith("FR"): # For other FRs (FR2, FR3, FR4)
