@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 3.2.4
+
+### Patch Changes
+
+- 835d47e: Fix cysteine location check for missing and gained cysteines
+
 ## 3.2.3
 
 ### Patch Changes
