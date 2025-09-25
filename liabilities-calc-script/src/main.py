@@ -112,14 +112,21 @@ def identify_liabilities(seq: str, region: str,
             if expected_indices: # Only check if expectations are defined for this region
                 actual_cys_count = seq.count("C")
                 expected_cys_count = len(expected_indices)
-                if "Missing Cysteines" in active_cys_defs and seq[expected_indices[0]] != "C":
-                    liabilities_found.append("Missing Cysteines")
-                if ("Extra Cysteines" in active_cys_defs and 
-                        # More cysteines than expected
-                        ((actual_cys_count > expected_cys_count) or 
-                         # Same number as expected (or more), but the expected cysteine is lost
-                         (seq[expected_indices[0]] != "C" and actual_cys_count >= expected_cys_count))):
-                    liabilities_found.append("Extra Cysteines")
+                if len(seq) > expected_indices[0]:
+                    if "Missing Cysteines" in active_cys_defs and seq[expected_indices[0]] != "C":
+                        liabilities_found.append("Missing Cysteines")
+                    if ("Extra Cysteines" in active_cys_defs and 
+                            # More cysteines than expected
+                            ((actual_cys_count > expected_cys_count) or 
+                            # Same number as expected (or more), but the expected cysteine is lost
+                            (seq[expected_indices[0]] != "C" and actual_cys_count >= expected_cys_count))):
+                        liabilities_found.append("Extra Cysteines")
+                else:
+                    if ("Extra Cysteines" in active_cys_defs and 
+                            # More cysteines than expected
+                            actual_cys_count > expected_cys_count):
+                        liabilities_found.append("Extra Cysteines")
+
 
     elif region.startswith("CDR"):
         # Handle Tryptophan Oxidation (W) first due to its specific logic for CDR3 vs other CDRs
@@ -142,15 +149,21 @@ def identify_liabilities(seq: str, region: str,
             if expected_indices:
                 actual_cys_count = seq.count("C")
                 expected_cys_count = len(expected_indices)
-                # If the expected cysteine is lost
-                if "Missing Cysteines" in active_cys_defs and seq[expected_indices[0]] != "C":
-                    liabilities_found.append("Missing Cysteines")
-                if ("Extra Cysteines" in active_cys_defs and 
-                        # More cysteines than expected
-                        ((actual_cys_count > expected_cys_count) or 
-                        # Same number as expected (or more), but the expected cysteine is lost
-                         (seq[expected_indices[0]] != "C" and actual_cys_count >= expected_cys_count))):
-                    liabilities_found.append("Extra Cysteines")
+                if len(seq) > expected_indices[0]:
+                    # If the expected cysteine is lost
+                    if "Missing Cysteines" in active_cys_defs and seq[expected_indices[0]] != "C":
+                        liabilities_found.append("Missing Cysteines")
+                    if ("Extra Cysteines" in active_cys_defs and 
+                            # More cysteines than expected
+                            ((actual_cys_count > expected_cys_count) or 
+                            # Same number as expected (or more), but the expected cysteine is lost
+                            (seq[expected_indices[0]] != "C" and actual_cys_count >= expected_cys_count))):
+                        liabilities_found.append("Extra Cysteines")
+                else:
+                    if ("Extra Cysteines" in active_cys_defs and 
+                            # More cysteines than expected
+                            actual_cys_count > expected_cys_count):
+                        liabilities_found.append("Extra Cysteines")
 
     elif region.startswith("FR"): # For other FRs (FR2, FR3, FR4)
         # print(f"DEBUG ID_LIAB (call:{call_id}, Col:'{debug_col_name}', Region:'{region}') Is FR (not FR1). Only Extra_Patterns and Cys applied if active.")
@@ -464,12 +477,13 @@ def main():
                                     actual_cys_fr1 = fragment_seq.count("C")
                                     expected_cys_fr1 = len(expected_indices_fr1)
                                     cys_liability_name = None
-                                    if fragment_seq[expected_indices_fr1[0]] != "C":
+                                    if len(fragment_seq) > expected_indices_fr1[0] and fragment_seq[expected_indices_fr1[0]] != "C":
                                         cys_liability_name = "Missing Cysteines"
                                     elif (# More cysteines than expected
                                         (actual_cys_fr1 > expected_cys_fr1) or 
                                         # Same number as expected (or more), but the expected cysteine is lost
-                                        (fragment_seq[expected_indices_fr1[0]] != "C" and 
+                                        (len(fragment_seq) > expected_indices_fr1[0] and 
+                                            fragment_seq[expected_indices_fr1[0]] != "C" and 
                                             actual_cys_fr1 >= expected_cys_fr1)):
                                         cys_liability_name = "Extra Cysteines"
                                     
