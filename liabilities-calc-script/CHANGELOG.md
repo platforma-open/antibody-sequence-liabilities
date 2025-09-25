@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 3.2.5
+
+### Patch Changes
+
+- 929381c: solve error related with features being shorter than the expected location for thei main Cysteine
+
 ## 3.2.4
 
 ### Patch Changes
