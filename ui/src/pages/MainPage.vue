@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { liabilityTypes } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import type { PlRef } from '@platforma-sdk/model';
-import { plRefsEqual, getRawPlatformaInstance } from '@platforma-sdk/model';
+import { getRawPlatformaInstance, plRefsEqual } from '@platforma-sdk/model';
 import {
   PlAgDataTableV2,
+  PlAlert,
   PlBlockPage,
   PlBtnGhost,
   PlDropdownMulti,
   PlDropdownRef,
+  PlMaskIcon24,
   PlSlideModal,
   usePlDataTableSettingsV2,
-  PlAlert,
 } from '@platforma-sdk/ui-vue';
 import { asyncComputed } from '@vueuse/core';
 import { computed, ref } from 'vue';
@@ -52,7 +53,12 @@ const isEmpty = asyncComputed(async () => {
   <PlBlockPage>
     <template #title> Antibody sequence liabilities </template>
     <template #append>
-      <PlBtnGhost icon="settings" @click.stop="settingsIsShown = true" />
+      <PlBtnGhost @click.stop="settingsIsShown = true">
+        Settings
+        <template #append>
+          <PlMaskIcon24 name="settings" />
+        </template>
+      </PlBtnGhost>
     </template>
     <PlAgDataTableV2
       v-model="app.model.ui.tableState"
