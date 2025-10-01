@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 3.1.2
+
+### Patch Changes
+
+- 65d4d91: Fix settings button
+
 ## 3.1.1
 
 ### Patch Changes
