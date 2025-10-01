@@ -28,7 +28,7 @@ ORIG_EXTRA_PATTERNS = {
 ORIG_CYS_LIABILITIES = {"Missing Cysteines": "High", "Extra Cysteines": "High"}
 # Usage of EXPECTED_CYS will have to be modified if you add more than one nucleotide coordinate
 # Coordinates are added in 0-based index
-EXPECTED_CYS = {"FR1": [22], "CDR3": [0]}
+EXPECTED_CYS = {"FR1": [21], "CDR3": [0]}
 FR1_SPECIFIC_LIABILITIES = {"Missing Cysteines", "Extra Cysteines"}
 REGION_ORDER_MAP = {"FR1": 1, "CDR1": 2, "CDR2": 3, "CDR3": 4, "FR2": 5, "FR3": 6, "FR4": 7} # For sorting summary
 
