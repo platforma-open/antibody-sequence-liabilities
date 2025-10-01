@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.workflow
 
+## 3.4.8
+
+### Patch Changes
+
+- Updated dependencies [fac8424]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script@3.2.6
+
 ## 3.4.7
 
 ### Patch Changes

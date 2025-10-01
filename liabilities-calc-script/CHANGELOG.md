@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 3.2.6
+
+### Patch Changes
+
+- fac8424: Fix FR1 Cysteine location
+
 ## 3.2.5
 
 ### Patch Changes
