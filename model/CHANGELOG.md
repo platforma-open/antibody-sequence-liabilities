@@ -1,5 +1,14 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.model
 
+## 3.1.2
+
+### Patch Changes
+
+- 9c55f5a: technical release
+- 3766c4a: technical release
+- 1c704a8: technical release
+- 061677e: technical release
+
 ## 3.1.1
 
 ### Patch Changes
