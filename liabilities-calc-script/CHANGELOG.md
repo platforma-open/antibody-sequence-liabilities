@@ -1,5 +1,14 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 3.2.7
+
+### Patch Changes
+
+- 9c55f5a: technical release
+- 3766c4a: technical release
+- 1c704a8: technical release
+- 061677e: technical release
+
 ## 3.2.6
 
 ### Patch Changes
