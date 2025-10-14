@@ -12,7 +12,7 @@ catalog:
   "@platforma-sdk/workflow-tengo": ^5.3.3
   "@platforma-sdk/block-tools": ^2.6.4
   "@platforma-sdk/test": ^1.43.0
-  "@platforma-sdk/tengo-builder": ^2.1.19
+  "@platforma-sdk/tengo-builder": ^2.3.0
   "@platforma-sdk/package-builder": ^3.8.0
   "@platforma-sdk/eslint-config": ^1.1.0
   "@platforma-sdk/blocks-deps-updater": ^2.0.0
