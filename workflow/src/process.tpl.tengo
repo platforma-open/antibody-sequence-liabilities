@@ -257,7 +257,7 @@ self.body(func(args) {
 	exportSpecs := {
 		axes: axes,
 		columns: exportColumns,
-		storageFormat: "Binary",
+		storageFormat: "Parquet",
 		partitionKeyLength: 0
 	}
 
@@ -266,7 +266,7 @@ self.body(func(args) {
 	outputSpecs := {
 		axes: axes,
 		columns: columns,
-		storageFormat: "Binary",
+		storageFormat: "Parquet",
 		partitionKeyLength: 0
 		}
 
