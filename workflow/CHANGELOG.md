@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.workflow
 
+## 3.4.10
+
+### Patch Changes
+
+- 0a15327: Support parquet format
+
 ## 3.4.9
 
 ### Patch Changes
