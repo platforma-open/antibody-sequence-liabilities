@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 2.4.16
+
+### Patch Changes
+
+- c5ccfe4: Update SDK
+
 ## 2.4.15
 
 ### Patch Changes
