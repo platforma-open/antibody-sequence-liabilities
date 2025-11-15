@@ -25,10 +25,10 @@
     "meta": {
       "title": "Antibody Sequence Liabilities",
       "logo": "file:../logos/block-logo.png",
-      "url": "https://github.com/milaboratory/platforma-antibody-sequence-liabilities",
-      "docs": "https://github.com/milaboratory/platforma-antibody-sequence-liabilities/docs",
+      "url": "https://github.com/platforma-open/antibody-sequence-liabilities",
+      "docs": "https://docs.platforma.bio/guides/antibody-discovery/sequence-liabilities/",
       "support": "mailto:support@milaboratories.com",
-      "description": "Calculate sequence liabilities for antibody sequences.",
+      "description": "Identifies sequence liabilities in antibody sequences that may impact manufacturability, stability, or safety.",
       "longDescription": "file:../docs/description.md",
       "changelog": "file:../CHANGELOG.md",
       "tags": [
