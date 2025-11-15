@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 2.4.17
+
+### Patch Changes
+
+- db873a0: Block metadata updated.
+
 ## 2.4.16
 
 ### Patch Changes
