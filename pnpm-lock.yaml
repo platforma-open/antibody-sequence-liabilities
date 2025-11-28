@@ -10,8 +10,8 @@ catalogs:
       specifier: ^2.29.5
       version: 2.29.5
     '@platforma-open/milaboratories.runenv-python-3':
-      specifier: ^1.4.9
-      version: 1.4.9
+      specifier: ^1.7.5
+      version: 1.7.5
     '@platforma-sdk/block-tools':
       specifier: ^2.6.25
       version: 2.6.25
@@ -104,7 +104,7 @@ importers:
     dependencies:
       '@platforma-open/milaboratories.runenv-python-3':
         specifier: 'catalog:'
-        version: 1.4.9
+        version: 1.7.5
     devDependencies:
       '@platforma-sdk/package-builder':
         specifier: 'catalog:'
@@ -1175,20 +1175,23 @@ packages:
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
 
-  '@platforma-open/milaboratories.runenv-python-3.10.11@1.1.10':
-    resolution: {integrity: sha512-F+lx7vqLMP+j9CJX5qssCqx09cxPQFTJr0peVG2GquzqV8m3fO0bWSu7T7X4J+vGd0Ey7rti43fDrb9viPwLkg==}
+  '@platforma-open/milaboratories.runenv-python-3.12.10-atls@1.2.3':
+    resolution: {integrity: sha512-gSdJ85n4VN+XEeZ2Vsyhv3iLWrN9mU/gfuXAtjnAGuXe62UPw6W4R0EAQ1bhJi18UBpMr69jY/0OFPXippUBXQ==}
 
-  '@platforma-open/milaboratories.runenv-python-3.12.10-atls@1.1.10':
-    resolution: {integrity: sha512-zUf6kn/IDAGaYia4YRUzTjhmfRm5KgsI8MXcBVda1UFdaaO/hr/yMg43MmMlzALbbiUK251MGRrUT6gPoXxfdw==}
+  '@platforma-open/milaboratories.runenv-python-3.12.10-h5ad@1.1.3':
+    resolution: {integrity: sha512-RrCHJPVKRDD90UtiRKG+JRxWuBQGTM0twzIJVR4X7TedSJR8dnwrPL0uJKs7+f6Nw4B4PlZ+8vjivlyHSEIgZQ==}
 
-  '@platforma-open/milaboratories.runenv-python-3.12.10-sccoda@1.2.9':
-    resolution: {integrity: sha512-EGAf2zWx5TjLoMZWuXWS1odXUx82087Q2CJsmxOjddYkJsLBxW/GRN0jbmImny+lwfZLIm/regZ7LJP57cBPeQ==}
+  '@platforma-open/milaboratories.runenv-python-3.12.10-rapids@1.4.3':
+    resolution: {integrity: sha512-W4tMkHdnasHkocLyUVtgQD6rR9haV40RjYkcW6GBqUkwZBrZj8kqI3bvNhaQT5Za3GXgxNYLtIHpggUa3KLy5w==}
 
-  '@platforma-open/milaboratories.runenv-python-3.12.10@1.2.8':
-    resolution: {integrity: sha512-bjZ+clJRxA5ul3a8TtFVrD6lEpUIOpOO03DtaFiaZMpC1xBwjVvbTzE3EFpiELwjqc+ajaMiDesWjc7MzNKckQ==}
+  '@platforma-open/milaboratories.runenv-python-3.12.10-sccoda@1.3.4':
+    resolution: {integrity: sha512-3U614BaP2Z7kKgjKWrcV8/67QvW93wQ2BzVaxE+nY+C9KhO53y1YQuDfBQue92oxBDjsrSuBOu+pfDS248YGyg==}
 
-  '@platforma-open/milaboratories.runenv-python-3@1.4.9':
-    resolution: {integrity: sha512-kSqvthwHIChC2rn11QSj2cKQqwaBXnzrHbdt2NjuEcLTYCLlfkFIJbv9mmU4BB+vsECZTz9lWzCO+p8gTnevbA==}
+  '@platforma-open/milaboratories.runenv-python-3.12.10@1.3.4':
+    resolution: {integrity: sha512-7+JQL3k4qrHk3Bpx/4FIORuUufnuBQqIZcu/CNKeAITNBjIN51En18mcseWgdmDbPpEmwlS0+hhk5ob8ov/a1g==}
+
+  '@platforma-open/milaboratories.runenv-python-3@1.7.5':
+    resolution: {integrity: sha512-jGexrFZQ9IMa0P416WnQiTmshhjQo8uFfTiYvb5H1/bZfkN34FNI7G37/QT5W+ocFiLQ3Eu2Ok4BLeG9EwzlYg==}
 
   '@platforma-open/milaboratories.software-ptabler.schema@1.12.0':
     resolution: {integrity: sha512-tQw07omRWh7XFNyGDZz1VeiRxjzprvXWxhJI3git3Yf0GlgsCMmdxwSd1gpeORwFU9ggvLTGwdlAMN5KkfFwAw==}
@@ -7010,20 +7013,23 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
-  '@platforma-open/milaboratories.runenv-python-3.10.11@1.1.10': {}
+  '@platforma-open/milaboratories.runenv-python-3.12.10-atls@1.2.3': {}
 
-  '@platforma-open/milaboratories.runenv-python-3.12.10-atls@1.1.10': {}
+  '@platforma-open/milaboratories.runenv-python-3.12.10-h5ad@1.1.3': {}
 
-  '@platforma-open/milaboratories.runenv-python-3.12.10-sccoda@1.2.9': {}
+  '@platforma-open/milaboratories.runenv-python-3.12.10-rapids@1.4.3': {}
 
-  '@platforma-open/milaboratories.runenv-python-3.12.10@1.2.8': {}
+  '@platforma-open/milaboratories.runenv-python-3.12.10-sccoda@1.3.4': {}
 
-  '@platforma-open/milaboratories.runenv-python-3@1.4.9':
+  '@platforma-open/milaboratories.runenv-python-3.12.10@1.3.4': {}
+
+  '@platforma-open/milaboratories.runenv-python-3@1.7.5':
     dependencies:
-      '@platforma-open/milaboratories.runenv-python-3.10.11': 1.1.10
-      '@platforma-open/milaboratories.runenv-python-3.12.10': 1.2.8
-      '@platforma-open/milaboratories.runenv-python-3.12.10-atls': 1.1.10
-      '@platforma-open/milaboratories.runenv-python-3.12.10-sccoda': 1.2.9
+      '@platforma-open/milaboratories.runenv-python-3.12.10': 1.3.4
+      '@platforma-open/milaboratories.runenv-python-3.12.10-atls': 1.2.3
+      '@platforma-open/milaboratories.runenv-python-3.12.10-h5ad': 1.1.3
+      '@platforma-open/milaboratories.runenv-python-3.12.10-rapids': 1.4.3
+      '@platforma-open/milaboratories.runenv-python-3.12.10-sccoda': 1.3.4
 
   '@platforma-open/milaboratories.software-ptabler.schema@1.12.0': {}
 
