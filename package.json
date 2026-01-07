@@ -1,26 +1,23 @@
 {
-  "name": "@platforma-open/milaboratories.antibody-sequence-liabilities",
-  "version": "1.0.0",
   "scripts": {
-    "pretty": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json,vue}\"",
     "build": "turbo run build",
-    "build:dev": "PL_PKG_DEV=local turbo run build",
-    "test": "PL_PKG_DEV=local turbo run test --concurrency 1",
-    "test:dry-run": "turbo run test --dry-run=json",
-    "watch": "turbo watch build",
+    "build:dev": "env PL_PKG_DEV=local turbo run build",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "test": "env PL_PKG_DEV=local turbo run test --concurrency 1 --env-mode=loose",
+    "test:dry-run": "env PL_PKG_DEV=local turbo run test --dry-run=json",
     "mark-stable": "turbo run mark-stable",
+    "do-pack": "turbo run do-pack",
+    "watch": "turbo watch build",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "update-sdk": "pl-blocks-deps-updater"
+    "update-sdk": "block-tools update-deps"
   },
-  "files": [
-    "index.d.ts",
-    "index.js"
-  ],
   "devDependencies": {
-    "turbo": "catalog:",
     "@changesets/cli": "catalog:",
-    "@platforma-sdk/blocks-deps-updater": "catalog:"
+    "@platforma-sdk/block-tools": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:"
   },
   "packageManager": "pnpm@9.12.0"
 }
