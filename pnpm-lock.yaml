@@ -25,8 +25,8 @@ catalogs:
       specifier: 1.2.0
       version: 1.2.0
     '@platforma-sdk/model':
-      specifier: 1.50.0
-      version: 1.50.0
+      specifier: 1.51.2
+      version: 1.51.2
     '@platforma-sdk/package-builder':
       specifier: 3.10.7
       version: 3.10.7
@@ -34,11 +34,11 @@ catalogs:
       specifier: 2.4.8
       version: 2.4.8
     '@platforma-sdk/ui-vue':
-      specifier: 1.51.0
-      version: 1.51.0
+      specifier: 1.51.2
+      version: 1.51.2
     '@platforma-sdk/workflow-tengo':
-      specifier: 5.7.3
-      version: 5.7.3
+      specifier: 5.8.0
+      version: 5.8.0
     '@vueuse/core':
       specifier: ^13.6.0
       version: 13.9.0
@@ -105,7 +105,7 @@ importers:
     dependencies:
       '@platforma-sdk/model':
         specifier: 'catalog:'
-        version: 1.50.0
+        version: 1.51.2
     devDependencies:
       '@milaboratories/ts-builder':
         specifier: 'catalog:'
@@ -136,10 +136,10 @@ importers:
         version: link:../model
       '@platforma-sdk/model':
         specifier: 'catalog:'
-        version: 1.50.0
+        version: 1.51.2
       '@platforma-sdk/ui-vue':
         specifier: 'catalog:'
-        version: 1.51.0(sortablejs@1.15.6)(typescript@5.6.3)
+        version: 1.51.2(sortablejs@1.15.6)(typescript@5.6.3)
       '@vueuse/core':
         specifier: 'catalog:'
         version: 13.9.0(vue@3.5.26(typescript@5.6.3))
@@ -173,7 +173,7 @@ importers:
         version: link:../liabilities-calc-script
       '@platforma-sdk/workflow-tengo':
         specifier: 'catalog:'
-        version: 5.7.3
+        version: 5.8.0
     devDependencies:
       '@platforma-sdk/tengo-builder':
         specifier: 'catalog:'
@@ -930,8 +930,8 @@ packages:
     resolution: {integrity: sha512-Inpyk9sYn1e+59KwgAQW9uFBIR6hmMozDgTfOmz7sx38a2ZftBkYQtSCHwzztbV5tg8covugxbFEbpDKfDDF6A==}
     engines: {node: '>=22.19.0'}
 
-  '@milaboratories/uikit@2.9.0':
-    resolution: {integrity: sha512-jaqG9zwEDSOrig5Bn0bANtxSwp2PWAYSiw4d7v1adsl2WPVj83W9q1OYk5v0IwQSXkPuq4Pn3zHDEfnIrzUnkA==}
+  '@milaboratories/uikit@2.9.1':
+    resolution: {integrity: sha512-oyG/+EHN+LnpGZzfGA+lPcH7U7bx4dc4uMp0c50uYnRVDZ0tWmBs8u1DYEL8V1hqZCP5yrZYABu6qsRmGKRhHg==}
 
   '@mstssk/cleandir@2.0.0':
     resolution: {integrity: sha512-CidYeaV4VQLIMbZlYqs0SJaZe/DyI0E4nsbFmPtCa2koKzMjZj/BThTCb+bvzcGhzp2A4Js1c4jDg6lqaqapyQ==}
@@ -1043,8 +1043,8 @@ packages:
       typescript: ~5.6.3
       typescript-eslint: ^8.17.0
 
-  '@platforma-sdk/model@1.50.0':
-    resolution: {integrity: sha512-2PevGYzf/tNX8MYcEn0H1oK2W3EFSSrEnKH7jcMLrbSjaPlGkt+W9Aqeq9QPEDr9jZ+adI4gtyQZ3YlbOi6+6w==}
+  '@platforma-sdk/model@1.51.2':
+    resolution: {integrity: sha512-AFCQus1HYOW/TwrYYSKetgqW39S2XUCGI856H0dxjArJiTHzroUpGtUv+8CkklBCTH5KhWjd7+8BMMRx/MOZpQ==}
 
   '@platforma-sdk/package-builder@3.10.7':
     resolution: {integrity: sha512-3qWieTD0GTCNQ65lVV1/LAcwNlTFh7BuswS6qrK8acRtREFEZm/QvywbE6fQu7gEEF697y7/6/ktR8Sd1EzP/A==}
@@ -1055,11 +1055,11 @@ packages:
     engines: {node: '>=22'}
     hasBin: true
 
-  '@platforma-sdk/ui-vue@1.51.0':
-    resolution: {integrity: sha512-SHgwySkmaqdw7ir7/bXBJOvjHkdD0EG6RJrVf4Vr2hjWGQ5YBUrS35LsCr39/BmwQil4SHaI8v8YAGC0wYHuBg==}
+  '@platforma-sdk/ui-vue@1.51.2':
+    resolution: {integrity: sha512-9TJutyjwHrfiFERcvjxaQIS/vbm96XVDyC5UooVxIUAkcEGYPqkv79os00Yr7g7nc+TEPTML8dFzYZ6QTZpm6A==}
 
-  '@platforma-sdk/workflow-tengo@5.7.3':
-    resolution: {integrity: sha512-AhLdyFfGtczC78syyKQMwb1qA0DL3W1dvuZbD1B/O1SqhIbd5ozvSDDQiV8ni4xj+qM7tf/wnmBKqRTZDB9TLw==}
+  '@platforma-sdk/workflow-tengo@5.8.0':
+    resolution: {integrity: sha512-OJnnjBXt1VcS1QNMC90PlkXrWJoKQ/Nl3/NeTqzTmq1j5gT3cZXoIQYu1c31KZXBungUo8TphymBcs+qDGpVgA==}
 
   '@protobuf-ts/grpc-transport@2.11.1':
     resolution: {integrity: sha512-l6wrcFffY+tuNnuyrNCkRM8hDIsAZVLA8Mn7PKdVyYxITosYh60qW663p9kL6TWXYuDCL3oxH8ih3vLKTDyhtg==}
@@ -4831,10 +4831,10 @@ snapshots:
       canonicalize: 2.1.0
       denque: 2.1.0
 
-  '@milaboratories/uikit@2.9.0(typescript@5.6.3)':
+  '@milaboratories/uikit@2.9.1(typescript@5.6.3)':
     dependencies:
       '@milaboratories/helpers': 1.13.0
-      '@platforma-sdk/model': 1.50.0
+      '@platforma-sdk/model': 1.51.2
       '@types/d3-array': 3.2.1
       '@types/d3-axis': 3.0.6
       '@types/d3-scale': 4.0.9
@@ -5005,7 +5005,7 @@ snapshots:
       typescript: 5.6.3
       typescript-eslint: 8.24.0(eslint@9.28.0)(typescript@5.6.3)
 
-  '@platforma-sdk/model@1.50.0':
+  '@platforma-sdk/model@1.51.2':
     dependencies:
       '@milaboratories/pl-error-like': 1.12.5
       '@milaboratories/pl-model-common': 1.23.0
@@ -5045,12 +5045,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@platforma-sdk/ui-vue@1.51.0(sortablejs@1.15.6)(typescript@5.6.3)':
+  '@platforma-sdk/ui-vue@1.51.2(sortablejs@1.15.6)(typescript@5.6.3)':
     dependencies:
       '@milaboratories/biowasm-tools': 2.0.0
       '@milaboratories/ptabler-expression-js': 1.1.9
-      '@milaboratories/uikit': 2.9.0(typescript@5.6.3)
-      '@platforma-sdk/model': 1.50.0
+      '@milaboratories/uikit': 2.9.1(typescript@5.6.3)
+      '@platforma-sdk/model': 1.51.2
       '@types/d3-format': 3.0.4
       '@types/node': 24.5.2
       '@types/semver': 7.7.0
@@ -5080,7 +5080,7 @@ snapshots:
       - typescript
       - universal-cookie
 
-  '@platforma-sdk/workflow-tengo@5.7.3':
+  '@platforma-sdk/workflow-tengo@5.8.0':
     dependencies:
       '@milaboratories/software-pframes-conv': 2.2.9
       '@platforma-open/milaboratories.software-ptabler': 1.14.0
