@@ -1,5 +1,18 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 3.0.0
+
+### Major Changes
+
+- 4a02933: Show running state for tables and graphs, migrate to new project template
+
+### Patch Changes
+
+- Updated dependencies [4a02933]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.workflow@4.0.0
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@4.0.0
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.ui@4.0.0
+
 ## 2.4.17
 
 ### Patch Changes

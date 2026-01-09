@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 4.0.0
+
+### Major Changes
+
+- 4a02933: Show running state for tables and graphs, migrate to new project template
+
 ## 3.2.7
 
 ### Patch Changes
