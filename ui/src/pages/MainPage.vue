@@ -22,11 +22,6 @@ const app = useApp();
 function setInput(inputRef?: PlRef) {
   if (!inputRef) return;
   app.model.args.inputAnchor = inputRef;
-
-  const label = app.model.outputs.inputOptions?.find((o) => plRefsEqual(o.ref, inputRef))?.label ?? '';
-
-  // Set title to dataset label
-  app.model.ui.title = 'Antibody Sequence Liabilities - ' + label;
 }
 
 const tableSettings = usePlDataTableSettingsV2({
