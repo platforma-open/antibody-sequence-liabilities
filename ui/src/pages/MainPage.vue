@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { liabilityTypes } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import type { PlRef } from '@platforma-sdk/model';
-import { getRawPlatformaInstance, plRefsEqual } from '@platforma-sdk/model';
+import { getRawPlatformaInstance } from '@platforma-sdk/model';
 import {
   PlAgDataTableV2,
   PlAlert,
