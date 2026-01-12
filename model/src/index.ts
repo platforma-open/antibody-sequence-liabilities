@@ -16,7 +16,6 @@ export type BlockArgs = {
 };
 
 export type UiState = {
-  title: string;
   tableState: PlDataTableStateV2;
 };
 
@@ -43,7 +42,6 @@ export const model = BlockModel.create()
   })
 
   .withUiState<UiState>({
-    title: 'Antibody Sequence Liabilities',
     tableState: createPlDataTableStateV2(),
   })
 
