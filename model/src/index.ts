@@ -1,5 +1,4 @@
 import type {
-  InferOutputsType,
   PlDataTableStateV2,
   PlRef,
 } from '@platforma-sdk/model';
@@ -10,6 +9,8 @@ import {
 } from '@platforma-sdk/model';
 
 export type BlockArgs = {
+  defaultBlockLabel: string;
+  customBlockLabel: string;
   inputAnchor?: PlRef;
   liabilityTypes?: string[];
 };
@@ -36,6 +37,8 @@ export const liabilityTypes = [
 
 export const model = BlockModel.create()
   .withArgs<BlockArgs>({
+    defaultBlockLabel: '',
+    customBlockLabel: '',
     liabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
   })
 
@@ -88,12 +91,12 @@ export const model = BlockModel.create()
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
 
-  .title((ctx) => ctx.uiState.title)
+  .title(() => 'Antibody Sequence Liabilities')
+
+  .subtitle((ctx) => ctx.args.customBlockLabel || ctx.args.defaultBlockLabel)
 
   .sections((_) => [
     { type: 'link', href: '/', label: 'Table' },
   ])
 
   .done(2);
-
-export type BlockOutputs = InferOutputsType<typeof model>;

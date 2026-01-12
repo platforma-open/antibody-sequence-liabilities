@@ -15,6 +15,8 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 self.body(func(args) {
 
     blockId := args.blockId
+    customBlockLabel := args.customBlockLabel
+    defaultBlockLabel := args.defaultBlockLabel
 	
     params := args.params
     liabilitiesTable := args.liabilitiesTable
@@ -285,11 +287,14 @@ self.body(func(args) {
         {splitDataAndSpec: true, cpu: 1, mem: "16GiB"}
 	)
 
+	// Determine the label for the trace
+	blockLabel := customBlockLabel || defaultBlockLabel || "Liabilities risk"
+
 	// Create the base block-level trace
 	traceSteps := [{
 		type: "milaboratories.antibody-sequence-liabilities",
 		importance: 30,
-		label: "Liabilities risk",
+		label: blockLabel,
 		id: blockId
 	}]
 
