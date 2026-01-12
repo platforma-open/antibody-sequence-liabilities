@@ -14,7 +14,7 @@ import {
   usePlDataTableSettingsV2,
 } from '@platforma-sdk/ui-vue';
 import { asyncComputed } from '@vueuse/core';
-import { computed, ref } from 'vue';
+import { computed, ref, watchEffect } from 'vue';
 import { useApp } from '../app';
 
 const app = useApp();
@@ -47,11 +47,76 @@ const isEmpty = asyncComputed(async () => {
   return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.liabilitiesRiskTable)).rows === 0;
 });
 
+// Build defaultBlockLabel from liability types
+watchEffect(() => {
+  const selectedTypes = app.model.args.liabilityTypes;
+  if (!selectedTypes || selectedTypes.length === 0) {
+    app.model.args.defaultBlockLabel = '';
+    return;
+  }
+
+  // If all liability types are selected, show "All"
+  if (selectedTypes.length === liabilityTypes.length) {
+    app.model.args.defaultBlockLabel = 'All';
+    return;
+  }
+
+  // Build abbreviated label from selected types
+  const abbreviations: Record<string, string> = {
+    'Deamidation (N[GS])': 'Deam',
+    'Fragmentation (DP)': 'Frag',
+    'Isomerization (D[DGHST])': 'Isom',
+    'N-linked Glycosylation (N[^P][ST])': 'Glyc',
+    'Deamidation (N[AHNT])': 'Deam2',
+    'Hydrolysis (NP)': 'Hydro',
+    'Fragmentation (TS)': 'Frag2',
+    'Tryptophan Oxidation (W)': 'TrpOx',
+    'Methionine Oxidation (M)': 'MetOx',
+    'Deamidation ([STK]N)': 'Deam3',
+    'Missing Cysteines': 'MissCys',
+    'Extra Cysteines': 'ExtraCys',
+  };
+
+  // PTM types
+  const ptmTypes = new Set([
+    'Deamidation (N[GS])',
+    'Isomerization (D[DGHST])',
+    'N-linked Glycosylation (N[^P][ST])',
+    'Tryptophan Oxidation (W)',
+    'Methionine Oxidation (M)',
+  ]);
+
+  // Fragmentation types
+  const fragTypes = new Set([
+    'Fragmentation (DP)',
+    'Hydrolysis (NP)',
+    'Fragmentation (TS)',
+  ]);
+
+  const isPTMOnly = selectedTypes.every((t) => ptmTypes.has(t)) && selectedTypes.some((t) => ptmTypes.has(t));
+  const isFragOnly = selectedTypes.every((t) => fragTypes.has(t)) && selectedTypes.some((t) => fragTypes.has(t));
+
+  if (isPTMOnly && isFragOnly) {
+    app.model.args.defaultBlockLabel = 'PTM+Frag';
+  } else if (isPTMOnly && selectedTypes.length === ptmTypes.size) {
+    app.model.args.defaultBlockLabel = 'PTM';
+  } else if (isFragOnly && selectedTypes.length === fragTypes.size) {
+    app.model.args.defaultBlockLabel = 'Frag';
+  } else {
+    // Build label from abbreviations
+    const abbrevs = selectedTypes.map((t) => abbreviations[t] || t.substring(0, 4));
+    app.model.args.defaultBlockLabel = abbrevs.join('+');
+  }
+});
+
 </script>
 
 <template>
-  <PlBlockPage>
-    <template #title> Antibody sequence liabilities </template>
+  <PlBlockPage
+    v-model:subtitle="app.model.args.customBlockLabel"
+    :subtitle-placeholder="app.model.args.defaultBlockLabel"
+    title="Antibody Sequence Liabilities"
+  >
     <template #append>
       <PlBtnGhost @click.stop="settingsIsShown = true">
         Settings
