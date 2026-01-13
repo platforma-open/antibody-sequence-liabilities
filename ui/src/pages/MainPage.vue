@@ -58,16 +58,16 @@ watchEffect(() => {
 
   // Build abbreviated label from selected types
   const abbreviations: Record<string, string> = {
-    'Deamidation (N[GS])': 'Deam',
-    'Fragmentation (DP)': 'Frag',
+    'Deamidation (N[GS])': 'Deam(N[GS])',
+    'Fragmentation (DP)': 'Frag(DP)',
     'Isomerization (D[DGHST])': 'Isom',
     'N-linked Glycosylation (N[^P][ST])': 'Glyc',
-    'Deamidation (N[AHNT])': 'Deam2',
+    'Deamidation (N[AHNT])': 'Deam(N[AHNT])',
     'Hydrolysis (NP)': 'Hydro',
-    'Fragmentation (TS)': 'Frag2',
+    'Fragmentation (TS)': 'Frag(TS)',
     'Tryptophan Oxidation (W)': 'TrpOx',
     'Methionine Oxidation (M)': 'MetOx',
-    'Deamidation ([STK]N)': 'Deam3',
+    'Deamidation ([STK]N)': 'Deam([STK]N)',
     'Missing Cysteines': 'MissCys',
     'Extra Cysteines': 'ExtraCys',
   };
@@ -100,7 +100,14 @@ watchEffect(() => {
   } else {
     // Build label from abbreviations
     const abbrevs = selectedTypes.map((t) => abbreviations[t] || t.substring(0, 4));
-    app.model.args.defaultBlockLabel = abbrevs.join('+');
+    if (abbrevs.length <= 2) {
+      // Show all shortcuts if 1 or 2 liabilities selected
+      app.model.args.defaultBlockLabel = abbrevs.join('+');
+    } else {
+      // Show first two + count of remaining types
+      const remainingCount = abbrevs.length - 2;
+      app.model.args.defaultBlockLabel = `${abbrevs[0]}+${abbrevs[1]}+${remainingCount} type(s)`;
+    }
   }
 });
 
