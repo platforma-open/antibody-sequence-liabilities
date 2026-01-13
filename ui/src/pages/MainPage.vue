@@ -42,6 +42,38 @@ const isEmpty = asyncComputed(async () => {
   return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.liabilitiesRiskTable)).rows === 0;
 });
 
+// Abbreviations for liability types
+const abbreviations: Record<string, string> = {
+  'Deamidation (N[GS])': 'Deam(N[GS])',
+  'Fragmentation (DP)': 'Frag(DP)',
+  'Isomerization (D[DGHST])': 'Isom',
+  'N-linked Glycosylation (N[^P][ST])': 'Glyc',
+  'Deamidation (N[AHNT])': 'Deam(N[AHNT])',
+  'Hydrolysis (NP)': 'Hydro',
+  'Fragmentation (TS)': 'Frag(TS)',
+  'Tryptophan Oxidation (W)': 'TrpOx',
+  'Methionine Oxidation (M)': 'MetOx',
+  'Deamidation ([STK]N)': 'Deam([STK]N)',
+  'Missing Cysteines': 'MissCys',
+  'Extra Cysteines': 'ExtraCys',
+};
+
+// PTM types
+const ptmTypes = new Set([
+  'Deamidation (N[GS])',
+  'Isomerization (D[DGHST])',
+  'N-linked Glycosylation (N[^P][ST])',
+  'Tryptophan Oxidation (W)',
+  'Methionine Oxidation (M)',
+]);
+
+// Fragmentation types
+const fragTypes = new Set([
+  'Fragmentation (DP)',
+  'Hydrolysis (NP)',
+  'Fragmentation (TS)',
+]);
+
 // Build defaultBlockLabel from liability types
 watchEffect(() => {
   const selectedTypes = app.model.args.liabilityTypes;
@@ -56,46 +88,21 @@ watchEffect(() => {
     return;
   }
 
-  // Build abbreviated label from selected types
-  const abbreviations: Record<string, string> = {
-    'Deamidation (N[GS])': 'Deam(N[GS])',
-    'Fragmentation (DP)': 'Frag(DP)',
-    'Isomerization (D[DGHST])': 'Isom',
-    'N-linked Glycosylation (N[^P][ST])': 'Glyc',
-    'Deamidation (N[AHNT])': 'Deam(N[AHNT])',
-    'Hydrolysis (NP)': 'Hydro',
-    'Fragmentation (TS)': 'Frag(TS)',
-    'Tryptophan Oxidation (W)': 'TrpOx',
-    'Methionine Oxidation (M)': 'MetOx',
-    'Deamidation ([STK]N)': 'Deam([STK]N)',
-    'Missing Cysteines': 'MissCys',
-    'Extra Cysteines': 'ExtraCys',
-  };
+  const selectedSet = new Set(selectedTypes);
+  // Check if all selected types are PTM types
+  const allSelectedArePTM = selectedTypes.every((t) => ptmTypes.has(t));
+  // Check if all PTM types are selected
+  const allPTMSelected = Array.from(ptmTypes).every((t) => selectedSet.has(t));
+  // Check if all selected types are Frag types
+  const allSelectedAreFrag = selectedTypes.every((t) => fragTypes.has(t));
+  // Check if all Frag types are selected
+  const allFragSelected = Array.from(fragTypes).every((t) => selectedSet.has(t));
 
-  // PTM types
-  const ptmTypes = new Set([
-    'Deamidation (N[GS])',
-    'Isomerization (D[DGHST])',
-    'N-linked Glycosylation (N[^P][ST])',
-    'Tryptophan Oxidation (W)',
-    'Methionine Oxidation (M)',
-  ]);
-
-  // Fragmentation types
-  const fragTypes = new Set([
-    'Fragmentation (DP)',
-    'Hydrolysis (NP)',
-    'Fragmentation (TS)',
-  ]);
-
-  const isPTMOnly = selectedTypes.every((t) => ptmTypes.has(t)) && selectedTypes.some((t) => ptmTypes.has(t));
-  const isFragOnly = selectedTypes.every((t) => fragTypes.has(t)) && selectedTypes.some((t) => fragTypes.has(t));
-
-  if (isPTMOnly && isFragOnly) {
+  if (allPTMSelected && allFragSelected) {
     app.model.args.defaultBlockLabel = 'PTM+Frag';
-  } else if (isPTMOnly && selectedTypes.length === ptmTypes.size) {
+  } else if (allSelectedArePTM && allPTMSelected) {
     app.model.args.defaultBlockLabel = 'PTM';
-  } else if (isFragOnly && selectedTypes.length === fragTypes.size) {
+  } else if (allSelectedAreFrag && allFragSelected) {
     app.model.args.defaultBlockLabel = 'Frag';
   } else {
     // Build label from abbreviations
