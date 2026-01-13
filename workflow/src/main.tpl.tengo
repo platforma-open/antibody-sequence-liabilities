@@ -172,6 +172,8 @@ wf.body(func(args) {
 		newMapping: newMapping,
 		regionsFound: regionsFound,
 		blockId: blockId,
+		customBlockLabel: args.customBlockLabel,
+		defaultBlockLabel: args.defaultBlockLabel,
 		params: smart.createJsonResource({
 			datasetSpec: datasetSpec,
 			isSingleCell: isSingleCell,
