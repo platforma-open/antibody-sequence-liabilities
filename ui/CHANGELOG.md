@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 4.1.0
+
+### Minor Changes
+
+- ee5a48c: Support custom block title
+
+### Patch Changes
+
+- Updated dependencies [ee5a48c]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@4.1.0
+
 ## 4.0.0
 
 ### Major Changes
