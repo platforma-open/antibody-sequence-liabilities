@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "scripts": {
     "build": "rm -rf ./block-pack && block-tools pack",
     "do-pack": "rm -f *.tgz && pnpm pack && mv *.tgz package.tgz",

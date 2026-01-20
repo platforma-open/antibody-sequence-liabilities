@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 4.1.1
+
+### Patch Changes
+
+- 6579b7d: Labels migration
+
 ## 4.1.0
 
 ### Minor Changes
