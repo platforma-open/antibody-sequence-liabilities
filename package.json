@@ -17,7 +17,8 @@
     "@changesets/cli": "catalog:",
     "@platforma-sdk/block-tools": "catalog:",
     "turbo": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "shx": "catalog:"
   },
   "packageManager": "pnpm@9.12.0"
 }
