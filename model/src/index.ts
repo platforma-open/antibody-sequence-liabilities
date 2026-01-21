@@ -36,7 +36,7 @@ export const liabilityTypes = [
 
 export const model = BlockModel.create()
   .withArgs<BlockArgs>({
-    defaultBlockLabel: '',
+    defaultBlockLabel: 'Select Dataset',
     customBlockLabel: '',
     liabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
   })
