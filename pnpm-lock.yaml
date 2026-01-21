@@ -25,8 +25,8 @@ catalogs:
       specifier: 1.2.0
       version: 1.2.0
     '@platforma-sdk/model':
-      specifier: 1.51.6
-      version: 1.51.6
+      specifier: 1.51.9
+      version: 1.51.9
     '@platforma-sdk/package-builder':
       specifier: 3.11.0
       version: 3.11.0
@@ -34,8 +34,8 @@ catalogs:
       specifier: 2.4.8
       version: 2.4.8
     '@platforma-sdk/ui-vue':
-      specifier: 1.51.7
-      version: 1.51.7
+      specifier: 1.51.9
+      version: 1.51.9
     '@platforma-sdk/workflow-tengo':
       specifier: 5.8.0
       version: 5.8.0
@@ -105,7 +105,7 @@ importers:
     dependencies:
       '@platforma-sdk/model':
         specifier: 'catalog:'
-        version: 1.51.6
+        version: 1.51.9
     devDependencies:
       '@milaboratories/ts-builder':
         specifier: 'catalog:'
@@ -136,10 +136,10 @@ importers:
         version: link:../model
       '@platforma-sdk/model':
         specifier: 'catalog:'
-        version: 1.51.6
+        version: 1.51.9
       '@platforma-sdk/ui-vue':
         specifier: 'catalog:'
-        version: 1.51.7(sortablejs@1.15.6)(typescript@5.6.3)
+        version: 1.51.9(sortablejs@1.15.6)(typescript@5.6.3)
       '@vueuse/core':
         specifier: 'catalog:'
         version: 13.9.0(vue@3.5.26(typescript@5.6.3))
@@ -910,8 +910,8 @@ packages:
     resolution: {integrity: sha512-Inpyk9sYn1e+59KwgAQW9uFBIR6hmMozDgTfOmz7sx38a2ZftBkYQtSCHwzztbV5tg8covugxbFEbpDKfDDF6A==}
     engines: {node: '>=22.19.0'}
 
-  '@milaboratories/uikit@2.10.2':
-    resolution: {integrity: sha512-q2i1TbqCCbpkNgVAJTOPTaz1W66vPBKCbIdX4u1OYe754M6AS9i2tuJL6wx3RhF1PdZvmFXTwfKTqgJCt87rNA==}
+  '@milaboratories/uikit@2.10.4':
+    resolution: {integrity: sha512-IYreQuujR+tCWIlQL31JjpclfT3wxqKFkEymEqBgyM2q4pkTyJ4kIXPu3hmAN7VK4zZ7VrYkCnxBZs93PLEHEg==}
 
   '@mstssk/cleandir@2.0.0':
     resolution: {integrity: sha512-CidYeaV4VQLIMbZlYqs0SJaZe/DyI0E4nsbFmPtCa2koKzMjZj/BThTCb+bvzcGhzp2A4Js1c4jDg6lqaqapyQ==}
@@ -1023,8 +1023,8 @@ packages:
       typescript: ~5.6.3
       typescript-eslint: ^8.17.0
 
-  '@platforma-sdk/model@1.51.6':
-    resolution: {integrity: sha512-UgFbC7gPtH4qMwZ0opbM7Tcs8mCMlbjHzJsqs1wD2gxc22l4QvAQOHiIZh2i8dmXny8ny+TwQ/6L8nPaRHqk5g==}
+  '@platforma-sdk/model@1.51.9':
+    resolution: {integrity: sha512-WEwHdiEbCJFCgqPi5nFIlBBuMVAJTLFOXkN7rch0HdrgBFtcNWY+lpHSUE6sWOY013OFmdzQYSYjGSuhJETfyQ==}
 
   '@platforma-sdk/package-builder@3.11.0':
     resolution: {integrity: sha512-U2aOV3sxxcdh1svtmbBDfMX+CNdSGpFwkNSkO3Npq+hBrdjENzrHbDguI9tElUtkP2OMApK05aDcvOPrCjOfag==}
@@ -1035,8 +1035,8 @@ packages:
     engines: {node: '>=22'}
     hasBin: true
 
-  '@platforma-sdk/ui-vue@1.51.7':
-    resolution: {integrity: sha512-TEPe4Hvoyo5X6CXMMQrdgND0RBjb5uxsWQsj2n0sCAgGRXuuK4sL7lTX2YU69YTO7eyK8PcGuWGNR7Io0YL0+A==}
+  '@platforma-sdk/ui-vue@1.51.9':
+    resolution: {integrity: sha512-y08vsp+toO3I7Z7dIiwEPZ1HW7TipUx0LIx+L5ME6fqDx50t+JPkG3qsf8B9DvyYyqRWHaf7PY4YfmQM5nQusQ==}
 
   '@platforma-sdk/workflow-tengo@5.8.0':
     resolution: {integrity: sha512-OJnnjBXt1VcS1QNMC90PlkXrWJoKQ/Nl3/NeTqzTmq1j5gT3cZXoIQYu1c31KZXBungUo8TphymBcs+qDGpVgA==}
@@ -4797,10 +4797,10 @@ snapshots:
       canonicalize: 2.1.0
       denque: 2.1.0
 
-  '@milaboratories/uikit@2.10.2(typescript@5.6.3)':
+  '@milaboratories/uikit@2.10.4(typescript@5.6.3)':
     dependencies:
       '@milaboratories/helpers': 1.13.0
-      '@platforma-sdk/model': 1.51.6
+      '@platforma-sdk/model': 1.51.9
       '@types/d3-array': 3.2.1
       '@types/d3-axis': 3.0.6
       '@types/d3-scale': 4.0.9
@@ -4971,7 +4971,7 @@ snapshots:
       typescript: 5.6.3
       typescript-eslint: 8.24.0(eslint@9.28.0)(typescript@5.6.3)
 
-  '@platforma-sdk/model@1.51.6':
+  '@platforma-sdk/model@1.51.9':
     dependencies:
       '@milaboratories/pl-error-like': 1.12.5
       '@milaboratories/pl-model-common': 1.23.0
@@ -5011,12 +5011,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@platforma-sdk/ui-vue@1.51.7(sortablejs@1.15.6)(typescript@5.6.3)':
+  '@platforma-sdk/ui-vue@1.51.9(sortablejs@1.15.6)(typescript@5.6.3)':
     dependencies:
       '@milaboratories/biowasm-tools': 2.0.0
       '@milaboratories/ptabler-expression-js': 1.1.9
-      '@milaboratories/uikit': 2.10.2(typescript@5.6.3)
-      '@platforma-sdk/model': 1.51.6
+      '@milaboratories/uikit': 2.10.4(typescript@5.6.3)
+      '@platforma-sdk/model': 1.51.9
       '@types/d3-format': 3.0.4
       '@types/node': 24.5.2
       '@types/semver': 7.7.0
