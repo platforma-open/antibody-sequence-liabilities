@@ -4,7 +4,7 @@
   "scripts": {
     "build": "pl-pkg build",
     "prepublish": "pl-pkg prepublish",
-    "do-pack": "rm -f *.tgz && pl-pkg build && pnpm pack && mv platforma-open*.tgz package.tgz",
+    "do-pack": "shx rm -f *.tgz && pl-pkg build && pnpm pack && shx mv platforma-open*.tgz package.tgz",
     "changeset": "changeset",
     "version-packages": "changeset version"
   },
