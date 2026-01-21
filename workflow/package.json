@@ -4,9 +4,9 @@
   "type": "module",
   "description": "Block Workflow",
   "scripts": {
-    "build": "rm -rf dist && pl-tengo check && pl-tengo build",
+    "build": "shx rm -rf dist && pl-tengo check && pl-tengo build",
     "format": "/usr/bin/env emacs --script ./format.el",
-    "do-pack": "rm -f *.tgz && pnpm pack && mv *.tgz package.tgz"
+    "do-pack": "shx rm -f *.tgz && pnpm pack && shx mv *.tgz package.tgz"
   },
   "dependencies": {
     "@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script": "workspace:*",
