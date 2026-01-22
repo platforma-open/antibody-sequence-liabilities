@@ -28,23 +28,18 @@ ORIG_EXTRA_PATTERNS = {
 ORIG_CYS_LIABILITIES = {"Missing Cysteines": "High", "Extra Cysteines": "High"}
 # Usage of EXPECTED_CYS will have to be modified if you add more than one nucleotide coordinate
 # Coordinates are added in 0-based index
-EXPECTED_CYS = {"FR1": [21], "FR2": [], "FR3": [], "CDR1": [], "CDR2": [], "CDR3": [0]}
+EXPECTED_CYS = {"FR1": [21, 22], "FR2": [], "FR3": [], "CDR1": [], "CDR2": [], "CDR3": [0]}
 FR1_SPECIFIC_LIABILITIES = {"Missing Cysteines", "Extra Cysteines"}
 REGION_ORDER_MAP = {"FR1": 1, "CDR1": 2, "CDR2": 3, "CDR3": 4, "FR2": 5, "FR3": 6, "FR4": 7} # For sorting summary
 
 
 # Cysteine position helpers
-def _is_light_chain_hint(chain_hint: str | None) -> bool:
-    return bool(chain_hint) and "light" in chain_hint.lower()
-
-def _get_expected_cys_positions(region: str, expected_cys_map: dict, chain_hint: str | None = None):
-    has_expectations = region in expected_cys_map or (region == "FR1" and _is_light_chain_hint(chain_hint))
-    expected_positions = list(expected_cys_map.get(region, [])) if region in expected_cys_map else []
-    expected_count = len(expected_positions)
-    if region == "FR1" and _is_light_chain_hint(chain_hint):
-        expected_positions = [21, 22]
-        expected_count = 1
-    return expected_positions, expected_count, has_expectations
+def _get_expected_cys_positions(region: str, expected_cys_map: dict):
+    if region not in expected_cys_map:
+        return [], 0, False
+    expected_positions = list(expected_cys_map.get(region, []))
+    expected_count = 1 if region == "FR1" and expected_positions else len(expected_positions)
+    return expected_positions, expected_count, True
 
 def _evaluate_cys_liabilities(seq: str, expected_positions: list, expected_count: int):
     actual_cys_count = seq.count("C")
@@ -135,7 +130,7 @@ def identify_liabilities(seq: str, region: str,
     if region == "FR1":
         # print(f"DEBUG ID_LIAB (call:{call_id}, Col:'{debug_col_name}', Region:'{region}') Applying FR1-specific Cys checks.")
         if active_cys_defs:
-            expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map, debug_col_name)
+            expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map)
             if should_check:
                 missing_cys, extra_cys, _ = _evaluate_cys_liabilities(seq, expected_positions, expected_count)
                 if "Missing Cysteines" in active_cys_defs and missing_cys:
@@ -161,7 +156,7 @@ def identify_liabilities(seq: str, region: str,
 
         # Cysteine checks for CDRs (if defined in EXPECTED_CYS and active)
         if active_cys_defs:
-            expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map, debug_col_name)
+            expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map)
             if should_check:
                 missing_cys, extra_cys, _ = _evaluate_cys_liabilities(seq, expected_positions, expected_count)
                 if "Missing Cysteines" in active_cys_defs and missing_cys:
@@ -172,7 +167,7 @@ def identify_liabilities(seq: str, region: str,
     elif region.startswith("FR"): # For other FRs (FR2, FR3, FR4)
         # print(f"DEBUG ID_LIAB (call:{call_id}, Col:'{debug_col_name}', Region:'{region}') Is FR (not FR1). Only Extra_Patterns and Cys applied if active.")
         if active_cys_defs:
-            expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map, debug_col_name)
+            expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map)
             if should_check:
                 missing_cys, extra_cys, _ = _evaluate_cys_liabilities(seq, expected_positions, expected_count)
                 if "Missing Cysteines" in active_cys_defs and missing_cys:
@@ -475,8 +470,7 @@ def main():
                         if active_cys_defs and region_name in {"FR1", "FR2", "FR3", "CDR1", "CDR2", "CDR3"}:
                             expected_positions, expected_count, should_check = _get_expected_cys_positions(
                                 region_name,
-                                EXPECTED_CYS,
-                                current_prefix_raw
+                                EXPECTED_CYS
                             )
                             if should_check:
                                 missing_cys, extra_cys, _ = _evaluate_cys_liabilities(
