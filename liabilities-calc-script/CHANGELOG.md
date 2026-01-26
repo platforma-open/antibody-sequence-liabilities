@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 4.1.0
+
+### Minor Changes
+
+- 8d24e52: Expected cysteins position in light chain is corrected, dependencies updates
+
 ## 4.0.0
 
 ### Major Changes

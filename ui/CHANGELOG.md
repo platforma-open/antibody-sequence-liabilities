@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 4.2.0
+
+### Minor Changes
+
+- 8d24e52: Expected cysteins position in light chain is corrected, dependencies updates
+
+### Patch Changes
+
+- Updated dependencies [8d24e52]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@4.2.0
+
 ## 4.1.1
 
 ### Patch Changes
