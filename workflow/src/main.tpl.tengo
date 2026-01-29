@@ -89,6 +89,16 @@ wf.body(func(args) {
 
 	hasAnnotations := len(annotations) > 0
 
+	numberingSchema := ""
+	for seq_entry in sequences {
+		if seq_entry.spec.annotations && seq_entry.spec.annotations["pl7.app/vdj/numberingSchema"] {
+			numberingSchema = seq_entry.spec.annotations["pl7.app/vdj/numberingSchema"]
+			break
+		}
+	}
+
+	ll.print("__THE_LOG__", "Numbering schema: " + numberingSchema)
+
 	// Track which features are actually present in the data
 	coveredFeatures := {}
 
@@ -140,6 +150,19 @@ wf.body(func(args) {
 				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "sequence aa"})
 			}
 		}
+		// Add FR/CDR sequences from additionalSequences (bulk, no annotations)
+		for additionalSeq in additionalSequences {
+			for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"] {
+				if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr {
+					seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: fr + " aa"})
+					if coveredFeatures[fr] {
+						coveredFeatures[fr] += 1
+					} else {
+						coveredFeatures[fr] = 1
+					}
+				}
+			}
+		}
 		// Add annotations if they exist
 		if hasAnnotations {
 			// Python script expects annotation column to end with "annotations"
@@ -160,7 +183,8 @@ wf.body(func(args) {
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
 		table: seqTable,
 		mapping: hasAnnotations ? annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"] : undefined,
-		liabilityTypes: liabilityTypes
+		liabilityTypes: liabilityTypes,
+		numberingSchema: numberingSchema
 	})
 
 	liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
