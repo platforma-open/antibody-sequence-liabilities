@@ -15,6 +15,7 @@ self.body(func(args) {
 	inputTable := args.table
     mapping := args.mapping
 	liabilityTypes := args.liabilityTypes
+	numberingSchema := args.numberingSchema
 
     // Run the liabilities calculation tool on the sequences
 	liabilitiesCalcCmd := exec.builder().
@@ -36,6 +37,10 @@ self.body(func(args) {
 
 	if liabilityTypes {
 		liabilitiesCalcCmd.arg("--include-liabilities").arg(text.join(liabilityTypes, ","))
+	}
+
+	if numberingSchema {
+		liabilitiesCalcCmd.arg("--numbering-schema").arg(numberingSchema)
 	}
 
 	liabilitiesResult := liabilitiesCalcCmd.run()
