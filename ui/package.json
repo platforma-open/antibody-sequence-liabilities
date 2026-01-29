@@ -15,6 +15,7 @@
     "@platforma-open/milaboratories.antibody-sequence-liabilities.model": "workspace:*",
     "@platforma-sdk/ui-vue": "catalog:",
     "@platforma-sdk/model": "catalog:",
+    "@milaboratories/strings": "catalog:",
     "vue": "catalog:",
     "@vueuse/core": "catalog:"
   },
