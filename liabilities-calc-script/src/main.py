@@ -26,9 +26,9 @@ ORIG_EXTRA_PATTERNS = {
     "Out of frame":        r"_",
 }
 ORIG_CYS_LIABILITIES = {"Missing Cysteines": "High", "Extra Cysteines": "High"}
-# Usage of EXPECTED_CYS will have to be modified if you add more than one nucleotide coordinate
+# Usage of EXPECTED_CYS_BASE will have to be modified if you add more than one nucleotide coordinate
 # Coordinates are added in 0-based index
-EXPECTED_CYS = {"FR1": [21, 22], "FR2": [], "FR3": [], "CDR1": [], "CDR2": [], "CDR3": [0]}
+EXPECTED_CYS_BASE = {"FR1": [21, 22], "FR2": [], "FR3": [], "CDR1": [], "CDR2": [], "CDR3": [0]}
 FR1_SPECIFIC_LIABILITIES = {"Missing Cysteines", "Extra Cysteines"}
 REGION_ORDER_MAP = {"FR1": 1, "CDR1": 2, "CDR2": 3, "CDR3": 4, "FR2": 5, "FR3": 6, "FR4": 7} # For sorting summary
 
@@ -43,7 +43,7 @@ def _get_expected_cys_positions(region: str, expected_cys_map: dict):
 
 def _evaluate_cys_liabilities(seq: str, expected_positions: list, expected_count: int):
     actual_cys_count = seq.count("C")
-    allowed_positions = [p for p in expected_positions if p < len(seq)]
+    allowed_positions = [p for p in expected_positions if -len(seq) <= p < len(seq)]
     missing_cys = False
     if allowed_positions:
         missing_cys = all(seq[p] != "C" for p in allowed_positions)
@@ -106,6 +106,22 @@ def get_active_liability_definitions(user_requested_set: set):
         **active_extra_p
     }
     return active_cdr_l, active_extra_p, active_cys_l, active_liability_r
+
+
+def build_expected_cys_map(numbering_schema: str | None) -> dict:
+    expected = {k: list(v) for k, v in EXPECTED_CYS_BASE.items()}
+    if not numbering_schema:
+        return expected
+    schema = str(numbering_schema).strip().lower()
+    schema_fr3_map = {
+        "imgt": [-1],
+        "kabat": [-3],
+        "chothia": [-3],
+    }
+    if schema in schema_fr3_map:
+        expected["FR3"] = schema_fr3_map[schema]
+        expected["CDR3"] = []    
+    return expected
 
 
 # Liability & Risk Functions
@@ -367,6 +383,8 @@ def main():
                    help="A comma-delimited string of specific liability names to calculate (e.g., \"Deamidation (N[GS]),Methionine Oxidation (M)\"). If not provided, no liabilities or risks are calculated.")
     p.add_argument("--output-regions-found", type=str,
                    help="Path to output a JSON list of found regions (CDR1, CDR2, CDR3, FR1).")
+    p.add_argument("--numbering-schema", type=str,
+                   help="Optional numbering schema name (e.g., imgt, kabat, chothia) to adjust conserved cysteine coordinates.")
     args = p.parse_args()
 
     CALCULATE_LIABILITIES = args.include_liabilities is not None
@@ -377,6 +395,8 @@ def main():
 
     active_cdr_defs, active_extra_defs, active_cys_defs, active_liability_regex = \
         get_active_liability_definitions(USER_REQUESTED_LIABILITIES)
+
+    expected_cys_map = build_expected_cys_map(args.numbering_schema)
 
     if CALCULATE_LIABILITIES:
         if not (active_cdr_defs or active_extra_defs or active_cys_defs):
@@ -412,7 +432,7 @@ def main():
     ann_cols = [c for c in df_processed.columns if c.lower().endswith("annotations")]
     has_input_ann_cols = bool(ann_cols)
     all_seq_cols = [c for c in df_processed.columns if c.lower().endswith("aa")] # All potential sequence columns
-    TARGET_REGION_KEYS = ["cdr1 aa", "cdr2 aa", "cdr3 aa", "fr1 aa"] # For Path B
+    TARGET_REGION_KEYS = ["cdr1 aa", "cdr2 aa", "cdr3 aa", "fr1 aa", "fr2 aa", "fr3 aa"] # For Path B
     cols_for_liability_analysis = []
     skip_extraction_due_to_preexisting_regions = False
 
@@ -424,7 +444,7 @@ def main():
             for ann_prefix_raw in unique_ann_prefixes:
                 prefix_for_col_lookup = f"{ann_prefix_raw} " if ann_prefix_raw else ""
                 current_prefix_all_regions_found = True
-                for region_base in ["CDR1", "CDR2", "CDR3", "FR1"]: # Check for FR1, CDR1, CDR2, CDR3
+                for region_base in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"]: # Check for FR1/2/3, CDR1/2/3
                     expected_col_name = " ".join(f"{prefix_for_col_lookup}{region_base} aa".split())
                     if expected_col_name not in df_processed.columns: current_prefix_all_regions_found = False; print(f"Pre-existing check: '{expected_col_name}' not found for prefix '{ann_prefix_raw}'."); break
                     temp_cols_for_liability_if_skipping.append(expected_col_name)
@@ -470,7 +490,7 @@ def main():
                         if active_cys_defs and region_name in {"FR1", "FR2", "FR3", "CDR1", "CDR2", "CDR3"}:
                             expected_positions, expected_count, should_check = _get_expected_cys_positions(
                                 region_name,
-                                EXPECTED_CYS
+                                expected_cys_map
                             )
                             if should_check:
                                 missing_cys, extra_cys, _ = _evaluate_cys_liabilities(
@@ -532,7 +552,7 @@ def main():
                      print(f"Error during horizontal concatenation of extracted fragments: {e}. Fragment columns might be missing.", file=sys.stderr)
 
 
-        path_a_frag_cols = [c for c in df_processed.columns if c.lower().endswith(" aa") and any(k in c.lower() for k in ["cdr1","cdr2","cdr3","fr1"]) and not c.lower().endswith("sequence aa")]
+        path_a_frag_cols = [c for c in df_processed.columns if c.lower().endswith(" aa") and any(k in c.lower() for k in ["cdr1","cdr2","cdr3","fr1","fr2","fr3"]) and not c.lower().endswith("sequence aa")]
         cols_for_liability_analysis.extend(path_a_frag_cols); cols_for_liability_analysis = sorted(list(set(cols_for_liability_analysis)))
 
     elif not has_input_ann_cols: # Path B: No annotations, use direct sequence columns
@@ -562,7 +582,7 @@ def main():
             new_liab_col = f"{frag_seq_col} liabilities" # e.g. "Heavy CDR1 aa liabilities"
             generated_liability_summary_col_names.append(new_liab_col)
             liability_expressions.append(pl.col(frag_seq_col).cast(pl.Utf8).map_elements(
-                lambda s, fsc=frag_seq_col, crn=core_region_name: identify_liabilities(s, crn, active_cdr_defs, active_extra_defs, active_cys_defs, EXPECTED_CYS, debug_col_name=fsc),
+                lambda s, fsc=frag_seq_col, crn=core_region_name: identify_liabilities(s, crn, active_cdr_defs, active_extra_defs, active_cys_defs, expected_cys_map, debug_col_name=fsc),
                 return_dtype=pl.Utf8, skip_nulls=False).fill_null("Unknown").alias(new_liab_col))
         if liability_expressions: df_processed = df_processed.with_columns(liability_expressions)
 
