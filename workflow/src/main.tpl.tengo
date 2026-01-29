@@ -92,12 +92,14 @@ wf.body(func(args) {
 	numberingSchema := ""
 	for seq_entry in sequences {
 		if seq_entry.spec.annotations && seq_entry.spec.annotations["pl7.app/vdj/numberingSchema"] {
-			numberingSchema = seq_entry.spec.annotations["pl7.app/vdj/numberingSchema"]
-			break
+			currentSchema := seq_entry.spec.annotations["pl7.app/vdj/numberingSchema"]
+			if numberingSchema == "" {
+				numberingSchema = currentSchema
+			} else if numberingSchema != currentSchema {
+				ll.panic("Multiple different numbering schemas found in input sequences. This is not supported. Found: '" + numberingSchema + "' and '" + currentSchema + "'.")
+			}
 		}
 	}
-
-	ll.print("__THE_LOG__", "Numbering schema: " + numberingSchema)
 
 	// Track which features are actually present in the data
 	coveredFeatures := {}

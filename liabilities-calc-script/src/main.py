@@ -113,12 +113,14 @@ def build_expected_cys_map(numbering_schema: str | None) -> dict:
     if not numbering_schema:
         return expected
     schema = str(numbering_schema).strip().lower()
-    if schema == "imgt":
-        expected["FR3"] = [-1]
-        expected["CDR3"] = []
-    elif schema in {"kabat", "chothia"}:
-        expected["FR3"] = [-3]
-        expected["CDR3"] = []
+    schema_fr3_map = {
+        "imgt": [-1],
+        "kabat": [-3],
+        "chothia": [-3],
+    }
+    if schema in schema_fr3_map:
+        expected["FR3"] = schema_fr3_map[schema]
+        expected["CDR3"] = []    
     return expected
 
 
