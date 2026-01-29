@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 4.2.0
+
+### Minor Changes
+
+- 04076d8: adjusted coordinates for numbering schemes, dependencies updates
+
 ## 4.1.0
 
 ### Minor Changes

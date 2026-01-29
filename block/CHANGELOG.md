@@ -1,5 +1,18 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 3.2.0
+
+### Minor Changes
+
+- 04076d8: adjusted coordinates for numbering schemes, dependencies updates
+
+### Patch Changes
+
+- Updated dependencies [04076d8]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.workflow@4.3.0
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@4.3.0
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.ui@4.3.0
+
 ## 3.1.0
 
 ### Minor Changes
