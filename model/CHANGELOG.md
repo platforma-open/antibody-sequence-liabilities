@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.model
 
+## 4.3.1
+
+### Patch Changes
+
+- b9600e4: Set default block label, use sdk strings for status messages
+
 ## 4.3.0
 
 ### Minor Changes
