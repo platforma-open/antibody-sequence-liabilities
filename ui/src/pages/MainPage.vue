@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { liabilityTypes } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
+import strings from '@milaboratories/strings';
 import type { PlRef } from '@platforma-sdk/model';
 import { getRawPlatformaInstance } from '@platforma-sdk/model';
 import {
@@ -14,7 +15,7 @@ import {
   usePlDataTableSettingsV2,
 } from '@platforma-sdk/ui-vue';
 import { asyncComputed } from '@vueuse/core';
-import { computed, ref, watchEffect } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useApp } from '../app';
 
 const app = useApp();
@@ -30,6 +31,17 @@ const tableSettings = usePlDataTableSettingsV2({
 
 const settingsIsShown = ref(app.model.args.inputAnchor === undefined);
 
+// Auto-close settings panel when block starts running
+watch(
+  () => app.model.outputs.isRunning,
+  (isRunning, wasRunning) => {
+    // Close settings when block starts running (false -> true transition)
+    if (isRunning && !wasRunning) {
+      settingsIsShown.value = false;
+    }
+  },
+);
+
 const liabilityTypesModel = computed({
   get: () => (app.model.args.liabilityTypes ?? []),
   set: (value) => {
@@ -42,82 +54,6 @@ const isEmpty = asyncComputed(async () => {
   return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.liabilitiesRiskTable)).rows === 0;
 });
 
-// Abbreviations for liability types
-const abbreviations: Record<string, string> = {
-  'Deamidation (N[GS])': 'Deam(N[GS])',
-  'Fragmentation (DP)': 'Frag(DP)',
-  'Isomerization (D[DGHST])': 'Isom',
-  'N-linked Glycosylation (N[^P][ST])': 'Glyc',
-  'Deamidation (N[AHNT])': 'Deam(N[AHNT])',
-  'Hydrolysis (NP)': 'Hydro',
-  'Fragmentation (TS)': 'Frag(TS)',
-  'Tryptophan Oxidation (W)': 'TrpOx',
-  'Methionine Oxidation (M)': 'MetOx',
-  'Deamidation ([STK]N)': 'Deam([STK]N)',
-  'Missing Cysteines': 'MissCys',
-  'Extra Cysteines': 'ExtraCys',
-};
-
-// PTM types
-const ptmTypes = new Set([
-  'Deamidation (N[GS])',
-  'Isomerization (D[DGHST])',
-  'N-linked Glycosylation (N[^P][ST])',
-  'Tryptophan Oxidation (W)',
-  'Methionine Oxidation (M)',
-]);
-
-// Fragmentation types
-const fragTypes = new Set([
-  'Fragmentation (DP)',
-  'Hydrolysis (NP)',
-  'Fragmentation (TS)',
-]);
-
-// Build defaultBlockLabel from liability types
-watchEffect(() => {
-  const selectedTypes = app.model.args.liabilityTypes;
-  if (!selectedTypes || selectedTypes.length === 0) {
-    app.model.args.defaultBlockLabel = '';
-    return;
-  }
-
-  // If all liability types are selected, show "All"
-  if (selectedTypes.length === liabilityTypes.length) {
-    app.model.args.defaultBlockLabel = 'All';
-    return;
-  }
-
-  const selectedSet = new Set(selectedTypes);
-  // Check if all selected types are PTM types
-  const allSelectedArePTM = selectedTypes.every((t) => ptmTypes.has(t));
-  // Check if all PTM types are selected
-  const allPTMSelected = Array.from(ptmTypes).every((t) => selectedSet.has(t));
-  // Check if all selected types are Frag types
-  const allSelectedAreFrag = selectedTypes.every((t) => fragTypes.has(t));
-  // Check if all Frag types are selected
-  const allFragSelected = Array.from(fragTypes).every((t) => selectedSet.has(t));
-
-  if (allPTMSelected && allFragSelected) {
-    app.model.args.defaultBlockLabel = 'PTM+Frag';
-  } else if (allSelectedArePTM && allPTMSelected) {
-    app.model.args.defaultBlockLabel = 'PTM';
-  } else if (allSelectedAreFrag && allFragSelected) {
-    app.model.args.defaultBlockLabel = 'Frag';
-  } else {
-    // Build label from abbreviations
-    const abbrevs = selectedTypes.map((t) => abbreviations[t] || t.substring(0, 4));
-    if (abbrevs.length <= 2) {
-      // Show all shortcuts if 1 or 2 liabilities selected
-      app.model.args.defaultBlockLabel = abbrevs.join('+');
-    } else {
-      // Show first two + count of remaining types
-      const remainingCount = abbrevs.length - 2;
-      app.model.args.defaultBlockLabel = `${abbrevs[0]}+${abbrevs[1]}+${remainingCount} type(s)`;
-    }
-  }
-});
-
 </script>
 
 <template>
@@ -128,7 +64,7 @@ watchEffect(() => {
   >
     <template #append>
       <PlBtnGhost @click.stop="settingsIsShown = true">
-        Settings
+        {{ strings.titles.settings }}
         <template #append>
           <PlMaskIcon24 name="settings" />
         </template>
@@ -138,16 +74,17 @@ watchEffect(() => {
       v-model="app.model.ui.tableState"
       :settings="tableSettings"
       show-export-button
-      not-ready-text="Data is not computed"
+      :not-ready-text="strings.callToActions.configureSettingsAndRun"
+      :no-rows-text="strings.states.noDataAvailable"
     />
   </PlBlockPage>
 
   <PlSlideModal v-model="settingsIsShown">
-    <template #title>Settings</template>
+    <template #title>{{ strings.titles.settings }}</template>
     <PlDropdownRef
       v-model="app.model.args.inputAnchor"
       :options="app.model.outputs.inputOptions ?? []"
-      label="Select dataset"
+      :label="strings.titles.dataset"
       required
       @update:model-value="setInput"
     />

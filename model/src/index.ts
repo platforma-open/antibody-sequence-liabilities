@@ -7,6 +7,7 @@ import {
   createPlDataTableStateV2,
   createPlDataTableV2,
 } from '@platforma-sdk/model';
+import { getDefaultBlockLabel } from './label';
 
 export type BlockArgs = {
   defaultBlockLabel: string;
@@ -36,7 +37,10 @@ export const liabilityTypes = [
 
 export const model = BlockModel.create()
   .withArgs<BlockArgs>({
-    defaultBlockLabel: '',
+    defaultBlockLabel: getDefaultBlockLabel({
+      liabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
+      allLiabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
+    }),
     customBlockLabel: '',
     liabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
   })
@@ -98,3 +102,5 @@ export const model = BlockModel.create()
   ])
 
   .done(2);
+
+export { getDefaultBlockLabel } from './label';
