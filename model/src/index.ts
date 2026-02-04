@@ -67,7 +67,7 @@ export const model = BlockModel.create()
     }]),
   )
 
-  .outputWithStatus('pt', (ctx) => {
+  .retentiveOutputWithStatus('pt', (ctx) => {
     const pCols = ctx.outputs?.resolve('outputLiabilities')?.getPColumns();
     if (pCols === undefined) {
       return undefined;
