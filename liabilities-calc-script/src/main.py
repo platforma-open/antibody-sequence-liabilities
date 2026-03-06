@@ -25,6 +25,11 @@ ORIG_EXTRA_PATTERNS = {
     "Contains stop codon": r"\*",
     "Out of frame":        r"_",
 }
+
+# Polars uses Rust regex which doesn't support look-ahead; W. is equivalent to W(?!$) for contains
+POLARS_W_CDR3_PATTERN = r"W."
+# Pre-compiled regex patterns for Path A annotation loop
+COMPILED_LIABILITY_REGEX = {}  # Populated by get_active_liability_definitions
 ORIG_CYS_LIABILITIES = {"Missing Cysteines": "High", "Extra Cysteines": "High"}
 # Usage of EXPECTED_CYS_BASE will have to be modified if you add more than one nucleotide coordinate
 # Coordinates are added in 0-based index
@@ -105,6 +110,10 @@ def get_active_liability_definitions(user_requested_set: set):
         **{nm: details[0] for nm, details in active_cdr_l.items()},
         **active_extra_p
     }
+    # Populate compiled regex dict for hot-path usage
+    COMPILED_LIABILITY_REGEX.clear()
+    for name, pattern in active_liability_r.items():
+        COMPILED_LIABILITY_REGEX[name] = re.compile(pattern)
     return active_cdr_l, active_extra_p, active_cys_l, active_liability_r
 
 
@@ -124,109 +133,218 @@ def build_expected_cys_map(numbering_schema: str | None) -> dict:
     return expected
 
 
-# Liability & Risk Functions
-def identify_liabilities(seq: str, region: str,
-                         active_cdr_defs: dict,
-                         active_extra_defs: dict,
-                         active_cys_defs: dict,
-                         expected_cys_map: dict,
-                         debug_col_name: str = "N/A") -> str:
-    call_id = os.urandom(2).hex()
-    if not seq or not isinstance(seq, str) or not seq.strip():
-        return "Unknown"
 
-    liabilities_found = []
+def _build_vectorized_liability_expr(frag_seq_col: str, core_region_name: str,
+                                      active_cdr_defs: dict, active_extra_defs: dict,
+                                      active_cys_defs: dict, expected_cys_map: dict) -> pl.Expr:
+    """Build a vectorized Polars expression to compute liabilities for a column.
+    Replaces per-row map_elements(identify_liabilities) with native Polars ops."""
+    col = pl.col(frag_seq_col).cast(pl.Utf8)
+    seq_len = col.str.len_chars()
+    is_null_or_empty = col.is_null() | (col.str.strip_chars() == "")
 
-    # General "extra" patterns (applied to all regions first)
+    liability_checks = []  # List of (name, condition_expr)
+
+    # Extra patterns apply to all regions
     for name, pattern in active_extra_defs.items():
-        if re.search(pattern, seq):
-            liabilities_found.append(name) # Duplicates removed by set() later
+        liability_checks.append((name, col.str.contains(pattern)))
 
-    # Region-specific logic
-    if region == "FR1":
-        # print(f"DEBUG ID_LIAB (call:{call_id}, Col:'{debug_col_name}', Region:'{region}') Applying FR1-specific Cys checks.")
-        if active_cys_defs:
-            expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map)
-            if should_check:
-                missing_cys, extra_cys, _ = _evaluate_cys_liabilities(seq, expected_positions, expected_count)
-                if "Missing Cysteines" in active_cys_defs and missing_cys:
-                    liabilities_found.append("Missing Cysteines")
-                if "Extra Cysteines" in active_cys_defs and extra_cys:
-                    liabilities_found.append("Extra Cysteines")
-
-
-    elif region.startswith("CDR"):
-        # Handle Tryptophan Oxidation (W) first due to its specific logic for CDR3 vs other CDRs
-        w_oxidation_name = "Tryptophan Oxidation (W)"
-        if w_oxidation_name in active_cdr_defs:
-            pattern_to_use_for_w = r"W(?!$)" if region == "CDR3" else active_cdr_defs[w_oxidation_name][0]
-            if re.search(pattern_to_use_for_w, seq):
-                liabilities_found.append(w_oxidation_name)
-
-        # Apply other active_cdr_defs for CDRs (excluding W, which was handled above)
+    # CDR-specific: regex liability checks
+    if core_region_name.startswith("CDR"):
+        w_name = "Tryptophan Oxidation (W)"
         for name, (pattern, _) in active_cdr_defs.items():
-            if name == w_oxidation_name: # Already processed
-                continue
-            if re.search(pattern, seq):
-                liabilities_found.append(name)
+            if name == w_name:
+                p = POLARS_W_CDR3_PATTERN if core_region_name == "CDR3" else pattern
+                liability_checks.append((name, col.str.contains(p)))
+            else:
+                liability_checks.append((name, col.str.contains(pattern)))
 
-        # Cysteine checks for CDRs (if defined in EXPECTED_CYS and active)
-        if active_cys_defs:
-            expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map)
-            if should_check:
-                missing_cys, extra_cys, _ = _evaluate_cys_liabilities(seq, expected_positions, expected_count)
-                if "Missing Cysteines" in active_cys_defs and missing_cys:
-                    liabilities_found.append("Missing Cysteines")
-                if "Extra Cysteines" in active_cys_defs and extra_cys:
-                    liabilities_found.append("Extra Cysteines")
+    # Cysteine checks for applicable regions
+    if active_cys_defs and core_region_name in expected_cys_map:
+        expected_positions = list(expected_cys_map[core_region_name])
+        expected_count = 1 if core_region_name == "FR1" and expected_positions else len(expected_positions)
+        actual_cys_count = col.str.count_matches("C")
 
-    elif region.startswith("FR"): # For other FRs (FR2, FR3, FR4)
-        # print(f"DEBUG ID_LIAB (call:{call_id}, Col:'{debug_col_name}', Region:'{region}') Is FR (not FR1). Only Extra_Patterns and Cys applied if active.")
-        if active_cys_defs:
-            expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map)
-            if should_check:
-                missing_cys, extra_cys, _ = _evaluate_cys_liabilities(seq, expected_positions, expected_count)
-                if "Missing Cysteines" in active_cys_defs and missing_cys:
-                    liabilities_found.append("Missing Cysteines")
-                if "Extra Cysteines" in active_cys_defs and extra_cys:
-                    liabilities_found.append("Extra Cysteines")
+        if expected_positions:
+            any_in_bounds_parts = []
+            any_has_c_parts = []
+            for pos in expected_positions:
+                in_bounds = seq_len > pos if pos >= 0 else seq_len >= abs(pos)
+                char_at_pos = col.str.slice(pos, 1)
+                any_in_bounds_parts.append(in_bounds)
+                any_has_c_parts.append(in_bounds & (char_at_pos == pl.lit("C")))
 
-    final_liabs_found_str = ", ".join(sorted(list(set(liabilities_found)))) if liabilities_found else "None"
-    # print(f"DEBUG ID_LIAB (call:{call_id}, Col:'{debug_col_name}', Region:'{region}') Final result: '{final_liabs_found_str}'")
-    return final_liabs_found_str
+            any_in_bounds = any_in_bounds_parts[0]
+            for e in any_in_bounds_parts[1:]:
+                any_in_bounds = any_in_bounds | e
+            any_has_c = any_has_c_parts[0]
+            for e in any_has_c_parts[1:]:
+                any_has_c = any_has_c | e
 
-# Other helper functions
-def classify_risk(liabilities_str: str,
-                  active_cdr_defs: dict,
-                  active_cys_defs: dict,
-                  active_extra_pattern_names: set) -> str:
-    if not liabilities_str or liabilities_str == "None" or not isinstance(liabilities_str, str): return "None"
-    items = [item.strip() for item in liabilities_str.split(",")]
-    current_max_risk_level = 0
-    risk_map = {"None": 0, "Low": 1, "Medium": 2, "High": 3}
-    level_to_risk = {v: k for k, v in risk_map.items()}
-    for item in items:
-        if item in active_cys_defs:
-            item_risk_str = active_cys_defs[item]
-            if risk_map[item_risk_str] > current_max_risk_level: current_max_risk_level = risk_map[item_risk_str]
-            if current_max_risk_level == risk_map["High"]: return "High";
-            continue
-        if item in active_cdr_defs:
-            item_risk_str = active_cdr_defs[item][1]
-            if risk_map[item_risk_str] > current_max_risk_level: current_max_risk_level = risk_map[item_risk_str]
-            if current_max_risk_level == risk_map["High"]: return "High";
-            continue
-        if item in active_extra_pattern_names:
-            if risk_map["High"] > current_max_risk_level: current_max_risk_level = risk_map["High"]
-            if current_max_risk_level == risk_map["High"]: return "High"
-    return level_to_risk[current_max_risk_level]
+            missing_cys = any_in_bounds & ~any_has_c
+            extra_cys = (actual_cys_count > expected_count) | (missing_cys & (actual_cys_count >= expected_count))
+        else:
+            # No expected positions: any cysteine is extra
+            missing_cys = pl.lit(False)
+            extra_cys = actual_cys_count > expected_count
 
-def overall_risk_func(row_struct: dict) -> str:
-    risk_values = [str(v).strip() for v in row_struct.values() if v is not None]
-    if "High" in risk_values: return "High"
-    if "Medium" in risk_values: return "Medium"
-    if "Low" in risk_values: return "Low"
-    return "None"
+        if "Missing Cysteines" in active_cys_defs:
+            liability_checks.append(("Missing Cysteines", missing_cys))
+        if "Extra Cysteines" in active_cys_defs:
+            liability_checks.append(("Extra Cysteines", extra_cys))
+
+    if not liability_checks:
+        return pl.when(is_null_or_empty).then(pl.lit("Unknown")).otherwise(pl.lit("None"))
+
+    # Sort by name for consistent output matching original sorted(set(...))
+    liability_checks.sort(key=lambda x: x[0])
+
+    # Build concatenated string: each found liability prepends ", Name"
+    parts = [pl.when(cond).then(pl.lit(f", {name}")).otherwise(pl.lit("")) for name, cond in liability_checks]
+    result = pl.concat_str(parts, separator="").str.replace(r"^, ", "")
+
+    return (
+        pl.when(is_null_or_empty)
+        .then(pl.lit("Unknown"))
+        .when(result == "")
+        .then(pl.lit("None"))
+        .otherwise(result)
+    )
+
+
+def _build_vectorized_risk_expr(liab_col: str, active_cdr_defs: dict,
+                                active_cys_defs: dict, active_extra_names: set) -> pl.Expr:
+    """Build a vectorized Polars expression to compute risk from a liabilities string column."""
+    col = pl.col(liab_col).cast(pl.Utf8)
+    is_none = col.is_null() | (col == "None") | (col.str.strip_chars() == "")
+
+    # Group liability names by risk level
+    high_names, medium_names, low_names = set(), set(), set()
+    for name, (_, risk) in active_cdr_defs.items():
+        {"High": high_names, "Medium": medium_names, "Low": low_names}.get(risk, set()).add(name)
+    for name in active_extra_names:
+        high_names.add(name)  # Extra patterns are always High risk
+    for name, risk in active_cys_defs.items():
+        {"High": high_names, "Medium": medium_names, "Low": low_names}.get(risk, set()).add(name)
+
+    def _any_contains(names):
+        if not names:
+            return pl.lit(False)
+        conditions = [col.str.contains(name, literal=True) for name in sorted(names)]
+        result = conditions[0]
+        for c in conditions[1:]:
+            result = result | c
+        return result
+
+    return (
+        pl.when(is_none).then(pl.lit("None"))
+        .when(_any_contains(high_names)).then(pl.lit("High"))
+        .when(_any_contains(medium_names)).then(pl.lit("Medium"))
+        .when(_any_contains(low_names)).then(pl.lit("Low"))
+        .otherwise(pl.lit("None"))
+    )
+
+
+def _build_vectorized_overall_risk_expr(risk_col_names: list) -> pl.Expr:
+    """Build a vectorized Polars expression to compute overall risk from multiple risk columns."""
+    has_high = pl.lit(False)
+    has_medium = pl.lit(False)
+    has_low = pl.lit(False)
+    for col_name in risk_col_names:
+        c = pl.col(col_name).cast(pl.Utf8)
+        has_high = has_high | (c == "High")
+        has_medium = has_medium | (c == "Medium")
+        has_low = has_low | (c == "Low")
+
+    return (
+        pl.when(has_high).then(pl.lit("High"))
+        .when(has_medium).then(pl.lit("Medium"))
+        .when(has_low).then(pl.lit("Low"))
+        .otherwise(pl.lit("None"))
+    )
+
+
+def _build_vectorized_summary_expr(summary_struct_cols: list) -> pl.Expr:
+    """Build a vectorized Polars expression for sequence liabilities summary.
+    Replaces per-row map_elements(_create_sequence_liabilities_summary_str)."""
+    heavy_parts, light_parts, bulk_parts = [], [], []
+    has_any_heavy = any(c.startswith("Heavy ") for c in summary_struct_cols)
+    has_any_light = any(c.startswith("Light ") for c in summary_struct_cols)
+    is_hl_mode = has_any_heavy or has_any_light
+
+    for col_name in summary_struct_cols:
+        cn, prefix = col_name, ""
+        if cn.startswith("Heavy "):
+            prefix, cn = "Heavy", cn[6:]
+        elif cn.startswith("Light "):
+            prefix, cn = "Light", cn[6:]
+
+        for suffix in (" aa liabilities", " liabilities"):
+            if cn.endswith(suffix):
+                cn = cn[:-len(suffix)]
+                break
+
+        sort_key = REGION_ORDER_MAP.get(cn.upper(), 99)
+        dest = heavy_parts if prefix == "Heavy" else light_parts if prefix == "Light" else bulk_parts
+        dest.append((sort_key, cn, col_name))
+
+    for lst in (heavy_parts, light_parts, bulk_parts):
+        lst.sort()
+
+    def _group_expr(parts):
+        """Build expression joining 'region: value' entries, skipping None/Unknown."""
+        if not parts:
+            return None
+        items = []
+        for _, region, col_name in parts:
+            col = pl.col(col_name).cast(pl.Utf8)
+            has_data = col.is_not_null() & ~col.is_in(["None", "Unknown", ""]) & (col.str.strip_chars() != "")
+            items.append(
+                pl.when(has_data)
+                .then(pl.concat_str([pl.lit(f", {region}: "), col], separator=""))
+                .otherwise(pl.lit(""))
+            )
+        return pl.concat_str(items, separator="").str.replace(r"^, ", "")
+
+    if not is_hl_mode:
+        expr = _group_expr(bulk_parts)
+        if expr is None:
+            return pl.lit("None")
+        return pl.when(expr == "").then(pl.lit("None")).otherwise(expr)
+
+    # Heavy/Light mode: build sections and join with " | "
+    hl_section_parts = []
+    any_hl_has_data = pl.lit(False)
+
+    for label, parts in [("Heavy chain", heavy_parts), ("Light chain", light_parts)]:
+        expr = _group_expr(parts)
+        if expr is not None:
+            labeled = pl.concat_str([pl.lit(f"{label}: "), expr], separator="")
+            hl_section_parts.append(
+                pl.when(expr != "").then(
+                    pl.concat_str([pl.lit(" | "), labeled], separator="")
+                ).otherwise(pl.lit(""))
+            )
+            any_hl_has_data = any_hl_has_data | (expr != "")
+
+    other_section_parts = []
+    bulk_expr = _group_expr(bulk_parts)
+    if bulk_expr is not None:
+        with_prefix = pl.concat_str([pl.lit(" | Other: "), bulk_expr], separator="")
+        without_prefix = pl.concat_str([pl.lit(" | "), bulk_expr], separator="")
+        other_section_parts.append(
+            pl.when(bulk_expr != "").then(
+                pl.when(any_hl_has_data).then(with_prefix).otherwise(without_prefix)
+            ).otherwise(pl.lit(""))
+        )
+
+    all_parts = hl_section_parts + other_section_parts
+    if not all_parts:
+        return pl.lit("None")
+
+    result = pl.concat_str(all_parts, separator="").str.replace(r"^ \| ", "")
+    return pl.when(result == "").then(pl.lit("None")).otherwise(result)
+
 
 def _combine_heavy_light_prefixed_columns(df: pl.DataFrame, suffix: str, prefixes: tuple = ("Heavy", "Light")) -> pl.DataFrame:
     prefixed_cols_map = {prefix: {} for prefix in prefixes}
@@ -279,97 +397,6 @@ def _output_final_label_map(base_map: dict, liability_map: dict, output_path: st
             print(f"{description} label map written to {output_path}")
         except IOError as e: print(f"Error writing {description} label map to '{output_path}': {e}", file=sys.stderr)
     else: print(f"\n{description} label map:\n{json.dumps(final_map_all_strings, indent=2, sort_keys=True)}")
-
-
-def _create_sequence_liabilities_summary_str(row_dict: dict) -> str:
-    """
-    Creates a formatted string summarizing liabilities for a sequence (row).
-    Input: row_dict where keys are liability column names and values are their string values.
-    """
-    heavy_parts_data = []
-    light_parts_data = []
-    # For regions that don't have H/L prefix even in H/L mode, or for all in bulk mode
-    bulk_parts_data = [] 
-    
-    has_any_heavy_prefix = False
-    has_any_light_prefix = False
-
-    # First pass to determine if H/L specific prefixes exist on any relevant columns
-    for col_name in row_dict.keys():
-        if col_name.startswith("Heavy "):
-            has_any_heavy_prefix = True
-        elif col_name.startswith("Light "):
-            has_any_light_prefix = True
-    
-    is_heavy_light_mode = has_any_heavy_prefix or has_any_light_prefix
-
-    for col_name, liability_value in row_dict.items():
-        # Standardize missing/unknown liability values for the summary string
-        if liability_value is None or liability_value == "Unknown" or str(liability_value).strip() == "" or liability_value == "None":
-            liability_value = "None"
-
-        # Omit segments with no liabilities from the summary string
-        if liability_value == "None":
-            continue
-
-        current_col_name = col_name
-        current_prefix = "" # Heavy, Light, or empty (for bulk or common regions)
-
-        if current_col_name.startswith("Heavy "):
-            current_prefix = "Heavy"
-            current_col_name = current_col_name[len("Heavy "):]
-        elif current_col_name.startswith("Light "):
-            current_prefix = "Light"
-            current_col_name = current_col_name[len("Light "):]
-        
-        # Remove " aa liabilities" or " liabilities" suffix to get the base region name
-        if current_col_name.endswith(" aa liabilities"):
-            region_base = current_col_name[:-len(" aa liabilities")]
-        elif current_col_name.endswith(" liabilities"):
-             region_base = current_col_name[:-len(" liabilities")]
-        else: # Should not happen if source cols are chosen carefully
-            region_base = current_col_name 
-
-        # Use original case for region_base in output string, but UPPER for map key
-        sort_key = REGION_ORDER_MAP.get(region_base.upper(), 99) # .upper() for robust key lookup
-        entry_str = f"{region_base}: {liability_value}"
-
-        if is_heavy_light_mode:
-            if current_prefix == "Heavy":
-                heavy_parts_data.append((sort_key, region_base, entry_str))
-            elif current_prefix == "Light":
-                light_parts_data.append((sort_key, region_base, entry_str))
-            else: 
-                # Non-prefixed column in H/L mode (e.g. a common region not specific to H/L chains)
-                bulk_parts_data.append((sort_key, region_base, entry_str))
-        else: # Bulk mode, all go to bulk_parts
-            bulk_parts_data.append((sort_key, region_base, entry_str))
-
-    final_summary_elements = []
-
-    if is_heavy_light_mode:
-        heavy_parts_data.sort() # Sorts by (sort_key, region_base, entry_str)
-        light_parts_data.sort()
-        bulk_parts_data.sort() # Sort "other" common regions too
-
-        if heavy_parts_data:
-            final_summary_elements.append("Heavy chain: " + ", ".join([item[2] for item in heavy_parts_data]))
-        if light_parts_data:
-            final_summary_elements.append("Light chain: " + ", ".join([item[2] for item in light_parts_data]))
-        
-        # If there were non-prefixed items (common regions) in H/L mode, add them.
-        if bulk_parts_data:
-            prefix_for_common = "Other: " if (heavy_parts_data or light_parts_data) else ""
-            final_summary_elements.append(prefix_for_common + ", ".join([item[2] for item in bulk_parts_data]))
-    else: # Bulk mode (no H/L prefixes detected among liability columns)
-        bulk_parts_data.sort()
-        if bulk_parts_data:
-            final_summary_elements.append(", ".join([item[2] for item in bulk_parts_data]))
-            
-    if not final_summary_elements:
-        return "None"
-    
-    return " | ".join(final_summary_elements)
 
 
 # ——— MAIN SCRIPT —————————————————————————————————————
@@ -511,8 +538,11 @@ def main():
                                     code = liability_codes[cys_liability_name]
                                     current_ann_parts.append(f"{code}:{base36_encode(start_coord)}+{base36_encode(0)}") # Length 0 for point annotation
                         if region_name != "FR1": # For CDRs and other non-FR1 regions from extraction
-                            for liability_name, pattern in active_liability_regex.items():
-                                for match in re.finditer(pattern, fragment_seq):
+                            for liability_name in active_liability_regex:
+                                compiled = COMPILED_LIABILITY_REGEX.get(liability_name)
+                                if compiled is None:
+                                    continue
+                                for match in compiled.finditer(fragment_seq):
                                     global_start, global_length = start_coord + match.start(), match.end() - match.start()
                                     if liability_name not in liability_codes: liability_codes[liability_name] = str(next_code); next_code += 1
                                     code = liability_codes[liability_name]
@@ -581,9 +611,11 @@ def main():
             core_region_name = match.group(1).upper() if match else "UNKNOWN_REGION"
             new_liab_col = f"{frag_seq_col} liabilities" # e.g. "Heavy CDR1 aa liabilities"
             generated_liability_summary_col_names.append(new_liab_col)
-            liability_expressions.append(pl.col(frag_seq_col).cast(pl.Utf8).map_elements(
-                lambda s, fsc=frag_seq_col, crn=core_region_name: identify_liabilities(s, crn, active_cdr_defs, active_extra_defs, active_cys_defs, expected_cys_map, debug_col_name=fsc),
-                return_dtype=pl.Utf8, skip_nulls=False).fill_null("Unknown").alias(new_liab_col))
+            liability_expressions.append(
+                _build_vectorized_liability_expr(frag_seq_col, core_region_name,
+                                                active_cdr_defs, active_extra_defs,
+                                                active_cys_defs, expected_cys_map)
+                .fill_null("Unknown").alias(new_liab_col))
         if liability_expressions: df_processed = df_processed.with_columns(liability_expressions)
 
         # ---- START: New section to create "Sequence liabilities summary" ----
@@ -591,8 +623,7 @@ def main():
         if summary_struct_cols:
             print(f"Generating sequence liabilities summary from columns: {summary_struct_cols}")
             df_processed = df_processed.with_columns(
-                pl.struct(summary_struct_cols)
-                .map_elements(_create_sequence_liabilities_summary_str, return_dtype=pl.Utf8, skip_nulls=False)
+                _build_vectorized_summary_expr(summary_struct_cols)
                 .fill_null("None")
                 .alias("Sequence liabilities summary")
             )
@@ -604,15 +635,17 @@ def main():
             if liab_col not in df_processed.columns: continue
             new_risk_col = liab_col.replace(" liabilities", " risk")
             generated_risk_col_names.append(new_risk_col)
-            risk_expressions.append(pl.col(liab_col).cast(pl.Utf8).map_elements(
-                lambda l_str: classify_risk(l_str, active_cdr_defs, active_cys_defs, set(active_extra_defs.keys())),
-                return_dtype=pl.Utf8, skip_nulls=False).fill_null("None").alias(new_risk_col))
+            risk_expressions.append(
+                _build_vectorized_risk_expr(liab_col, active_cdr_defs, active_cys_defs,
+                                            set(active_extra_defs.keys()))
+                .fill_null("None").alias(new_risk_col))
         if risk_expressions: df_processed = df_processed.with_columns(risk_expressions)
 
         existing_risk_cols_for_struct = [c for c in generated_risk_col_names if c in df_processed.columns]
         if existing_risk_cols_for_struct:
-            df_processed = df_processed.with_columns(pl.struct([pl.col(c) for c in existing_risk_cols_for_struct])
-                .map_elements(overall_risk_func, return_dtype=pl.Utf8, skip_nulls=False).fill_null("None").alias("Liabilities risk"))
+            df_processed = df_processed.with_columns(
+                _build_vectorized_overall_risk_expr(existing_risk_cols_for_struct)
+                .fill_null("None").alias("Liabilities risk"))
         elif "Liabilities risk" not in df_processed.columns:
              df_processed = df_processed.with_columns(pl.lit("None").cast(pl.Utf8).alias("Liabilities risk"))
 
@@ -643,7 +676,6 @@ def main():
     combined_region_liabs, combined_region_risks = [], []
     
     overall_summary_cols = [] # Renamed from overall_liab_risk_col for clarity
-    print(f"DEBUG: CALCULATE_LIABILITIES={CALCULATE_LIABILITIES}, df_processed.width={df_processed.width}", file=sys.stderr)
     if CALCULATE_LIABILITIES:
         if df_processed.width > 0:  # Normal case - find existing columns
             all_liab_cols = [c for c in df_processed.columns if c.endswith(" liabilities")]
@@ -712,16 +744,9 @@ def main():
         individual_frag_risks + combined_region_risks + combined_chain_risks +
         overall_summary_cols )) # <-- "Sequence liabilities summary" and "Liabilities risk" included here
     
-    print(f"DEBUG: Column generation - output_cols_core={output_cols_core}", file=sys.stderr)
-    print(f"DEBUG: Column generation - final_annotation_cols={final_annotation_cols}", file=sys.stderr)
-    print(f"DEBUG: Column generation - final_cdr3_seq_cols={final_cdr3_seq_cols}", file=sys.stderr)
-    print(f"DEBUG: Column generation - individual_frag_liabs={individual_frag_liabs}", file=sys.stderr)
-    print(f"DEBUG: Column generation - overall_summary_cols={overall_summary_cols}", file=sys.stderr)
-    
     # For empty input or when no liabilities calculated, force generation of all expected bulk columns
     # Check if we have insufficient columns (only core + annotations, no liability/risk columns)
     has_insufficient_columns = (len(output_cols_ordered) <= 2)
-    print(f"DEBUG: has_insufficient_columns={has_insufficient_columns}, len(output_cols_ordered)={len(output_cols_ordered)}", file=sys.stderr)
     
     if df_processed.width == 0 or (not CALCULATE_LIABILITIES and has_insufficient_columns):
         # Force generate all expected bulk columns
@@ -753,14 +778,11 @@ def main():
         # Create missing columns with empty/default values
         missing_columns = [c for c in expected_bulk_columns if c not in df_processed.columns]
         if missing_columns:
-            print(f"DEBUG: Creating missing columns: {missing_columns}", file=sys.stderr)
             # Add empty columns for missing ones
             for col in missing_columns:
                 df_processed = df_processed.with_columns(pl.lit("").alias(col))
         
         output_cols_existing = expected_bulk_columns
-        print(f"DEBUG: Forcing bulk columns. df_processed.width={df_processed.width}, CALCULATE_LIABILITIES={CALCULATE_LIABILITIES}", file=sys.stderr)
-        print(f"DEBUG: All expected bulk columns: {output_cols_existing}", file=sys.stderr)
     else:
         output_cols_existing = [c for c in output_cols_ordered if c in df_processed.columns]
     
