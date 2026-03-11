@@ -4,6 +4,7 @@ ll := import("@platforma-sdk/workflow-tengo:ll")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 text := import("text")
+json := import("json")
 
 liabilitiesCalcSw := assets.importSoftware("@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script:main")
 
@@ -16,6 +17,7 @@ self.body(func(args) {
     mapping := args.mapping
 	liabilityTypes := args.liabilityTypes
 	numberingSchema := args.numberingSchema
+	customLiabilities := args.customLiabilities
 
     // Run the liabilities calculation tool on the sequences
 	liabilitiesCalcCmd := exec.builder().
@@ -41,6 +43,10 @@ self.body(func(args) {
 
 	if numberingSchema {
 		liabilitiesCalcCmd.arg("--numbering-schema").arg(numberingSchema)
+	}
+
+	if customLiabilities {
+		liabilitiesCalcCmd.arg("--custom-liabilities").arg(json.encode(customLiabilities))
 	}
 
 	liabilitiesResult := liabilitiesCalcCmd.run()

@@ -69,6 +69,7 @@ wf.body(func(args) {
 	additionalSequences := columnsWithSequences.getColumns("additionalSequences")
 	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
 	liabilityTypes := args.liabilityTypes
+	customLiabilities := args.customLiabilities
 
 
 	// Determine if we're working with single cell data
@@ -186,7 +187,8 @@ wf.body(func(args) {
 		table: seqTable,
 		mapping: hasAnnotations ? annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"] : undefined,
 		liabilityTypes: liabilityTypes,
-		numberingSchema: numberingSchema
+		numberingSchema: numberingSchema,
+		customLiabilities: customLiabilities
 	})
 
 	liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)

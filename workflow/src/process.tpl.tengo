@@ -38,27 +38,82 @@ self.body(func(args) {
 		}
 	]
 
-	discreteValues := string(json.encode(["None", "Low", "Medium", "High"]))
-
 	liabilityColumns := []
 
-    // Define the output columns - starting with the overall liabilities risk
+    // Define the output columns - four taxonomy columns replacing the old single "Liabilities risk"
     liabilityColumns += [
 		{
-			column: "Liabilities risk",
-			id: "liabilitiesRisk",
+			column: "Sequence quality",
+			id: "sequenceQuality",
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/liabilitiesRisk",
+				name: "pl7.app/vdj/sequenceQuality",
 				valueType: "String",
 				annotations: {
-					"pl7.app/label": "Liabilities risk",
+					"pl7.app/label": "Sequence quality",
 					"pl7.app/isDiscreteFilter": "true",
-            		"pl7.app/discreteValues": discreteValues,
+					"pl7.app/discreteValues": string(json.encode(["Pass", "Fail"])),
+					"pl7.app/isScore": "true",
+					"pl7.app/score/rankValues": "decreasing",
+					"pl7.app/score/defaultCutoff": string(json.encode(["Pass"])),
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "103"
+				}
+			}
+		},
+		{
+			column: "Structural liabilities",
+			id: "structuralLiabilities",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/structuralLiabilities",
+				valueType: "String",
+				annotations: {
+					"pl7.app/label": "Structural liabilities",
+					"pl7.app/isDiscreteFilter": "true",
+					"pl7.app/discreteValues": string(json.encode(["None", "Present"])),
 					"pl7.app/isScore": "true",
 					"pl7.app/score/rankValues": "decreasing",
 					"pl7.app/score/defaultCutoff": string(json.encode(["None"])),
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "102"
+				}
+			}
+		},
+		{
+			column: "Engineering liabilities risk",
+			id: "engineeringRisk",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/engineeringLiabilitiesRisk",
+				valueType: "String",
+				annotations: {
+					"pl7.app/label": "Engineering liabilities risk",
+					"pl7.app/isDiscreteFilter": "true",
+					"pl7.app/discreteValues": string(json.encode(["None", "Low", "Medium", "High"])),
+					"pl7.app/isScore": "true",
+					"pl7.app/score/rankValues": "decreasing",
+					"pl7.app/score/defaultCutoff": string(json.encode(["None", "Low", "Medium"])),
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "101"
+				}
+			}
+		},
+		{
+			column: "Engineering burden",
+			id: "engineeringBurden",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/engineeringBurden",
+				valueType: "Float",
+				annotations: {
+					"pl7.app/label": "Engineering burden",
+					"pl7.app/isScore": "true",
+					"pl7.app/score/rankValues": "increasing",
 					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "100"
 				}
@@ -76,7 +131,7 @@ self.body(func(args) {
 					"pl7.app/label": "Sequence liabilities summary",
 					"pl7.app/isSummary": "true",
 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "101"
+					"pl7.app/table/orderPriority": "99"
 				}
 			}
 		}
@@ -117,8 +172,7 @@ self.body(func(args) {
 					annotations: {
 						"pl7.app/label": f_name + " Risk",
 						"pl7.app/table/visibility": "default",
-						"pl7.app/isDiscreteFilter": "true",
-						"pl7.app/discreteValues": discreteValues,
+						"pl7.app/isScore": "true",
 						"pl7.app/table/orderPriority": string(orderPriorityBase - 1)
 					}
 				}
