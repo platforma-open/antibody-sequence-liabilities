@@ -9,3 +9,11 @@ log/
 .turbo
 vite.config.*.timestamp-*
 .DS_Store
+
+# Python caches
+__pycache__/
+.ruff_cache/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
