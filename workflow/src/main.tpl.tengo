@@ -207,7 +207,8 @@ wf.body(func(args) {
 			isSingleCell: isSingleCell,
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations,
-			liabilityTypes: liabilityTypes
+			liabilityTypes: liabilityTypes,
+			customLiabilities: customLiabilities
 		})
 	})
 

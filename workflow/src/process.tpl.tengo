@@ -25,6 +25,7 @@ self.body(func(args) {
     coveredFeatures := params.coveredFeatures
     hasAnnotations := params.hasAnnotations
     liabilityTypes := params.liabilityTypes
+    customLiabilities := params.customLiabilities
     newMapping := json.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
 
@@ -137,7 +138,7 @@ self.body(func(args) {
 		}
 	]
 
-    orderPriorityBase := 99
+    orderPriorityBase := 98
 
 	for f_name in regionsFound {
 		liabColNameFromPy := f_name + " aa liabilities"
@@ -286,7 +287,7 @@ self.body(func(args) {
 
     columns := []
 
-    if len(liabilityTypes) > 0 {
+    if len(liabilityTypes) > 0 || len(customLiabilities) > 0 {
         columns = liabilityColumns + sequenceColumns
     } else {
         columns = sequenceColumns

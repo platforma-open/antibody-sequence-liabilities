@@ -585,14 +585,17 @@ def main():
         try:
             parsed = json.loads(args.custom_liabilities)
             if isinstance(parsed, list):
-                active_custom_defs = parsed
+                active_custom_defs = [d for d in parsed if d.get("name") and d.get("pattern")]
             else:
                 print("Warning: --custom-liabilities must be a JSON array. Ignoring.", file=sys.stderr)
         except json.JSONDecodeError as e:
             print(f"Warning: Could not parse --custom-liabilities JSON: {e}", file=sys.stderr)
 
+    if active_custom_defs:
+        CALCULATE_LIABILITIES = True
+
     if CALCULATE_LIABILITIES:
-        if not (active_cdr_defs or active_extra_defs or active_cys_defs):
+        if not (active_cdr_defs or active_extra_defs or active_cys_defs or active_custom_defs):
             print(
                 "Warning: --include-liabilities provided, but no recognized liability names matched"
                 " internal definitions. No liabilities will be calculated."

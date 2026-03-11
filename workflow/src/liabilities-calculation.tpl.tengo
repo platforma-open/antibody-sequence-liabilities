@@ -46,7 +46,7 @@ self.body(func(args) {
 	}
 
 	if customLiabilities {
-		liabilitiesCalcCmd.arg("--custom-liabilities").arg(json.encode(customLiabilities))
+		liabilitiesCalcCmd.arg("--custom-liabilities").arg(string(json.encode(customLiabilities)))
 	}
 
 	liabilitiesResult := liabilitiesCalcCmd.run()

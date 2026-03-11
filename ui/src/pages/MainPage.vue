@@ -98,23 +98,38 @@ const customItems = computed({
   set: (value) => { app.model.args.customLiabilities = value; },
 });
 
+const expandedIndices = ref<Set<number>>(new Set());
+
 function addCustomLiability(): void {
   const current = app.model.args.customLiabilities ?? [];
-  const newItem: CustomLiability & { isExpanded?: boolean } = {
+  const newItem: CustomLiability = {
     name: '',
     pattern: '',
     riskLevel: 'Medium',
     fixability: 'fixable',
     regions: ['CDR1', 'CDR2', 'CDR3'],
-    isExpanded: true,
   };
+  expandedIndices.value = new Set([...expandedIndices.value, current.length]);
   app.model.args.customLiabilities = [...current, newItem];
 }
 
 function removeCustomLiability(index: number): void {
   const current = [...(app.model.args.customLiabilities ?? [])];
   current.splice(index, 1);
+  const next = new Set<number>();
+  for (const i of expandedIndices.value) {
+    if (i < index) next.add(i);
+    else if (i > index) next.add(i - 1);
+  }
+  expandedIndices.value = next;
   app.model.args.customLiabilities = current;
+}
+
+function toggleExpanded(index: number): void {
+  const next = new Set(expandedIndices.value);
+  if (next.has(index)) next.delete(index);
+  else next.add(index);
+  expandedIndices.value = next;
 }
 
 function isPatternValid(pattern: string): boolean {
@@ -192,8 +207,8 @@ const isEmpty = asyncComputed(async () => {
     <PlElementList
       v-model:items="customItems"
       :get-item-key="(item, index) => index"
-      :is-expanded="(item) => (item as any).isExpanded === true"
-      :on-expand="(item) => { (item as any).isExpanded = !(item as any).isExpanded; }"
+      :is-expanded="(_item, index) => expandedIndices.has(index)"
+      :on-expand="(_item, index) => toggleExpanded(index)"
       :is-removable="() => true"
       :on-remove="(_item, index) => removeCustomLiability(index)"
       :disable-dragging="true"
