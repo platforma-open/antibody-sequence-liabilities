@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-import polars as pl
-from polars.exceptions import ShapeError
-import re
 import argparse
-import sys
 import json
 import os
+import re
+import sys
 
+import polars as pl
+from polars.exceptions import ShapeError
 
 # Liability Definitions
 ORIG_CDR_LIABILITIES = {
@@ -548,7 +548,7 @@ def main():
         print(f"Proceeding with pre-existing columns: {cols_for_liability_analysis}")
     elif has_input_ann_cols:  # Path A: Annotation-based extraction
         print(
-            f"Path A: Extracting regions and updating annotations (with FR1 specific logic if liabilities are calculated)."
+            "Path A: Extracting regions and updating annotations (with FR1 specific logic if liabilities are calculated)."
         )
         chain_prefixes_found = set()
         for ann_col_name_for_prefix_check in ann_cols:
@@ -692,7 +692,7 @@ def main():
 
     elif not has_input_ann_cols:  # Path B: No annotations, use direct sequence columns
         print(
-            f"Path B (No Annotations Mode): Using direct sequence columns ending with predefined keys (e.g., 'CDR1 aa')."
+            "Path B (No Annotations Mode): Using direct sequence columns ending with predefined keys (e.g., 'CDR1 aa')."
         )
         candidate_seq_cols_for_path_b = [
             c for c in all_seq_cols if any(key_suffix in c.lower() for key_suffix in TARGET_REGION_KEYS)
@@ -705,11 +705,11 @@ def main():
 
     if not cols_for_liability_analysis and CALCULATE_LIABILITIES:
         print(
-            f"Warning: No columns identified for liability analysis, but liabilities were requested. Skipping liability calculation."
+            "Warning: No columns identified for liability analysis, but liabilities were requested. Skipping liability calculation."
         )
         CALCULATE_LIABILITIES = False  # Force skip if no columns to act on
     elif not cols_for_liability_analysis and not CALCULATE_LIABILITIES:
-        print(f"No columns identified for liability analysis (and no liabilities were requested).")
+        print("No columns identified for liability analysis (and no liabilities were requested).")
 
     if CALCULATE_LIABILITIES and cols_for_liability_analysis:  # Ensure CALCULATE_LIABILITIES is still true
         print(f"Generating liabilities for columns: {cols_for_liability_analysis}")
