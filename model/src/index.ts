@@ -71,19 +71,24 @@ export const model = BlockModel.create()
 
   .argsValid((ctx) => {
     if (ctx.args.inputAnchor === undefined) return false;
+    const predefinedNames = new Set(liabilityTypes.map((l) => l.value));
     const customs = ctx.args.customLiabilities ?? [];
-    const names = customs.map((c) => c.name);
-    if (names.length !== new Set(names).size) return false;
+    const customNames = customs.map((c) => c.name);
+    // No duplicate custom names
+    if (customNames.length !== new Set(customNames).size) return false;
     for (const c of customs) {
       if (!c.name || !c.pattern) return false;
+      // Custom name must not collide with predefined names (R17)
+      if (predefinedNames.has(c.name)) return false;
+      // Pattern must be valid regex
       try {
         new RegExp(c.pattern);
       } catch {
         return false;
       }
+      // At least one region must be selected (R14)
+      if (!c.regions || c.regions.length === 0) return false;
     }
-    const usePredefined = ctx.args.usePredefinedLiabilities ?? true;
-    if (!usePredefined && customs.length === 0) return false;
     return true;
   })
 
