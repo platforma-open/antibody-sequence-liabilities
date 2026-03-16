@@ -68,7 +68,8 @@ wf.body(func(args) {
 	annotations := columnsWithSequences.getColumns("annotations")
 	additionalSequences := columnsWithSequences.getColumns("additionalSequences")
 	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
-	liabilityTypes := args.liabilityTypes
+	usePredefinedLiabilities := args.usePredefinedLiabilities
+	disabledPredefinedLiabilities := args.disabledPredefinedLiabilities
 	customLiabilities := args.customLiabilities
 
 
@@ -190,7 +191,8 @@ wf.body(func(args) {
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
 		table: seqTable,
 		mapping: hasAnnotations ? annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"] : undefined,
-		liabilityTypes: liabilityTypes,
+		usePredefinedLiabilities: usePredefinedLiabilities,
+		disabledPredefinedLiabilities: disabledPredefinedLiabilities,
 		numberingSchema: numberingSchema,
 		customLiabilities: customLiabilities
 	})
@@ -211,7 +213,8 @@ wf.body(func(args) {
 			isSingleCell: isSingleCell,
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations,
-			liabilityTypes: liabilityTypes,
+			usePredefinedLiabilities: usePredefinedLiabilities,
+			disabledPredefinedLiabilities: disabledPredefinedLiabilities,
 			customLiabilities: customLiabilities
 		})
 	})

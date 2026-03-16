@@ -1,5 +1,4 @@
 self := import("@platforma-sdk/workflow-tengo:tpl")
-smart := import("@platforma-sdk/workflow-tengo:smart")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
@@ -15,7 +14,8 @@ self.body(func(args) {
 
 	inputTable := args.table
     mapping := args.mapping
-	liabilityTypes := args.liabilityTypes
+	usePredefinedLiabilities := args.usePredefinedLiabilities
+	disabledPredefinedLiabilities := args.disabledPredefinedLiabilities
 	numberingSchema := args.numberingSchema
 	customLiabilities := args.customLiabilities
 
@@ -37,23 +37,27 @@ self.body(func(args) {
 		liabilitiesCalcCmd.arg("-m").arg(mapping)
 	}
 
-	if liabilityTypes {
-		liabilitiesCalcCmd.arg("--include-liabilities").arg(text.join(liabilityTypes, ","))
+	liabilitiesCalcCmd.arg("--use-predefined-liabilities").arg(usePredefinedLiabilities ? "true" : "false")
+
+	if disabledPredefinedLiabilities && len(disabledPredefinedLiabilities) > 0 {
+		liabilitiesCalcCmd.writeFile("disabled-predefined-liabilities.json", string(json.encode(disabledPredefinedLiabilities)))
+		liabilitiesCalcCmd.arg("--disabled-predefined-liabilities").arg("disabled-predefined-liabilities.json")
 	}
 
 	if numberingSchema {
 		liabilitiesCalcCmd.arg("--numbering-schema").arg(numberingSchema)
 	}
 
-	if customLiabilities {
-		liabilitiesCalcCmd.arg("--custom-liabilities").arg(string(json.encode(customLiabilities)))
+	if customLiabilities && len(customLiabilities) > 0 {
+		liabilitiesCalcCmd.writeFile("custom-liabilities.json", string(json.encode(customLiabilities)))
+		liabilitiesCalcCmd.arg("--custom-liabilities").arg("custom-liabilities.json")
 	}
 
 	liabilitiesResult := liabilitiesCalcCmd.run()
 
 	// Get the results from the calculation
 	result := liabilitiesResult.getFile("result.tsv")
-	
+
 	newMapping := liabilitiesResult.getFileContent("output.json")
 
 	regionsFound := liabilitiesResult.getFileContent("regions-found.json")
@@ -63,6 +67,6 @@ self.body(func(args) {
         newMapping: newMapping,
 		regionsFound: regionsFound
     }
-	
-	
+
+
 })

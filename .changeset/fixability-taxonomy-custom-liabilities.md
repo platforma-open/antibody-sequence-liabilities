@@ -1,20 +1,20 @@
 ---
-"@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script": minor
-"@platforma-open/milaboratories.antibody-sequence-liabilities.workflow": minor
-"@platforma-open/milaboratories.antibody-sequence-liabilities.model": minor
-"@platforma-open/milaboratories.antibody-sequence-liabilities.ui": minor
-"@platforma-open/milaboratories.antibody-sequence-liabilities": minor
+"@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script": major
+"@platforma-open/milaboratories.antibody-sequence-liabilities.workflow": major
+"@platforma-open/milaboratories.antibody-sequence-liabilities.model": major
+"@platforma-open/milaboratories.antibody-sequence-liabilities.ui": major
+"@platforma-open/milaboratories.antibody-sequence-liabilities": major
 ---
 
-Replace single liabilities risk column with fixability taxonomy and add custom liability support.
+Replace single liabilities risk column with fixability taxonomy, add custom liability support, and new predefined liability controls.
 
-The old "Liabilities risk" (None/Low/Medium/High) column is replaced with four columns that distinguish between fundamentally different types of issues:
+The old "Liabilities risk" column is replaced with four columns:
 
-- **Sequence quality** (Pass/Fail) — fails only for disqualifying issues: stop codons and out-of-frame sequences
-- **Structural liabilities** (None/Present) — missing or extra conserved cysteines
-- **Engineering liabilities risk** (None/Low/Medium/High) — fixable/easily-fixable liabilities only
-- **Engineering burden** (Float) — count of engineering liabilities
+- **Is Productive** (Pass/Fail) — fails only for disqualifying issues: stop codons and out-of-frame sequences
+- **Structural liabilities** (None/Present) — structural (missing Cys) and hard-to-fix (extra Cys) issues
+- **Developability risk** (None/Low/Medium/High) — max riskLevel of fixable/easily-fixable liabilities
+- **Developability score** (Float) — weighted sum of fixability_weight × region_weight
 
-This prevents Lead Selection's default filter from discarding candidates with trivially fixable issues (Met/Trp oxidation) alongside structurally unrescuable ones (missing conserved Cys).
+Predefined liability configuration changes from opt-in (`liabilityTypes`) to opt-out (`usePredefinedLiabilities` + `disabledPredefinedLiabilities`). Integrin binding is added as a new predefined liability, off by default. Fixability classifications updated: Deamidation (N[GS]) and other High-risk patterns are now `fixable` (surfacing in Developability risk), Extra Cysteines changed from `structural` to `hard_to_fix`.
 
-Custom liabilities can now be defined in the block settings: user-supplied name, regex pattern, risk level, fixability classification, and regions to apply them to.
+Custom liabilities are defined with name, regex pattern, risk level, fixability, and regions. They are passed as a JSON file rather than inline JSON.

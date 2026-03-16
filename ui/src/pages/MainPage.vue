@@ -51,15 +51,16 @@ watch(
 const predefinedItems = computed(() => liabilityTypes.map((lt) => ({ ...lt })));
 
 function isLiabilityEnabled(item: (typeof liabilityTypes)[number]): boolean {
-  return (app.model.args.liabilityTypes ?? []).includes(item.value);
+  const disabled = app.model.args.disabledPredefinedLiabilities ?? [];
+  return !disabled.includes(item.value);
 }
 
 function toggleLiability(item: (typeof liabilityTypes)[number]): void {
-  const current = app.model.args.liabilityTypes ?? [];
-  if (current.includes(item.value)) {
-    app.model.args.liabilityTypes = current.filter((v) => v !== item.value);
+  const disabled = app.model.args.disabledPredefinedLiabilities ?? [];
+  if (disabled.includes(item.value)) {
+    app.model.args.disabledPredefinedLiabilities = disabled.filter((v) => v !== item.value);
   } else {
-    app.model.args.liabilityTypes = [...current, item.value];
+    app.model.args.disabledPredefinedLiabilities = [...disabled, item.value];
   }
 }
 
@@ -153,6 +154,43 @@ const isEmpty = asyncComputed(async () => {
   if (app.model.outputs.liabilitiesRiskTable === undefined) return undefined;
   return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.liabilitiesRiskTable)).rows === 0;
 });
+
+// ── Export / Import custom liabilities ───────────────────────────────────────
+
+function exportCustomLiabilities(): void {
+  const data = JSON.stringify(app.model.args.customLiabilities ?? [], null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'custom-liabilities.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const importFileInput = ref<HTMLInputElement | null>(null);
+
+function triggerImport(): void {
+  importFileInput.value?.click();
+}
+
+function onImportFile(event: Event): void {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const parsed = JSON.parse(e.target?.result as string);
+      if (Array.isArray(parsed)) {
+        app.model.args.customLiabilities = parsed;
+      }
+    } catch {
+      // invalid JSON — silently ignore
+    }
+    if (importFileInput.value) importFileInput.value.value = '';
+  };
+  reader.readAsText(file);
+}
 </script>
 
 <template>
@@ -254,8 +292,23 @@ const isEmpty = asyncComputed(async () => {
       </template>
     </PlElementList>
 
-    <PlBtnSecondary icon="add" @click="addCustomLiability">
-      Add custom liability
-    </PlBtnSecondary>
+    <div :style="{ display: 'flex', gap: '8px', flexWrap: 'wrap' }">
+      <PlBtnSecondary icon="add" @click="addCustomLiability">
+        Add custom liability
+      </PlBtnSecondary>
+      <PlBtnSecondary @click="exportCustomLiabilities">
+        Export
+      </PlBtnSecondary>
+      <PlBtnSecondary @click="triggerImport">
+        Import
+      </PlBtnSecondary>
+    </div>
+    <input
+      ref="importFileInput"
+      type="file"
+      accept="application/json,.json"
+      :style="{ display: 'none' }"
+      @change="onImportFile"
+    />
   </PlSlideModal>
 </template>

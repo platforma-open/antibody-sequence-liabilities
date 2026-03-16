@@ -24,7 +24,8 @@ self.body(func(args) {
     isSingleCell := params.isSingleCell
     coveredFeatures := params.coveredFeatures
     hasAnnotations := params.hasAnnotations
-    liabilityTypes := params.liabilityTypes
+    usePredefinedLiabilities := params.usePredefinedLiabilities
+    disabledPredefinedLiabilities := params.disabledPredefinedLiabilities
     customLiabilities := params.customLiabilities
     newMapping := json.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
@@ -94,7 +95,7 @@ self.body(func(args) {
 				annotations: {
 					"pl7.app/label": "Developability risk",
 					"pl7.app/isDiscreteFilter": "true",
-					"pl7.app/discreteValues": string(json.encode(["None", "Low", "Medium"])),
+					"pl7.app/discreteValues": string(json.encode(["None", "Low", "Medium", "High"])),
 					"pl7.app/isScore": "true",
 					"pl7.app/score/rankingOrder": "decreasing",
 					"pl7.app/score/defaultCutoff": string(json.encode(["None", "Low"])),
@@ -119,10 +120,25 @@ self.body(func(args) {
 					"pl7.app/table/orderPriority": "99"
 				}
 			}
+		},
+		{
+			column: "Sequence liabilities summary",
+			id: "sequenceLiabilitiesSummary",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/sequenceLiabilitiesSummary",
+				valueType: "String",
+				annotations: {
+					"pl7.app/label": "Sequence liabilities summary",
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "98"
+				}
+			}
 		}
 	]
 
-    orderPriorityBase := 98
+    orderPriorityBase := 96
 
 	for f_name in regionsFound {
 		liabColNameFromPy := f_name + " aa liabilities"
@@ -229,7 +245,7 @@ self.body(func(args) {
 
     columns := []
 
-    if len(liabilityTypes) > 0 || len(customLiabilities) > 0 {
+    if usePredefinedLiabilities || len(customLiabilities) > 0 {
         columns = liabilityColumns + sequenceColumns
     } else {
         columns = sequenceColumns
@@ -294,13 +310,13 @@ self.body(func(args) {
 		id: blockId
 	}]
 
-	// Add individual trace steps for each liability type with decreasing importance
+	// Add individual trace steps for each active custom liability with decreasing importance
 	importance := 29
-	for liabilityType in liabilityTypes {
+	for customLiability in customLiabilities {
 		traceSteps += [{
-			type: "milaboratories.antibody-sequence-liabilities/" + text.to_lower(text.re_replace(" ", liabilityType , "-")),
+			type: "milaboratories.antibody-sequence-liabilities/custom/" + text.to_lower(text.re_replace(" ", customLiability.name, "-")),
 			importance: importance,
-			label: liabilityType,
+			label: customLiability.name,
 			id: blockId
 		}]
 		importance -= 1

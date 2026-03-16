@@ -21,7 +21,8 @@ export type BlockArgs = {
   defaultBlockLabel: string;
   customBlockLabel: string;
   inputAnchor?: PlRef;
-  liabilityTypes?: string[];
+  usePredefinedLiabilities?: boolean;
+  disabledPredefinedLiabilities?: string[];
   customLiabilities?: CustomLiability[];
 };
 
@@ -34,29 +35,33 @@ export const liabilityTypes: {
   label: string;
   riskLevel: 'Low' | 'Medium' | 'High';
   fixability: 'easily_fixable' | 'fixable' | 'hard_to_fix' | 'structural';
+  enabledByDefault: boolean;
 }[] = [
-  { value: 'Deamidation (N[GS])', label: 'Deamidation (N[GS])', riskLevel: 'High', fixability: 'hard_to_fix' },
-  { value: 'Fragmentation (DP)', label: 'Fragmentation (DP)', riskLevel: 'High', fixability: 'hard_to_fix' },
-  { value: 'Isomerization (D[DGHST])', label: 'Isomerization (D[DGHST])', riskLevel: 'High', fixability: 'hard_to_fix' },
-  { value: 'N-linked Glycosylation (N[^P][ST])', label: 'N-linked Glycosylation (N[^P][ST])', riskLevel: 'High', fixability: 'hard_to_fix' },
-  { value: 'Deamidation (N[AHNT])', label: 'Deamidation (N[AHNT])', riskLevel: 'Medium', fixability: 'fixable' },
-  { value: 'Hydrolysis (NP)', label: 'Hydrolysis (NP)', riskLevel: 'Medium', fixability: 'fixable' },
-  { value: 'Fragmentation (TS)', label: 'Fragmentation (TS)', riskLevel: 'Medium', fixability: 'fixable' },
-  { value: 'Tryptophan Oxidation (W)', label: 'Tryptophan Oxidation (W)', riskLevel: 'Medium', fixability: 'easily_fixable' },
-  { value: 'Methionine Oxidation (M)', label: 'Methionine Oxidation (M)', riskLevel: 'Medium', fixability: 'easily_fixable' },
-  { value: 'Deamidation ([STK]N)', label: 'Deamidation ([STK]N)', riskLevel: 'Low', fixability: 'easily_fixable' },
-  { value: 'Missing Cysteines', label: 'Missing Cysteines', riskLevel: 'High', fixability: 'structural' },
-  { value: 'Extra Cysteines', label: 'Extra Cysteines', riskLevel: 'High', fixability: 'structural' },
+  { value: 'Deamidation (N[GS])', label: 'Deamidation (N[GS])', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Fragmentation (DP)', label: 'Fragmentation (DP)', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Isomerization (D[DGHST])', label: 'Isomerization (D[DGHST])', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'N-linked Glycosylation (N[^P][ST])', label: 'N-linked Glycosylation (N[^P][ST])', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Deamidation (N[AHNT])', label: 'Deamidation (N[AHNT])', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Hydrolysis (NP)', label: 'Hydrolysis (NP)', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Fragmentation (TS)', label: 'Fragmentation (TS)', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Tryptophan Oxidation (W)', label: 'Tryptophan Oxidation (W)', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Methionine Oxidation (M)', label: 'Methionine Oxidation (M)', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Deamidation ([STK]N)', label: 'Deamidation ([STK]N)', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Integrin binding', label: 'Integrin binding', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: false },
+  { value: 'Missing Cysteines', label: 'Missing Cysteines', riskLevel: 'High', fixability: 'structural', enabledByDefault: true },
+  { value: 'Extra Cysteines', label: 'Extra Cysteines', riskLevel: 'High', fixability: 'hard_to_fix', enabledByDefault: true },
 ];
 
 export const model = BlockModel.create()
   .withArgs<BlockArgs>({
     defaultBlockLabel: getDefaultBlockLabel({
-      liabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
+      usePredefinedLiabilities: true,
+      disabledPredefinedLiabilities: liabilityTypes.filter((l) => !l.enabledByDefault).map((l) => l.value),
       allLiabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
     }),
     customBlockLabel: '',
-    liabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
+    usePredefinedLiabilities: true,
+    disabledPredefinedLiabilities: liabilityTypes.filter((l) => !l.enabledByDefault).map((l) => l.value),
     customLiabilities: [],
   })
 
@@ -77,6 +82,8 @@ export const model = BlockModel.create()
         return false;
       }
     }
+    const usePredefined = ctx.args.usePredefinedLiabilities ?? true;
+    if (!usePredefined && customs.length === 0) return false;
     return true;
   })
 
