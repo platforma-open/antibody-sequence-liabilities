@@ -64,7 +64,21 @@ export const model = BlockModel.create()
     tableState: createPlDataTableStateV2(),
   })
 
-  .argsValid((ctx) => ctx.args.inputAnchor !== undefined)
+  .argsValid((ctx) => {
+    if (ctx.args.inputAnchor === undefined) return false;
+    const customs = ctx.args.customLiabilities ?? [];
+    const names = customs.map((c) => c.name);
+    if (names.length !== new Set(names).size) return false;
+    for (const c of customs) {
+      if (!c.name || !c.pattern) return false;
+      try {
+        new RegExp(c.pattern);
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  })
 
   .output('inputOptions', (ctx) =>
     ctx.resultPool.getOptions([{

@@ -142,6 +142,13 @@ function isPatternValid(pattern: string): boolean {
   }
 }
 
+function isDuplicateName(index: number): boolean {
+  const items = app.model.args.customLiabilities ?? [];
+  const name = items[index]?.name;
+  if (!name) return false;
+  return items.some((item, i) => i !== index && item.name === name);
+}
+
 const isEmpty = asyncComputed(async () => {
   if (app.model.outputs.liabilitiesRiskTable === undefined) return undefined;
   return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.liabilitiesRiskTable)).rows === 0;
@@ -221,6 +228,7 @@ const isEmpty = asyncComputed(async () => {
           v-model="customItems[index].name"
           label="Name"
           placeholder="e.g. Aspartate Isomerization"
+          :error="isDuplicateName(index) ? 'Name must be unique' : undefined"
         />
         <PlTextField
           v-model="customItems[index].pattern"
