@@ -1131,7 +1131,6 @@ def main():
         dict.fromkeys(
             output_cols_core
             + final_annotation_cols
-            + final_cdr3_seq_cols
             + individual_frag_liabs
             + combined_region_liabs
             + combined_chain_liabs

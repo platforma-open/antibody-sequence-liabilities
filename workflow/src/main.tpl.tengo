@@ -146,17 +146,21 @@ wf.body(func(args) {
 		}
 	} else { // Bulk data handling
 		// Add the primary sequence
+		primaryFeature := undefined
 		if len(sequences) > 0 {
 			if sequences[0].spec.domain["pl7.app/vdj/feature"] == "CDR3" {
 				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "CDR3 aa"})
+				primaryFeature = "CDR3"
 			} else {
 				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "sequence aa"})
+				primaryFeature = sequences[0].spec.domain["pl7.app/vdj/feature"]
 			}
 		}
-		// Add FR/CDR sequences from additionalSequences (bulk, no annotations)
+		// Add FR/CDR sequences from additionalSequences (bulk, no annotations).
+		// Skip any feature already added as the primary sequence to avoid duplicate headers.
 		for additionalSeq in additionalSequences {
 			for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"] {
-				if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr {
+				if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr && fr != primaryFeature {
 					seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: fr + " aa"})
 					if coveredFeatures[fr] {
 						coveredFeatures[fr] += 1

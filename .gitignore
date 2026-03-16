@@ -9,3 +9,4 @@ log/
 .turbo
 vite.config.*.timestamp-*
 .DS_Store
+__pycache__/
