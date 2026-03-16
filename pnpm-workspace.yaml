@@ -4,6 +4,7 @@ packages:
   - ui
   - liabilities-calc-script
   - block
+  - test
 
 catalog:
   # SDK packages - EXACT VERSIONS (no ^ or ~)
@@ -22,6 +23,10 @@ catalog:
 
   # Block-specific dependencies
   "@platforma-open/milaboratories.runenv-python-3": ^1.4.9
+  "@platforma-open/milaboratories.samples-and-data": ^1.14.0
+  "@platforma-open/milaboratories.samples-and-data.model": ^2.6.0
+  "@platforma-open/milaboratories.import-vdj": ^1.6.0
+  "@platforma-open/milaboratories.import-vdj.model": ^1.10.0
 
   # Common dependencies - can use ^ or ~
   'vue': ^3.5.24

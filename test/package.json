@@ -1,0 +1,27 @@
+{
+  "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.test",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Block tests",
+  "type": "module",
+  "scripts": {
+    "test": "vitest"
+  },
+  "files": [],
+  "keywords": [],
+  "dependencies": {
+    "this-block": "workspace:@platforma-open/milaboratories.antibody-sequence-liabilities@*",
+    "@platforma-open/milaboratories.antibody-sequence-liabilities.model": "workspace:*",
+    "@platforma-open/milaboratories.import-vdj": "catalog:",
+    "@platforma-open/milaboratories.import-vdj.model": "catalog:",
+    "@platforma-open/milaboratories.samples-and-data": "catalog:",
+    "@platforma-open/milaboratories.samples-and-data.model": "catalog:",
+    "@platforma-sdk/model": "catalog:"
+  },
+  "devDependencies": {
+    "@platforma-sdk/test": "catalog:",
+    "vitest": "catalog:",
+    "typescript": "catalog:",
+    "@platforma-sdk/eslint-config": "catalog:"
+  }
+}

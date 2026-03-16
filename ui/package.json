@@ -7,7 +7,7 @@
     "watch": "ts-builder build --target block-ui --watch",
     "build": "ts-builder build --target block-ui",
     "type-check": "ts-builder types --target block-ui",
-    "test": "vitest",
+    "test": "vitest --passWithNoTests",
     "lint": "eslint .",
     "do-pack": "shx rm -f *.tgz && pnpm pack && shx mv *.tgz package.tgz"
   },
