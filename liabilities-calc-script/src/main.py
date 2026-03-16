@@ -333,21 +333,21 @@ def classify_sequence_quality(liabilities_str: str, fixability_map: dict) -> str
 
 
 def classify_structural_risk(liabilities_str: str, fixability_map: dict) -> str:
-    """Returns 'Present' if any structural liability is present, otherwise 'None'."""
+    """Returns 'Present' if any structural or hard_to_fix liability is present, otherwise 'None'."""
     if not liabilities_str or liabilities_str == "None":
         return "None"
     for item in [i.strip() for i in liabilities_str.split(",") if i.strip()]:
-        if fixability_map.get(item) == "structural":
+        if fixability_map.get(item) in ("structural", "hard_to_fix"):
             return "Present"
     return "None"
 
 
 def classify_engineering_risk(liabilities_str: str, fixability_map: dict) -> str:
-    """Returns max engineering risk: hard_to_fix→High, fixable→Medium, easily_fixable→Low."""
+    """Returns max engineering risk among fixable/easily_fixable liabilities only."""
     if not liabilities_str or liabilities_str == "None":
         return "None"
-    fixability_to_level = {"hard_to_fix": 3, "fixable": 2, "easily_fixable": 1}
-    level_to_risk = {0: "None", 1: "Low", 2: "Medium", 3: "High"}
+    fixability_to_level = {"fixable": 2, "easily_fixable": 1}
+    level_to_risk = {0: "None", 1: "Low", 2: "Medium"}
     current_max = 0
     for item in [i.strip() for i in liabilities_str.split(",") if i.strip()]:
         level = fixability_to_level.get(fixability_map.get(item, ""), 0)
@@ -356,12 +356,24 @@ def classify_engineering_risk(liabilities_str: str, fixability_map: dict) -> str
     return level_to_risk[current_max]
 
 
-def compute_engineering_burden(liabilities_str: str, fixability_map: dict) -> float:
-    """Count of fixable + easily_fixable liability instances (engineering burden score)."""
-    if not liabilities_str or liabilities_str == "None":
-        return 0.0
-    items = [i.strip() for i in liabilities_str.split(",") if i.strip() and i.strip() != "None"]
-    return float(sum(1 for i in items if fixability_map.get(i) in ("fixable", "easily_fixable")))
+_FIXABILITY_WEIGHTS = {"easily_fixable": 1, "fixable": 3, "hard_to_fix": 8, "structural": 20, "disqualifying": 0}
+_REGION_WEIGHTS = {"FR1": 1.0, "CDR1": 1.2, "CDR2": 1.2, "CDR3": 1.5, "FR2": 0.5, "FR3": 0.5, "FR4": 0.3}
+
+
+def compute_developability_score(row_dict: dict, fixability_map: dict) -> float:
+    """Weighted sum of fixability_weight × region_weight across all per-region liability columns."""
+    total = 0.0
+    for col_name, v in row_dict.items():
+        if not v or not isinstance(v, str) or v in ("None", "Unknown"):
+            continue
+        region = next((r for r in _REGION_WEIGHTS if re.search(r"(?<![A-Z])" + r + r"(?![A-Z])", col_name, re.IGNORECASE)), None)
+        rw = _REGION_WEIGHTS.get(region, 1.0) if region else 1.0
+        for item in v.split(","):
+            item = item.strip()
+            if item and item not in ("None", "Unknown"):
+                fw = _FIXABILITY_WEIGHTS.get(fixability_map.get(item, ""), 0)
+                total += fw * rw
+    return total
 
 
 def _combine_heavy_light_prefixed_columns(
@@ -905,7 +917,7 @@ def main():
                         lambda s, fm=_fm: classify_sequence_quality(s, fm), return_dtype=pl.Utf8, skip_nulls=False
                     )
                     .fill_null("Pass")
-                    .alias("Sequence quality"),
+                    .alias("Is Productive"),
                     pl.col("_all_liabilities_tmp")
                     .map_elements(
                         lambda s, fm=_fm: classify_structural_risk(s, fm), return_dtype=pl.Utf8, skip_nulls=False
@@ -917,13 +929,13 @@ def main():
                         lambda s, fm=_fm: classify_engineering_risk(s, fm), return_dtype=pl.Utf8, skip_nulls=False
                     )
                     .fill_null("None")
-                    .alias("Engineering liabilities risk"),
-                    pl.col("_all_liabilities_tmp")
+                    .alias("Developability risk"),
+                    pl.struct([pl.col(c) for c in existing_liab_cols_for_global])
                     .map_elements(
-                        lambda s, fm=_fm: compute_engineering_burden(s, fm), return_dtype=pl.Float64, skip_nulls=False
+                        lambda row, fm=_fm: compute_developability_score(row, fm), return_dtype=pl.Float64, skip_nulls=False
                     )
                     .fill_null(0.0)
-                    .alias("Engineering burden"),
+                    .alias("Developability score"),
                 ]
             )
             df_processed = df_processed.drop("_all_liabilities_tmp")
@@ -942,25 +954,12 @@ def main():
         else:
             df_processed = df_processed.with_columns(
                 [
-                    pl.lit("Pass").cast(pl.Utf8).alias("Sequence quality"),
+                    pl.lit("Pass").cast(pl.Utf8).alias("Is Productive"),
                     pl.lit("None").cast(pl.Utf8).alias("Structural liabilities"),
-                    pl.lit("None").cast(pl.Utf8).alias("Engineering liabilities risk"),
-                    pl.lit(0.0).alias("Engineering burden"),
+                    pl.lit("None").cast(pl.Utf8).alias("Developability risk"),
+                    pl.lit(0.0).alias("Developability score"),
                 ]
             )
-
-        # ---- Step 2: Sequence liabilities summary (from filtered per-region liabilities) ----
-        summary_struct_cols = [c for c in generated_liability_summary_col_names if c in df_processed.columns]
-        if summary_struct_cols:
-            print(f"Generating sequence liabilities summary from columns: {summary_struct_cols}")
-            df_processed = df_processed.with_columns(
-                pl.struct(summary_struct_cols)
-                .map_elements(_create_sequence_liabilities_summary_str, return_dtype=pl.Utf8, skip_nulls=False)
-                .fill_null("None")
-                .alias("Sequence liabilities summary")
-            )
-        elif "Sequence liabilities summary" not in df_processed.columns:
-            df_processed = df_processed.with_columns(pl.lit("None").cast(pl.Utf8).alias("Sequence liabilities summary"))
 
         # ---- Step 3: Per-region risk from filtered liabilities ----
         custom_risk_map = {d["name"]: d["riskLevel"] for d in active_custom_defs}
@@ -1029,7 +1028,7 @@ def main():
             all_risk_cols = [c for c in df_processed.columns if c.endswith(" risk")]
 
             individual_frag_liabs = sorted(
-                [c for c in all_liab_cols if " aa liabilities" in c.lower() and c != "Sequence liabilities summary"]
+                [c for c in all_liab_cols if " aa liabilities" in c.lower()]
             )
             individual_frag_risks = sorted(
                 [c for c in all_risk_cols if " aa risk" in c.lower() and c != "Liabilities risk"]
@@ -1051,10 +1050,10 @@ def main():
             )
 
             _global_col_names = {
-                "sequence quality",
+                "is productive",
                 "structural liabilities",
-                "engineering liabilities risk",
-                "engineering burden",
+                "developability risk",
+                "developability score",
             }
             combined_region_liabs = sorted(
                 [
@@ -1063,7 +1062,6 @@ def main():
                     if c not in individual_frag_liabs
                     and c not in combined_chain_liabs
                     and c.lower() != "liabilities risk"
-                    and c != "Sequence liabilities summary"
                     and c.lower() not in _global_col_names
                 ]
             )
@@ -1078,17 +1076,15 @@ def main():
                 ]
             )
 
-            # Build overall_summary_cols: taxonomy columns first, then Sequence liabilities summary
+            # Build overall_summary_cols: taxonomy columns
             for col in [
-                "Sequence quality",
+                "Is Productive",
                 "Structural liabilities",
-                "Engineering liabilities risk",
-                "Engineering burden",
+                "Developability risk",
+                "Developability score",
             ]:
                 if col in df_processed.columns:
                     overall_summary_cols.append(col)
-            if "Sequence liabilities summary" in df_processed.columns:
-                overall_summary_cols.append("Sequence liabilities summary")
         else:  # Empty input case - generate expected column names
             # For empty input, always generate bulk columns (standard liability and risk columns)
             expected_regions = ["CDR1", "CDR2", "CDR3", "FR1"]
@@ -1096,13 +1092,12 @@ def main():
                 individual_frag_liabs.append(f"{region} aa liabilities")
                 individual_frag_risks.append(f"{region} aa risk")
 
-            # Add taxonomy + summary columns
+            # Add taxonomy columns
             overall_summary_cols = [
-                "Sequence quality",
+                "Is Productive",
                 "Structural liabilities",
-                "Engineering liabilities risk",
-                "Engineering burden",
-                "Sequence liabilities summary",
+                "Developability risk",
+                "Developability score",
             ]
 
             # Sort the generated columns
@@ -1117,11 +1112,10 @@ def main():
                 individual_frag_risks.append(f"{region} aa risk")
 
             overall_summary_cols = [
-                "Sequence quality",
+                "Is Productive",
                 "Structural liabilities",
-                "Engineering liabilities risk",
-                "Engineering burden",
-                "Sequence liabilities summary",
+                "Developability risk",
+                "Developability score",
             ]
 
             individual_frag_liabs = sorted(individual_frag_liabs)
@@ -1139,7 +1133,7 @@ def main():
             + combined_chain_risks
             + overall_summary_cols
         )
-    )  # <-- "Sequence liabilities summary" and "Liabilities risk" included here
+    )
 
     print(f"DEBUG: Column generation - output_cols_core={output_cols_core}", file=sys.stderr)
     print(f"DEBUG: Column generation - final_annotation_cols={final_annotation_cols}", file=sys.stderr)
@@ -1180,11 +1174,10 @@ def main():
                 "CDR2 aa risk",
                 "CDR3 aa risk",
                 "FR1 aa risk",
-                "Sequence quality",
+                "Is Productive",
                 "Structural liabilities",
-                "Engineering liabilities risk",
-                "Engineering burden",
-                "Sequence liabilities summary",
+                "Developability risk",
+                "Developability score",
             ]
         )
 

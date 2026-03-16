@@ -113,7 +113,7 @@ export const model = BlockModel.create()
     if (pCols === undefined) {
       return undefined;
     }
-    const qualityColumn = pCols.find((p) => p.spec.name === 'pl7.app/vdj/sequenceQuality');
+    const qualityColumn = pCols.find((p) => p.spec.name === 'pl7.app/vdj/isProductive');
     if (qualityColumn === undefined) {
       return undefined;
     }

@@ -44,22 +44,22 @@ self.body(func(args) {
     // Define the output columns - four taxonomy columns replacing the old single "Liabilities risk"
     liabilityColumns += [
 		{
-			column: "Sequence quality",
-			id: "sequenceQuality",
+			column: "Is Productive",
+			id: "isProductive",
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/sequenceQuality",
+				name: "pl7.app/vdj/isProductive",
 				valueType: "String",
 				annotations: {
-					"pl7.app/label": "Sequence quality",
+					"pl7.app/label": "Is Productive",
 					"pl7.app/isDiscreteFilter": "true",
 					"pl7.app/discreteValues": string(json.encode(["Pass", "Fail"])),
 					"pl7.app/isScore": "true",
-					"pl7.app/score/rankValues": "decreasing",
+					"pl7.app/score/rankingOrder": "decreasing",
 					"pl7.app/score/defaultCutoff": string(json.encode(["Pass"])),
 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "103"
+					"pl7.app/table/orderPriority": "102"
 				}
 			}
 		},
@@ -76,61 +76,45 @@ self.body(func(args) {
 					"pl7.app/isDiscreteFilter": "true",
 					"pl7.app/discreteValues": string(json.encode(["None", "Present"])),
 					"pl7.app/isScore": "true",
-					"pl7.app/score/rankValues": "decreasing",
+					"pl7.app/score/rankingOrder": "decreasing",
 					"pl7.app/score/defaultCutoff": string(json.encode(["None"])),
-					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "102"
-				}
-			}
-		},
-		{
-			column: "Engineering liabilities risk",
-			id: "engineeringRisk",
-			naRegex: "",
-			allowNA: true,
-			spec: {
-				name: "pl7.app/vdj/engineeringLiabilitiesRisk",
-				valueType: "String",
-				annotations: {
-					"pl7.app/label": "Engineering liabilities risk",
-					"pl7.app/isDiscreteFilter": "true",
-					"pl7.app/discreteValues": string(json.encode(["None", "Low", "Medium", "High"])),
-					"pl7.app/isScore": "true",
-					"pl7.app/score/rankValues": "decreasing",
-					"pl7.app/score/defaultCutoff": string(json.encode(["None", "Low", "Medium"])),
 					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "101"
 				}
 			}
 		},
 		{
-			column: "Engineering burden",
-			id: "engineeringBurden",
+			column: "Developability risk",
+			id: "developabilityRisk",
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/engineeringBurden",
-				valueType: "Float",
+				name: "pl7.app/vdj/developabilityRisk",
+				valueType: "String",
 				annotations: {
-					"pl7.app/label": "Engineering burden",
+					"pl7.app/label": "Developability risk",
+					"pl7.app/isDiscreteFilter": "true",
+					"pl7.app/discreteValues": string(json.encode(["None", "Low", "Medium"])),
 					"pl7.app/isScore": "true",
-					"pl7.app/score/rankValues": "increasing",
+					"pl7.app/score/rankingOrder": "decreasing",
+					"pl7.app/score/defaultCutoff": string(json.encode(["None", "Low"])),
 					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "100"
 				}
 			}
 		},
 		{
-			column: "Sequence liabilities summary",
-			id: "sequence-liabilities-summary",
+			column: "Developability score",
+			id: "developabilityScore",
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/sequenceLiabilitiesSummary",
-				valueType: "String",
+				name: "pl7.app/vdj/developabilityScore",
+				valueType: "Double",
 				annotations: {
-					"pl7.app/label": "Sequence liabilities summary",
-					"pl7.app/isSummary": "true",
+					"pl7.app/label": "Developability score",
+					"pl7.app/isScore": "true",
+					"pl7.app/score/rankingOrder": "increasing",
 					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "99"
 				}
@@ -257,8 +241,7 @@ self.body(func(args) {
 	exportColumns := []
 	for col in columns {
 		if col.spec.name == "pl7.app/vdj/sequence/annotation" ||
-			(col.spec.annotations && col.spec.annotations["pl7.app/isScore"] == "true") ||
-			(col.spec.annotations && col.spec.annotations["pl7.app/isSummary"] == "true") {
+			(col.spec.annotations && col.spec.annotations["pl7.app/isScore"] == "true") {
 
 			if !col.spec.domain {
 				col.spec.domain = {}

@@ -92,13 +92,15 @@ class TestClassifyEngineeringRisk:
     def test_fixable_is_medium(self):
         assert main.classify_engineering_risk("Hydrolysis (NP)", FULL_FM) == "Medium"
 
-    def test_hard_to_fix_is_high(self):
-        assert main.classify_engineering_risk("Deamidation (N[GS])", FULL_FM) == "High"
+    def test_hard_to_fix_is_none(self):
+        # hard_to_fix goes to Structural liabilities, not Developability risk
+        assert main.classify_engineering_risk("Deamidation (N[GS])", FULL_FM) == "None"
 
     def test_mixed_levels_returns_max(self):
+        # hard_to_fix (Deamidation) is excluded from Developability risk; max is still Medium from Hydrolysis
         assert main.classify_engineering_risk(
             "Methionine Oxidation (M), Deamidation (N[GS])", FULL_FM
-        ) == "High"
+        ) == "Low"
         assert main.classify_engineering_risk(
             "Methionine Oxidation (M), Hydrolysis (NP)", FULL_FM
         ) == "Medium"
@@ -111,36 +113,61 @@ class TestClassifyEngineeringRisk:
         assert main.classify_engineering_risk("Contains stop codon", FULL_FM) == "None"
 
 
-# ── compute_engineering_burden ────────────────────────────────────────────────
+# ── compute_developability_score ──────────────────────────────────────────────
 
 
-class TestComputeEngineeringBurden:
-    def test_none_is_zero(self):
-        assert main.compute_engineering_burden("None", FULL_FM) == 0.0
+class TestComputeDevelopabilityScore:
+    def test_empty_row_is_zero(self):
+        assert main.compute_developability_score({}, FULL_FM) == 0.0
 
-    def test_single_easily_fixable_is_one(self):
-        assert main.compute_engineering_burden("Methionine Oxidation (M)", FULL_FM) == 1.0
+    def test_none_value_is_zero(self):
+        assert main.compute_developability_score({"CDR3 aa liabilities": "None"}, FULL_FM) == 0.0
 
-    def test_single_fixable_is_one(self):
-        assert main.compute_engineering_burden("Hydrolysis (NP)", FULL_FM) == 1.0
+    def test_easily_fixable_in_cdr3_uses_region_weight(self):
+        # easily_fixable weight=1, CDR3 region weight=1.5 → 1 * 1.5 = 1.5
+        score = main.compute_developability_score(
+            {"CDR3 aa liabilities": "Methionine Oxidation (M)"}, FULL_FM
+        )
+        assert score == 1.5
 
-    def test_two_engineering_liabilities_is_two(self):
-        assert main.compute_engineering_burden(
-            "Methionine Oxidation (M), Hydrolysis (NP)", FULL_FM
-        ) == 2.0
+    def test_fixable_in_fr1_uses_region_weight(self):
+        # fixable weight=3, FR1 region weight=1.0 → 3 * 1.0 = 3.0
+        score = main.compute_developability_score(
+            {"FR1 aa liabilities": "Hydrolysis (NP)"}, FULL_FM
+        )
+        assert score == 3.0
 
-    def test_structural_not_counted(self):
-        assert main.compute_engineering_burden("Missing Cysteines", FULL_FM) == 0.0
+    def test_hard_to_fix_uses_weight_8(self):
+        # hard_to_fix weight=8, CDR3 region weight=1.5 → 8 * 1.5 = 12.0
+        score = main.compute_developability_score(
+            {"CDR3 aa liabilities": "Deamidation (N[GS])"}, FULL_FM
+        )
+        assert score == 12.0
 
-    def test_hard_to_fix_not_counted(self):
-        # hard_to_fix maps to High engineering risk but contributes 0 to burden count
-        assert main.compute_engineering_burden("Deamidation (N[GS])", FULL_FM) == 0.0
+    def test_structural_uses_weight_20(self):
+        # structural weight=20, CDR3 region weight=1.5 → 20 * 1.5 = 30.0
+        score = main.compute_developability_score(
+            {"CDR3 aa liabilities": "Missing Cysteines"}, FULL_FM
+        )
+        assert score == 30.0
 
-    def test_mixed_counts_only_fixable_and_easily_fixable(self):
-        # Met oxidation (easily_fixable) counts; Deamidation (hard_to_fix) and Missing Cys (structural) do not
-        assert main.compute_engineering_burden(
-            "Methionine Oxidation (M), Deamidation (N[GS]), Missing Cysteines", FULL_FM
-        ) == 1.0
+    def test_disqualifying_contributes_zero(self):
+        # disqualifying weight=0
+        score = main.compute_developability_score(
+            {"CDR3 aa liabilities": "Contains stop codon"}, FULL_FM
+        )
+        assert score == 0.0
+
+    def test_multiple_regions_summed(self):
+        # CDR3: Met oxidation (easily_fixable=1 × 1.5) + CDR1: Hydrolysis (fixable=3 × 1.2) = 1.5 + 3.6 = 5.1
+        score = main.compute_developability_score(
+            {
+                "CDR3 aa liabilities": "Methionine Oxidation (M)",
+                "CDR1 aa liabilities": "Hydrolysis (NP)",
+            },
+            FULL_FM,
+        )
+        assert abs(score - 5.1) < 1e-9
 
 
 # ── custom liabilities ────────────────────────────────────────────────────────
@@ -181,9 +208,10 @@ class TestCustomLiabilities:
         )
         fm = main._get_fixability_map({}, {}, {})
         fm[hard_def["name"]] = "hard_to_fix"
-        assert main.classify_engineering_risk(liabilities, fm) == "High"
+        # hard_to_fix now goes to Structural liabilities; Developability risk returns None
+        assert main.classify_engineering_risk(liabilities, fm) == "None"
 
-    def test_easily_fixable_custom_contributes_to_burden(self):
+    def test_easily_fixable_custom_contributes_to_developability(self):
         easy_def = {**self._DG_CDR12, "fixability": "easily_fixable", "regions": ["CDR1"]}
         liabilities = main.identify_liabilities(
             "ADGSS", "CDR1", {}, {}, {}, {}, active_custom_defs=[easy_def]
@@ -191,7 +219,9 @@ class TestCustomLiabilities:
         fm = main._get_fixability_map({}, {}, {})
         fm[easy_def["name"]] = "easily_fixable"
         assert main.classify_engineering_risk(liabilities, fm) == "Low"
-        assert main.compute_engineering_burden(liabilities, fm) == 1.0
+        # easily_fixable weight=1, CDR1 region weight=1.2 → 1.2
+        score = main.compute_developability_score({"CDR1 aa liabilities": liabilities}, fm)
+        assert abs(score - 1.2) < 1e-9
 
     def test_no_match_when_pattern_does_not_match(self):
         liabilities = main.identify_liabilities(
