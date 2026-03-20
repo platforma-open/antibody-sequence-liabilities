@@ -432,3 +432,96 @@ def test_sc_both_chains_liabilities(tmp_path):
     summary = r["Sequence liabilities summary"]
     assert "Heavy chain" in summary
     assert "Light chain" in summary
+
+
+# ---------------------------------------------------------------------------
+# Custom liability per-region risk (R8)
+#
+# Custom fixable/easily_fixable liabilities must appear in per-region risk
+# columns, not only in global developability columns.
+# ---------------------------------------------------------------------------
+
+
+def test_custom_fixable_liability_raises_per_region_risk(tmp_path):
+    """A High-risk fixable custom liability in CDR3 must produce High per-region risk for CDR3.
+
+    Regression: classify_risk() previously ignored custom liabilities, leaving
+    CDR3 aa risk at None even when a custom fixable liability was detected there.
+    """
+    custom = tmp_path / "custom.json"
+    custom.write_text(json.dumps([{
+        "name": "WW motif",
+        "pattern": "WW",
+        "riskLevel": "High",
+        "fixability": "fixable",
+        "regions": ["CDR3"],
+    }]))
+    df = run_main(
+        tmp_path,
+        ["--use-predefined-liabilities", "false", "--custom-liabilities", str(custom)],
+    )
+    r = row(df, "clone_custom_ww")
+    # WW is present in CDR3 — per-region risk must reflect it
+    assert r["CDR3 aa risk"] == "High"
+    # CDR2 has no WW — must remain None
+    assert r["CDR2 aa risk"] == "None"
+
+
+def test_custom_easily_fixable_liability_raises_per_region_risk(tmp_path):
+    """A Medium easily_fixable custom liability in CDR2 must raise CDR2 aa risk to Medium."""
+    custom = tmp_path / "custom.json"
+    custom.write_text(json.dumps([{
+        "name": "GR motif",
+        "pattern": "GR",
+        "riskLevel": "Medium",
+        "fixability": "easily_fixable",
+        "regions": ["CDR2"],
+    }]))
+    df = run_main(
+        tmp_path,
+        ["--use-predefined-liabilities", "false", "--custom-liabilities", str(custom)],
+    )
+    # clone_clean CDR2 = ISPGRGIT — contains GR
+    r = row(df, "clone_clean")
+    assert r["CDR2 aa risk"] == "Medium"
+    # CDR3 has no GR — must stay None
+    assert r["CDR3 aa risk"] == "None"
+
+
+def test_custom_hard_to_fix_does_not_raise_per_region_risk(tmp_path):
+    """A hard_to_fix custom liability routes to Structural liabilities, not per-region risk."""
+    custom = tmp_path / "custom.json"
+    custom.write_text(json.dumps([{
+        "name": "WW hard",
+        "pattern": "WW",
+        "riskLevel": "High",
+        "fixability": "hard_to_fix",
+        "regions": ["CDR3"],
+    }]))
+    df = run_main(
+        tmp_path,
+        ["--use-predefined-liabilities", "false", "--custom-liabilities", str(custom)],
+    )
+    r = row(df, "clone_custom_ww")
+    assert r["Structural liabilities"] == "Present"
+    assert r["CDR3 aa risk"] == "None"
+
+
+def test_custom_and_predefined_combine_in_per_region_risk(tmp_path):
+    """Custom and predefined fixable liabilities in the same region take the higher risk level.
+
+    clone_met_cdr3 CDR3 has Met (predefined Medium/easily_fixable).
+    Adding a custom High/fixable motif that also matches CDR3 must raise it to High.
+    """
+    custom = tmp_path / "custom.json"
+    custom.write_text(json.dumps([{
+        "name": "MG motif",
+        "pattern": "MG",
+        "riskLevel": "High",
+        "fixability": "fixable",
+        "regions": ["CDR3"],
+    }]))
+    df = run_main(tmp_path, ["--custom-liabilities", str(custom)])
+    r = row(df, "clone_met_cdr3")
+    # Custom MG (High) beats predefined Met (Medium) — CDR3 risk must be High
+    assert r["CDR3 aa risk"] == "High"

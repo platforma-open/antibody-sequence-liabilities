@@ -106,6 +106,7 @@ def classify_risk(
     active_cys_defs: dict,
     active_extra_pattern_names: set,
     fixability_map: dict[str, str],
+    risk_level_map: dict[str, str] | None = None,
 ) -> str:
     """Per-region engineering risk — counts fixable and easily_fixable liabilities only."""
     if not liabilities_str or liabilities_str == "None" or not isinstance(liabilities_str, str):
@@ -123,6 +124,8 @@ def classify_risk(
             item_risk = active_cdr_defs[item][1]  # (pattern, risk_level, fixability)
         elif item in active_extra_pattern_names:
             item_risk = "High"
+        elif risk_level_map and item in risk_level_map:
+            item_risk = risk_level_map[item]  # custom liability
         else:
             continue
         level = risk_num.get(item_risk, 0)

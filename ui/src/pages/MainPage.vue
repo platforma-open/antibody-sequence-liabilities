@@ -148,11 +148,25 @@ function isPatternValid(pattern: string): boolean {
   }
 }
 
+const predefinedNameSet = new Set(liabilityTypes.map((lt) => lt.value));
+
+function isPredefinedName(index: number): boolean {
+  const name = (app.model.args.customLiabilities ?? [])[index]?.name;
+  if (!name) return false;
+  return predefinedNameSet.has(name);
+}
+
 function isDuplicateName(index: number): boolean {
   const items = app.model.args.customLiabilities ?? [];
   const name = items[index]?.name;
   if (!name) return false;
   return items.some((item, i) => i !== index && item.name === name);
+}
+
+function customNameError(index: number): string | undefined {
+  if (isPredefinedName(index)) return 'Name collides with a predefined liability';
+  if (isDuplicateName(index)) return 'Name must be unique';
+  return undefined;
 }
 
 // ── Export / Import custom liabilities ───────────────────────────────────────
@@ -189,6 +203,11 @@ watch(importFileHandle, async (handle) => {
   const names = (data as CustomLiability[]).map((item) => item.name);
   if (names.length !== new Set(names).size) {
     importError.value = 'Duplicate names in imported liabilities';
+    return;
+  }
+  const predefinedCollision = names.find((n) => predefinedNameSet.has(n));
+  if (predefinedCollision) {
+    importError.value = `"${predefinedCollision}" collides with a predefined liability name`;
     return;
   }
   for (const item of data as CustomLiability[]) {
@@ -273,7 +292,7 @@ watch(importFileHandle, async (handle) => {
           <template #item-title="{ item }">
             {{ item.label }}
             <span :style="{ fontSize: '11px', opacity: 0.6, marginLeft: '6px' }">
-              {{ item.riskLevel }} · {{ fixabilityLabel[item.fixability] }}
+              <code>{{ item.pattern }}</code> · {{ item.riskLevel }} · {{ fixabilityLabel[item.fixability] }}
             </span>
           </template>
         </PlElementList>
@@ -306,20 +325,20 @@ watch(importFileHandle, async (handle) => {
           v-model="customItems[index].name"
           label="Name"
           placeholder="e.g. Aspartate Isomerization"
-          :error="isDuplicateName(index) ? 'Name must be unique' : undefined"
+          :error="customNameError(index)"
         />
         <PlTextField
           v-model="customItems[index].pattern"
           label="Pattern (regex)"
-          placeholder="e.g. DG"
+          placeholder="e.g. N[GS]"
           :error="customItems[index].pattern && !isPatternValid(customItems[index].pattern) ? 'Invalid regular expression' : undefined"
         >
           <template #tooltip>
             <div>
-              <code>DG</code> — exact dipeptide<br>
-              <code>[ST]</code> — character class (S or T)<br>
+              <code>W</code> — single character literal<br>
+              <code>[GS]</code> — character class (G or S)<br>
               <code>[^P]</code> — negated class (not P)<br>
-              <code>N[GS]</code> — N followed by G or S
+              <code>DP</code> — exact dipeptide
             </div>
           </template>
         </PlTextField>
@@ -346,6 +365,7 @@ watch(importFileHandle, async (handle) => {
           v-model="customItems[index].regions"
           label="Regions"
           :options="regionOptions"
+          :error="(customItems[index].regions?.length ?? 0) === 0 ? 'At least one region must be selected' : undefined"
         />
       </template>
     </PlElementList>
