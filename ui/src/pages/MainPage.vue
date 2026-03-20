@@ -1,20 +1,28 @@
 <script setup lang="ts">
 import { liabilityTypes } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
+import type { CustomLiability } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import strings from '@milaboratories/strings';
-import type { PlRef } from '@platforma-sdk/model';
+import type { ImportFileHandle, LocalImportFileHandle, PlRef } from '@platforma-sdk/model';
 import { getRawPlatformaInstance } from '@platforma-sdk/model';
 import {
+  PlAccordionSection,
   PlAgDataTableV2,
   PlAlert,
   PlBlockPage,
   PlBtnGhost,
+  PlBtnSecondary,
+  PlCheckbox,
+  PlDropdown,
   PlDropdownMulti,
   PlDropdownRef,
+  PlElementList,
+  PlFileInput,
   PlMaskIcon24,
   PlSlideModal,
+  PlTextField,
+  PlTooltip,
   usePlDataTableSettingsV2,
 } from '@platforma-sdk/ui-vue';
-import { asyncComputed } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
 import { useApp } from '../app';
 
@@ -31,29 +39,176 @@ const tableSettings = usePlDataTableSettingsV2({
 
 const settingsIsShown = ref(app.model.args.inputAnchor === undefined);
 
-// Auto-close settings panel when block starts running
 watch(
   () => app.model.outputs.isRunning,
   (isRunning, wasRunning) => {
-    // Close settings when block starts running (false -> true transition)
     if (isRunning && !wasRunning) {
       settingsIsShown.value = false;
     }
   },
 );
 
-const liabilityTypesModel = computed({
-  get: () => (app.model.args.liabilityTypes ?? []),
-  set: (value) => {
-    app.model.args.liabilityTypes = value ?? [];
-  },
+// ── Predefined liabilities ────────────────────────────────────────────────────
+
+const predefinedSectionOpen = ref(false);
+
+const predefinedItems = computed(() => liabilityTypes.map((lt) => ({ ...lt })));
+
+function isLiabilityEnabled(item: (typeof liabilityTypes)[number]): boolean {
+  const disabled = app.model.args.disabledPredefinedLiabilities ?? [];
+  return !disabled.includes(item.value);
+}
+
+function toggleLiability(item: (typeof liabilityTypes)[number]): void {
+  const disabled = app.model.args.disabledPredefinedLiabilities ?? [];
+  if (disabled.includes(item.value)) {
+    app.model.args.disabledPredefinedLiabilities = disabled.filter((v) => v !== item.value);
+  } else {
+    app.model.args.disabledPredefinedLiabilities = [...disabled, item.value];
+  }
+}
+
+const fixabilityLabel: Record<string, string> = {
+  easily_fixable: 'Easy fix',
+  fixable: 'Fixable',
+  hard_to_fix: 'Hard to fix',
+  structural: 'Structural',
+};
+
+// ── Custom liabilities ────────────────────────────────────────────────────────
+
+const regionOptions = [
+  { value: 'CDR1', label: 'CDR1' },
+  { value: 'CDR2', label: 'CDR2' },
+  { value: 'CDR3', label: 'CDR3' },
+  { value: 'FR1', label: 'FR1' },
+  { value: 'FR2', label: 'FR2' },
+  { value: 'FR3', label: 'FR3' },
+];
+
+const riskLevelOptions = [
+  { value: 'Low', label: 'Low' },
+  { value: 'Medium', label: 'Medium' },
+  { value: 'High', label: 'High' },
+];
+
+const fixabilityOptions = [
+  { value: 'easily_fixable', label: 'Easy fix' },
+  { value: 'fixable', label: 'Fixable' },
+  { value: 'hard_to_fix', label: 'Hard to fix' },
+];
+
+const customItems = computed({
+  get: () => app.model.args.customLiabilities ?? [],
+  set: (value) => { app.model.args.customLiabilities = value; },
 });
 
-const isEmpty = asyncComputed(async () => {
-  if (app.model.outputs.liabilitiesRiskTable === undefined) return undefined;
-  return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.liabilitiesRiskTable)).rows === 0;
-});
+const expandedIndices = ref<Set<number>>(new Set());
 
+function addCustomLiability(): void {
+  const current = app.model.args.customLiabilities ?? [];
+  const newItem: CustomLiability = {
+    name: '',
+    pattern: '',
+    riskLevel: 'Medium',
+    fixability: 'fixable',
+    regions: ['CDR1', 'CDR2', 'CDR3'],
+  };
+  expandedIndices.value = new Set([...expandedIndices.value, current.length]);
+  app.model.args.customLiabilities = [...current, newItem];
+}
+
+function removeCustomLiability(index: number): void {
+  const current = [...(app.model.args.customLiabilities ?? [])];
+  current.splice(index, 1);
+  const next = new Set<number>();
+  for (const i of expandedIndices.value) {
+    if (i < index) next.add(i);
+    else if (i > index) next.add(i - 1);
+  }
+  expandedIndices.value = next;
+  app.model.args.customLiabilities = current;
+}
+
+function toggleExpanded(index: number): void {
+  const next = new Set(expandedIndices.value);
+  if (next.has(index)) next.delete(index);
+  else next.add(index);
+  expandedIndices.value = next;
+}
+
+function isPatternValid(pattern: string): boolean {
+  if (!pattern) return false;
+  try {
+    new RegExp(pattern);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isDuplicateName(index: number): boolean {
+  const items = app.model.args.customLiabilities ?? [];
+  const name = items[index]?.name;
+  if (!name) return false;
+  return items.some((item, i) => i !== index && item.name === name);
+}
+
+// ── Export / Import custom liabilities ───────────────────────────────────────
+
+function exportCustomLiabilities(): void {
+  const data = JSON.stringify(app.model.args.customLiabilities ?? [], null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'custom-liabilities.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const importFileHandle = ref<ImportFileHandle | undefined>(undefined);
+const importError = ref<string | undefined>(undefined);
+
+watch(importFileHandle, async (handle) => {
+  importError.value = undefined;
+  if (!handle) return;
+  let data: unknown;
+  try {
+    const bytes = await getRawPlatformaInstance().lsDriver.getLocalFileContent(handle as LocalImportFileHandle);
+    data = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    importError.value = 'Failed to read file — ensure it is valid JSON';
+    return;
+  }
+  if (!Array.isArray(data)) {
+    importError.value = 'Invalid format: expected a JSON array';
+    return;
+  }
+  const names = (data as CustomLiability[]).map((item) => item.name);
+  if (names.length !== new Set(names).size) {
+    importError.value = 'Duplicate names in imported liabilities';
+    return;
+  }
+  for (const item of data as CustomLiability[]) {
+    if (!item.name || !item.pattern) {
+      importError.value = 'Each liability must have a name and pattern';
+      return;
+    }
+    try {
+      new RegExp(item.pattern);
+    } catch {
+      importError.value = `Invalid regex: "${item.pattern}"`;
+      return;
+    }
+    if (!item.regions || item.regions.length === 0) {
+      importError.value = `"${item.name}" must have at least one region`;
+      return;
+    }
+  }
+  app.model.args.customLiabilities = data as CustomLiability[];
+  importFileHandle.value = undefined;
+});
 </script>
 
 <template>
@@ -88,15 +243,129 @@ const isEmpty = asyncComputed(async () => {
       required
       @update:model-value="setInput"
     />
-    <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
-      <template #title>Empty dataset selection</template>
-      The input dataset you have selected is empty.
-      Please choose a different dataset.
+
+    <!-- Predefined liabilities section (R12): collapsible, collapsed by default -->
+    <PlAccordionSection label="Predefined liabilities" v-model="predefinedSectionOpen">
+      <PlCheckbox
+        :model-value="app.model.args.usePredefinedLiabilities ?? true"
+        @update:model-value="(v) => (app.model.args.usePredefinedLiabilities = v)"
+      >
+        Use predefined liabilities
+      </PlCheckbox>
+
+      <!-- Predefined list: grayed out when disabled -->
+      <div
+        :style="{
+          opacity: (app.model.args.usePredefinedLiabilities ?? true) ? 1 : 0.4,
+          pointerEvents: (app.model.args.usePredefinedLiabilities ?? true) ? 'auto' : 'none',
+          transition: 'opacity 0.2s',
+        }"
+      >
+        <PlElementList
+          :items="predefinedItems"
+          :get-item-key="(item) => item.value"
+          :is-toggled="(item) => !isLiabilityEnabled(item)"
+          :on-toggle="(item) => toggleLiability(item)"
+          :is-removable="() => false"
+          :disable-dragging="true"
+        >
+          <template #item-title="{ item }">
+            {{ item.label }}
+            <span :style="{ fontSize: '11px', opacity: 0.6, marginLeft: '6px' }">
+              {{ item.riskLevel }} · {{ fixabilityLabel[item.fixability] }}
+            </span>
+          </template>
+        </PlElementList>
+      </div>
+    </PlAccordionSection>
+
+    <!-- Warn when no liabilities are active (R13a) — shown outside the collapsible so always visible -->
+    <PlAlert
+      v-if="!app.model.args.usePredefinedLiabilities && (app.model.args.customLiabilities?.length ?? 0) === 0"
+      type="warn"
+    >
+      No liabilities active — all sequences will pass without scoring.
     </PlAlert>
-    <PlDropdownMulti v-model="liabilityTypesModel" label="Liability types" :options="liabilityTypes" >
-      <template #tooltip>
-        Select the liability types to include in the analysis.
+
+    <!-- Custom liabilities -->
+    <PlElementList
+      v-model:items="customItems"
+      :get-item-key="(item, index) => index"
+      :is-expanded="(_item, index) => expandedIndices.has(index)"
+      :on-expand="(_item, index) => toggleExpanded(index)"
+      :is-removable="() => true"
+      :on-remove="(_item, index) => removeCustomLiability(index)"
+      :disable-dragging="true"
+    >
+      <template #item-title="{ item }">
+        {{ item.name || 'New custom liability' }}
       </template>
-    </PlDropdownMulti>
+      <template #item-content="{ index }">
+        <PlTextField
+          v-model="customItems[index].name"
+          label="Name"
+          placeholder="e.g. Aspartate Isomerization"
+          :error="isDuplicateName(index) ? 'Name must be unique' : undefined"
+        />
+        <PlTooltip position="top">
+          <PlTextField
+            v-model="customItems[index].pattern"
+            label="Pattern (regex)"
+            placeholder="e.g. DG"
+            :error="customItems[index].pattern && !isPatternValid(customItems[index].pattern) ? 'Invalid regular expression' : undefined"
+          />
+          <template #tooltip>
+            <div>
+              <code>DG</code> — exact dipeptide<br>
+              <code>[ST]</code> — character class (S or T)<br>
+              <code>[^P]</code> — negated class (not P)<br>
+              <code>N[GS]</code> — N followed by G or S
+            </div>
+          </template>
+        </PlTooltip>
+        <PlDropdown
+          v-model="customItems[index].riskLevel"
+          label="Risk level"
+          :options="riskLevelOptions"
+        />
+        <PlTooltip position="top">
+          <PlDropdown
+            v-model="customItems[index].fixability"
+            label="Fixability"
+            :options="fixabilityOptions"
+          />
+          <template #tooltip>
+            <div>
+              <b>Easy fix:</b> Single AA substitution, e.g. N→Q, M→L<br>
+              <b>Fixable:</b> 1–2 mutations needed, assess binding impact, e.g. D→E<br>
+              <b>Hard to fix:</b> Structural change, high functional risk, e.g. unpaired Cys
+            </div>
+          </template>
+        </PlTooltip>
+        <PlDropdownMulti
+          v-model="customItems[index].regions"
+          label="Regions"
+          :options="regionOptions"
+        />
+      </template>
+    </PlElementList>
+
+    <div :style="{ display: 'flex', gap: '8px', flexWrap: 'wrap' }">
+      <PlBtnSecondary icon="add" @click="addCustomLiability">
+        Add custom liability
+      </PlBtnSecondary>
+      <PlBtnSecondary @click="exportCustomLiabilities">
+        Export
+      </PlBtnSecondary>
+    </div>
+
+    <!-- R16: File-picker import with SDK component + validation -->
+    <PlFileInput
+      v-model="importFileHandle"
+      label="Import custom liabilities"
+      :extensions="['json']"
+      :error="importError"
+      placeholder="Select JSON file"
+    />
   </PlSlideModal>
 </template>

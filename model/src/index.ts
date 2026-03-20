@@ -9,47 +9,84 @@ import {
 } from '@platforma-sdk/model';
 import { getDefaultBlockLabel } from './label';
 
+export type CustomLiability = {
+  name: string;
+  pattern: string;
+  riskLevel: 'Low' | 'Medium' | 'High';
+  fixability: 'easily_fixable' | 'fixable' | 'hard_to_fix';
+  regions: string[];
+};
+
 export type BlockArgs = {
   defaultBlockLabel: string;
   customBlockLabel: string;
   inputAnchor?: PlRef;
-  liabilityTypes?: string[];
+  usePredefinedLiabilities?: boolean;
+  disabledPredefinedLiabilities?: string[];
+  customLiabilities?: CustomLiability[];
 };
 
 export type UiState = {
   tableState: PlDataTableStateV2;
 };
 
-export const liabilityTypes = [
-  { value: 'Deamidation (N[GS])', label: 'Deamidation (N[GS])' },
-  { value: 'Fragmentation (DP)', label: 'Fragmentation (DP)' },
-  { value: 'Isomerization (D[DGHST])', label: 'Isomerization (D[DGHST])' },
-  { value: 'N-linked Glycosylation (N[^P][ST])', label: 'N-linked Glycosylation (N[^P][ST])' },
-  { value: 'Deamidation (N[AHNT])', label: 'Deamidation (N[AHNT])' },
-  { value: 'Hydrolysis (NP)', label: 'Hydrolysis (NP)' },
-  { value: 'Fragmentation (TS)', label: 'Fragmentation (TS)' },
-  { value: 'Tryptophan Oxidation (W)', label: 'Tryptophan Oxidation (W)' },
-  { value: 'Methionine Oxidation (M)', label: 'Methionine Oxidation (M)' },
-  { value: 'Deamidation ([STK]N)', label: 'Deamidation ([STK]N)' },
-  { value: 'Missing Cysteines', label: 'Missing Cysteines' },
-  { value: 'Extra Cysteines', label: 'Extra Cysteines' },
+export const liabilityTypes: {
+  value: string;
+  label: string;
+  riskLevel: 'Low' | 'Medium' | 'High';
+  fixability: 'easily_fixable' | 'fixable' | 'hard_to_fix' | 'structural';
+  enabledByDefault: boolean;
+}[] = [
+  { value: 'Deamidation (N[GS])', label: 'Deamidation (N[GS])', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Fragmentation (DP)', label: 'Fragmentation (DP)', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Isomerization (D[DGHST])', label: 'Isomerization (D[DGHST])', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'N-linked Glycosylation (N[^P][ST])', label: 'N-linked Glycosylation (N[^P][ST])', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Deamidation (N[AHNT])', label: 'Deamidation (N[AHNT])', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Hydrolysis (NP)', label: 'Hydrolysis (NP)', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Fragmentation (TS)', label: 'Fragmentation (TS)', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Tryptophan Oxidation (W)', label: 'Tryptophan Oxidation (W)', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Methionine Oxidation (M)', label: 'Methionine Oxidation (M)', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Deamidation ([STK]N)', label: 'Deamidation ([STK]N)', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Integrin binding', label: 'Integrin binding', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: false },
+  { value: 'Missing Cysteines', label: 'Missing Cysteines', riskLevel: 'High', fixability: 'structural', enabledByDefault: true },
+  { value: 'Extra Cysteines', label: 'Extra Cysteines', riskLevel: 'High', fixability: 'hard_to_fix', enabledByDefault: true },
 ];
 
 export const model = BlockModel.create()
   .withArgs<BlockArgs>({
     defaultBlockLabel: getDefaultBlockLabel({
-      liabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
+      usePredefinedLiabilities: true,
+      disabledPredefinedLiabilities: liabilityTypes.filter((l) => !l.enabledByDefault).map((l) => l.value),
       allLiabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
     }),
     customBlockLabel: '',
-    liabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
+    usePredefinedLiabilities: true,
+    disabledPredefinedLiabilities: liabilityTypes.filter((l) => !l.enabledByDefault).map((l) => l.value),
+    customLiabilities: [],
   })
 
   .withUiState<UiState>({
     tableState: createPlDataTableStateV2(),
   })
 
-  .argsValid((ctx) => ctx.args.inputAnchor !== undefined)
+  .argsValid((ctx) => {
+    if (ctx.args.inputAnchor === undefined) return false;
+    const predefinedNames = new Set(liabilityTypes.map((l) => l.value));
+    const customs = ctx.args.customLiabilities ?? [];
+    const customNames = customs.map((c) => c.name);
+    if (customNames.length !== new Set(customNames).size) return false;
+    for (const c of customs) {
+      if (!c.name || !c.pattern) return false;
+      if (predefinedNames.has(c.name)) return false;
+      try {
+        new RegExp(c.pattern);
+      } catch {
+        return false;
+      }
+      if (!c.regions || c.regions.length === 0) return false;
+    }
+    return true;
+  })
 
   .output('inputOptions', (ctx) =>
     ctx.resultPool.getOptions([{
@@ -77,18 +114,6 @@ export const model = BlockModel.create()
       pCols,
       ctx.uiState.tableState,
     );
-  })
-
-  .output('liabilitiesRiskTable', (ctx) => {
-    const pCols = ctx.outputs?.resolve('outputLiabilities')?.getPColumns();
-    if (pCols === undefined) {
-      return undefined;
-    }
-    const riskColumn = pCols.find((p) => p.spec.name === 'pl7.app/vdj/liabilitiesRisk');
-    if (riskColumn === undefined) {
-      return undefined;
-    }
-    return ctx.createPTable({ columns: [riskColumn] });
   })
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)

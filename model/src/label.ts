@@ -10,6 +10,7 @@ const abbreviations: Record<string, string> = {
   'Tryptophan Oxidation (W)': 'TrpOx',
   'Methionine Oxidation (M)': 'MetOx',
   'Deamidation ([STK]N)': 'Deam([STK]N)',
+  'Integrin binding': 'IntBind',
   'Missing Cysteines': 'MissCys',
   'Extra Cysteines': 'ExtraCys',
 };
@@ -31,15 +32,22 @@ const fragTypes = new Set([
 ]);
 
 export function getDefaultBlockLabel(data: {
-  liabilityTypes: string[];
+  usePredefinedLiabilities: boolean;
+  disabledPredefinedLiabilities: string[];
   allLiabilityTypes: string[];
 }) {
-  const selectedTypes = data.liabilityTypes;
+  if (!data.usePredefinedLiabilities) {
+    return '';
+  }
+
+  const disabledSet = new Set(data.disabledPredefinedLiabilities ?? []);
+  const selectedTypes = data.allLiabilityTypes.filter((t) => !disabledSet.has(t));
+
   if (!selectedTypes || selectedTypes.length === 0) {
     return '';
   }
 
-  // If all liability types are selected, show "All"
+  // If all liability types are selected (nothing disabled), show "All"
   if (selectedTypes.length === data.allLiabilityTypes.length) {
     return 'All';
   }

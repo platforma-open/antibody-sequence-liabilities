@@ -22,7 +22,8 @@ type AppModel = ReturnType<typeof useApp>['model'];
 function syncDefaultBlockLabel(model: AppModel) {
   watchEffect(() => {
     model.args.defaultBlockLabel = getDefaultBlockLabel({
-      liabilityTypes: model.args.liabilityTypes ?? [],
+      usePredefinedLiabilities: model.args.usePredefinedLiabilities ?? true,
+      disabledPredefinedLiabilities: model.args.disabledPredefinedLiabilities ?? [],
       allLiabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
     });
   });
