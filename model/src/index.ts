@@ -33,23 +33,24 @@ export type UiState = {
 export const liabilityTypes: {
   value: string;
   label: string;
+  pattern: string;
   riskLevel: 'Low' | 'Medium' | 'High';
   fixability: 'easily_fixable' | 'fixable' | 'hard_to_fix' | 'structural';
   enabledByDefault: boolean;
 }[] = [
-  { value: 'Deamidation (N[GS])', label: 'Deamidation (N[GS])', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
-  { value: 'Fragmentation (DP)', label: 'Fragmentation (DP)', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
-  { value: 'Isomerization (D[DGHST])', label: 'Isomerization (D[DGHST])', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
-  { value: 'N-linked Glycosylation (N[^P][ST])', label: 'N-linked Glycosylation (N[^P][ST])', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
-  { value: 'Deamidation (N[AHNT])', label: 'Deamidation (N[AHNT])', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
-  { value: 'Hydrolysis (NP)', label: 'Hydrolysis (NP)', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true },
-  { value: 'Fragmentation (TS)', label: 'Fragmentation (TS)', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true },
-  { value: 'Tryptophan Oxidation (W)', label: 'Tryptophan Oxidation (W)', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
-  { value: 'Methionine Oxidation (M)', label: 'Methionine Oxidation (M)', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
-  { value: 'Deamidation ([STK]N)', label: 'Deamidation ([STK]N)', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: true },
-  { value: 'Integrin binding', label: 'Integrin binding', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: false },
-  { value: 'Missing Cysteines', label: 'Missing Cysteines', riskLevel: 'High', fixability: 'structural', enabledByDefault: true },
-  { value: 'Extra Cysteines', label: 'Extra Cysteines', riskLevel: 'High', fixability: 'hard_to_fix', enabledByDefault: true },
+  { value: 'Deamidation (N[GS])', label: 'Deamidation (N[GS])', pattern: 'N[GS]', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Fragmentation (DP)', label: 'Fragmentation (DP)', pattern: 'DP', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Isomerization (D[DGHST])', label: 'Isomerization (D[DGHST])', pattern: 'D[DGHST]', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'N-linked Glycosylation (N[^P][ST])', label: 'N-linked Glycosylation (N[^P][ST])', pattern: 'N[^P][ST]', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Deamidation (N[AHNT])', label: 'Deamidation (N[AHNT])', pattern: 'N[AHNT]', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Hydrolysis (NP)', label: 'Hydrolysis (NP)', pattern: 'NP', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Fragmentation (TS)', label: 'Fragmentation (TS)', pattern: 'TS', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true },
+  { value: 'Tryptophan Oxidation (W)', label: 'Tryptophan Oxidation (W)', pattern: 'W', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Methionine Oxidation (M)', label: 'Methionine Oxidation (M)', pattern: 'M', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Deamidation ([STK]N)', label: 'Deamidation ([STK]N)', pattern: '[STK]N', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: true },
+  { value: 'Integrin binding', label: 'Integrin binding', pattern: 'RGD|RYD|KGD|NGR|LDV|DGE|GPR', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: false },
+  { value: 'Missing Cysteines', label: 'Missing Cysteines', pattern: '—', riskLevel: 'High', fixability: 'structural', enabledByDefault: true },
+  { value: 'Extra Cysteines', label: 'Extra Cysteines', pattern: '—', riskLevel: 'High', fixability: 'hard_to_fix', enabledByDefault: true },
 ];
 
 export const model = BlockModel.create()

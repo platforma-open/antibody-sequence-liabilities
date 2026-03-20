@@ -601,8 +601,8 @@ def main():
                 pl.col(liab_col)
                 .cast(pl.Utf8)
                 .map_elements(
-                    lambda l_str, cfm=combined_fixability_map: classify_risk(
-                        l_str, active_cdr_defs, active_cys_defs, set(active_extra_defs.keys()), cfm
+                    lambda l_str, cfm=combined_fixability_map, rlm=combined_risk_level_map: classify_risk(
+                        l_str, active_cdr_defs, active_cys_defs, set(active_extra_defs.keys()), cfm, rlm
                     ),
                     return_dtype=pl.Utf8,
                     skip_nulls=False,
