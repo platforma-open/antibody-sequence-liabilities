@@ -24,7 +24,6 @@ self.body(func(args) {
     isSingleCell := params.isSingleCell
     coveredFeatures := params.coveredFeatures
     hasAnnotations := params.hasAnnotations
-    liabilityTypes := params.liabilityTypes
     newMapping := json.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
 
@@ -38,29 +37,86 @@ self.body(func(args) {
 		}
 	]
 
-	discreteValues := string(json.encode(["None", "Low", "Medium", "High"]))
+	perRegionDiscreteValues := string(json.encode(["None", "Low", "Medium", "High"]))
 
 	liabilityColumns := []
 
-    // Define the output columns - starting with the overall liabilities risk
+    // Define the output columns - starting with the four global classification columns
     liabilityColumns += [
 		{
-			column: "Liabilities risk",
-			id: "liabilitiesRisk",
+			column: "Is Productive",
+			id: "isProductive",
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/liabilitiesRisk",
+				name: "pl7.app/vdj/isProductive",
 				valueType: "String",
 				annotations: {
-					"pl7.app/label": "Liabilities risk",
-					"pl7.app/isDiscreteFilter": "true",
-            		"pl7.app/discreteValues": discreteValues,
+					"pl7.app/label": "Is Productive",
 					"pl7.app/isScore": "true",
-					"pl7.app/score/rankValues": "decreasing",
+					"pl7.app/isDiscreteFilter": "true",
+					"pl7.app/discreteValues": string(json.encode(["Pass", "Fail"])),
+					"pl7.app/score/rankingOrder": "decreasing",
+					"pl7.app/score/defaultCutoff": string(json.encode(["Pass"])),
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "102"
+				}
+			}
+		},
+		{
+			column: "Structural liabilities",
+			id: "structuralLiabilities",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/structuralLiabilities",
+				valueType: "String",
+				annotations: {
+					"pl7.app/label": "Structural liabilities",
+					"pl7.app/isScore": "true",
+					"pl7.app/isDiscreteFilter": "true",
+					"pl7.app/discreteValues": string(json.encode(["None", "Present"])),
+					"pl7.app/score/rankingOrder": "decreasing",
 					"pl7.app/score/defaultCutoff": string(json.encode(["None"])),
 					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "101"
+				}
+			}
+		},
+		{
+			column: "Developability risk",
+			id: "developabilityRisk",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/developabilityRisk",
+				valueType: "String",
+				annotations: {
+					"pl7.app/label": "Developability risk",
+					"pl7.app/isScore": "true",
+					"pl7.app/isDiscreteFilter": "true",
+					"pl7.app/discreteValues": string(json.encode(["None", "Low", "Medium", "High"])),
+					"pl7.app/score/rankingOrder": "decreasing",
+					"pl7.app/score/defaultCutoff": string(json.encode(["None", "Low", "Medium"])),
+					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "100"
+				}
+			}
+		},
+		{
+			column: "Developability score",
+			id: "developabilityScore",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/developabilityScore",
+				valueType: "Double",
+				annotations: {
+					"pl7.app/label": "Developability score",
+					"pl7.app/isScore": "true",
+					"pl7.app/score/rankingOrder": "increasing",
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "99"
 				}
 			}
 		},
@@ -117,8 +173,9 @@ self.body(func(args) {
 					annotations: {
 						"pl7.app/label": f_name + " Risk",
 						"pl7.app/table/visibility": "default",
+						"pl7.app/isScore": "true",
 						"pl7.app/isDiscreteFilter": "true",
-						"pl7.app/discreteValues": discreteValues,
+						"pl7.app/discreteValues": perRegionDiscreteValues,
 						"pl7.app/table/orderPriority": string(orderPriorityBase - 1)
 					}
 				}
@@ -230,13 +287,7 @@ self.body(func(args) {
 		}
 	}
 
-    columns := []
-
-    if len(liabilityTypes) > 0 {
-        columns = liabilityColumns + sequenceColumns
-    } else {
-        columns = sequenceColumns
-    }
+    columns := liabilityColumns + sequenceColumns
 
 
 
@@ -297,18 +348,6 @@ self.body(func(args) {
 		label: blockLabel,
 		id: blockId
 	}]
-
-	// Add individual trace steps for each liability type with decreasing importance
-	importance := 29
-	for liabilityType in liabilityTypes {
-		traceSteps += [{
-			type: "milaboratories.antibody-sequence-liabilities/" + text.to_lower(text.re_replace(" ", liabilityType , "-")),
-			importance: importance,
-			label: liabilityType,
-			id: blockId
-		}]
-		importance -= 1
-	}
 
 	// Create the trace with all steps. Spread operator is used to pass the trace steps as individual arguments.
 	liabilityTrace := pSpec.makeTrace(datasetSpec, traceSteps...)

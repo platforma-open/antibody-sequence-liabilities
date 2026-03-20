@@ -68,9 +68,6 @@ wf.body(func(args) {
 	annotations := columnsWithSequences.getColumns("annotations")
 	additionalSequences := columnsWithSequences.getColumns("additionalSequences")
 	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
-	liabilityTypes := args.liabilityTypes
-
-
 	// Determine if we're working with single cell data
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
 
@@ -185,8 +182,10 @@ wf.body(func(args) {
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
 		table: seqTable,
 		mapping: hasAnnotations ? annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"] : undefined,
-		liabilityTypes: liabilityTypes,
-		numberingSchema: numberingSchema
+		numberingSchema: numberingSchema,
+		customLiabilities: args.customLiabilities,
+		usePredefinedLiabilities: args.usePredefinedLiabilities,
+		disabledPredefinedLiabilities: args.disabledPredefinedLiabilities
 	})
 
 	liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
@@ -204,8 +203,7 @@ wf.body(func(args) {
 			datasetSpec: datasetSpec,
 			isSingleCell: isSingleCell,
 			coveredFeatures: features,
-			hasAnnotations: hasAnnotations,
-			liabilityTypes: liabilityTypes
+			hasAnnotations: hasAnnotations
 		})
 	})
 

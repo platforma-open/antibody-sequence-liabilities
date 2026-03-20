@@ -9,23 +9,55 @@ import polars as pl
 from polars.exceptions import ShapeError
 
 # Liability Definitions
+# Format: name → (pattern, risk_level, fixability)
 ORIG_CDR_LIABILITIES = {
-    "Deamidation (N[GS])": (r"N[GS]", "High"),
-    "Fragmentation (DP)": (r"DP", "High"),
-    "Isomerization (D[DGHST])": (r"D[DGHST]", "High"),
-    "N-linked Glycosylation (N[^P][ST])": (r"N[^P][ST]", "High"),
-    "Deamidation (N[AHNT])": (r"N[AHNT]", "Medium"),
-    "Hydrolysis (NP)": (r"NP", "Medium"),
-    "Fragmentation (TS)": (r"TS", "Medium"),
-    "Tryptophan Oxidation (W)": (r"W", "Medium"),
-    "Methionine Oxidation (M)": (r"M", "Medium"),
-    "Deamidation ([STK]N)": (r"[STK]N", "Low"),
+    "Deamidation (N[GS])": (r"N[GS]", "High", "fixable"),
+    "Fragmentation (DP)": (r"DP", "High", "fixable"),
+    "Isomerization (D[DGHST])": (r"D[DGHST]", "High", "fixable"),
+    "N-linked Glycosylation (N[^P][ST])": (r"N[^P][ST]", "High", "fixable"),
+    "Deamidation (N[AHNT])": (r"N[AHNT]", "Medium", "easily_fixable"),
+    "Hydrolysis (NP)": (r"NP", "Medium", "fixable"),
+    "Fragmentation (TS)": (r"TS", "Medium", "fixable"),
+    "Tryptophan Oxidation (W)": (r"W", "Medium", "easily_fixable"),
+    "Methionine Oxidation (M)": (r"M", "Medium", "easily_fixable"),
+    "Deamidation ([STK]N)": (r"[STK]N", "Low", "easily_fixable"),
+    "Integrin binding": (r"RGD|RYD|KGD|NGR|LDV|DGE|GPR", "Low", "easily_fixable"),
 }
+# Format: name → pattern  (fixability is always "disqualifying")
 ORIG_EXTRA_PATTERNS = {
     "Contains stop codon": r"\*",
     "Out of frame": r"_",
 }
-ORIG_CYS_LIABILITIES = {"Missing Cysteines": "High", "Extra Cysteines": "High"}
+# Format: name → (risk_level, fixability)
+ORIG_CYS_LIABILITIES = {
+    "Missing Cysteines": ("High", "structural"),
+    "Extra Cysteines": ("High", "hard_to_fix"),
+}
+
+# Unified fixability lookup for all predefined liabilities
+FIXABILITY_MAP: dict[str, str] = {name: fixability for name, (_pat, _risk, fixability) in ORIG_CDR_LIABILITIES.items()}
+FIXABILITY_MAP.update({name: "disqualifying" for name in ORIG_EXTRA_PATTERNS})
+FIXABILITY_MAP.update({name: fixability for name, (_risk, fixability) in ORIG_CYS_LIABILITIES.items()})
+
+# Engineering burden weights (used in compute_developability_score)
+FIXABILITY_WEIGHTS: dict[str, float] = {
+    "easily_fixable": 1.0,
+    "fixable": 3.0,
+    "hard_to_fix": 8.0,
+    "structural": 20.0,
+    "disqualifying": 0.0,
+}
+REGION_WEIGHTS: dict[str, float] = {
+    "CDR3": 1.5,
+    "CDR1": 1.2,
+    "CDR2": 1.2,
+    "FR1": 1.0,
+    "FR2": 0.5,
+    "FR3": 0.5,
+    "FR4": 0.3,
+}
+
+_ENGINEERING_FIXABILITIES = {"fixable", "easily_fixable"}
 # Usage of EXPECTED_CYS_BASE will have to be modified if you add more than one nucleotide coordinate
 # Coordinates are added in 0-based index
 EXPECTED_CYS_BASE = {"FR1": [21, 22], "FR2": [], "FR3": [], "CDR1": [], "CDR2": [], "CDR3": [0]}
@@ -119,7 +151,8 @@ def get_active_liability_definitions(user_requested_set: set):
         return {}, {}, {}, {}
     active_cdr_l = {n: d for n, d in ORIG_CDR_LIABILITIES.items() if n in user_requested_set}
     active_extra_p = {n: p for n, p in ORIG_EXTRA_PATTERNS.items() if n in user_requested_set}
-    active_cys_l = {n: r for n, r in ORIG_CYS_LIABILITIES.items() if n in user_requested_set}
+    active_cys_l = {n: d for n, d in ORIG_CYS_LIABILITIES.items() if n in user_requested_set}
+    # active_liability_regex: name → pattern (CDR patterns + extra patterns)
     active_liability_r = {**{nm: details[0] for nm, details in active_cdr_l.items()}, **active_extra_p}
     return active_cdr_l, active_extra_p, active_cys_l, active_liability_r
 
@@ -148,19 +181,19 @@ def identify_liabilities(
     active_extra_defs: dict,
     active_cys_defs: dict,
     expected_cys_map: dict,
-    debug_col_name: str = "N/A",
+    active_custom_defs: dict | None = None,
 ) -> str:
     if not seq or not isinstance(seq, str) or not seq.strip():
         return "Unknown"
 
     liabilities_found = []
 
-    # General "extra" patterns (applied to all regions first)
+    # Disqualifying patterns applied to all regions first
     for name, pattern in active_extra_defs.items():
         if re.search(pattern, seq):
-            liabilities_found.append(name)  # Duplicates removed by set() later
+            liabilities_found.append(name)
 
-    # Region-specific logic
+    # Region-specific predefined logic
     if region == "FR1":
         if active_cys_defs:
             expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map)
@@ -172,21 +205,19 @@ def identify_liabilities(
                     liabilities_found.append("Extra Cysteines")
 
     elif region.startswith("CDR"):
-        # Handle Tryptophan Oxidation (W) first due to its specific logic for CDR3 vs other CDRs
+        # Tryptophan Oxidation: suppress terminal W in CDR3
         w_oxidation_name = "Tryptophan Oxidation (W)"
         if w_oxidation_name in active_cdr_defs:
             pattern_to_use_for_w = r"W(?!$)" if region == "CDR3" else active_cdr_defs[w_oxidation_name][0]
             if re.search(pattern_to_use_for_w, seq):
                 liabilities_found.append(w_oxidation_name)
 
-        # Apply other active_cdr_defs for CDRs (excluding W, which was handled above)
-        for name, (pattern, _) in active_cdr_defs.items():
-            if name == w_oxidation_name:  # Already processed
+        for name, (pattern, *_rest) in active_cdr_defs.items():
+            if name == w_oxidation_name:
                 continue
             if re.search(pattern, seq):
                 liabilities_found.append(name)
 
-        # Cysteine checks for CDRs (if defined in EXPECTED_CYS and active)
         if active_cys_defs:
             expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map)
             if should_check:
@@ -196,7 +227,7 @@ def identify_liabilities(
                 if "Extra Cysteines" in active_cys_defs and extra_cys:
                     liabilities_found.append("Extra Cysteines")
 
-    elif region.startswith("FR"):  # For other FRs (FR2, FR3, FR4)
+    elif region.startswith("FR"):  # FR2, FR3, FR4
         if active_cys_defs:
             expected_positions, expected_count, should_check = _get_expected_cys_positions(region, expected_cys_map)
             if should_check:
@@ -206,52 +237,133 @@ def identify_liabilities(
                 if "Extra Cysteines" in active_cys_defs and extra_cys:
                     liabilities_found.append("Extra Cysteines")
 
-    final_liabs_found_str = ", ".join(sorted(list(set(liabilities_found)))) if liabilities_found else "None"
-    return final_liabs_found_str
+    # Custom liabilities: only applied if the current region is in their regions list
+    if active_custom_defs:
+        for name, custom_def in active_custom_defs.items():
+            if region in custom_def["regions"]:
+                if re.search(custom_def["pattern"], seq):
+                    liabilities_found.append(name)
+
+    return ", ".join(sorted(set(liabilities_found))) if liabilities_found else "None"
 
 
 # Other helper functions
 def classify_risk(
-    liabilities_str: str, active_cdr_defs: dict, active_cys_defs: dict, active_extra_pattern_names: set
+    liabilities_str: str,
+    active_cdr_defs: dict,
+    active_cys_defs: dict,
+    active_extra_pattern_names: set,
+    fixability_map: dict[str, str],
 ) -> str:
+    """Per-region engineering risk — counts fixable and easily_fixable liabilities only."""
     if not liabilities_str or liabilities_str == "None" or not isinstance(liabilities_str, str):
         return "None"
     items = [item.strip() for item in liabilities_str.split(",")]
-    current_max_risk_level = 0
-    risk_map = {"None": 0, "Low": 1, "Medium": 2, "High": 3}
-    level_to_risk = {v: k for k, v in risk_map.items()}
+    risk_num = {"None": 0, "Low": 1, "Medium": 2, "High": 3}
+    level_to_risk = {v: k for k, v in risk_num.items()}
+    current_max = 0
     for item in items:
+        if fixability_map.get(item) not in _ENGINEERING_FIXABILITIES:
+            continue  # Disqualifying, structural, and hard_to_fix excluded from per-region risk
         if item in active_cys_defs:
-            item_risk_str = active_cys_defs[item]
-            if risk_map[item_risk_str] > current_max_risk_level:
-                current_max_risk_level = risk_map[item_risk_str]
-            if current_max_risk_level == risk_map["High"]:
-                return "High"
+            item_risk = active_cys_defs[item][0]  # (risk_level, fixability)
+        elif item in active_cdr_defs:
+            item_risk = active_cdr_defs[item][1]  # (pattern, risk_level, fixability)
+        elif item in active_extra_pattern_names:
+            item_risk = "High"
+        else:
             continue
-        if item in active_cdr_defs:
-            item_risk_str = active_cdr_defs[item][1]
-            if risk_map[item_risk_str] > current_max_risk_level:
-                current_max_risk_level = risk_map[item_risk_str]
-            if current_max_risk_level == risk_map["High"]:
-                return "High"
-            continue
-        if item in active_extra_pattern_names:
-            if risk_map["High"] > current_max_risk_level:
-                current_max_risk_level = risk_map["High"]
-            if current_max_risk_level == risk_map["High"]:
-                return "High"
-    return level_to_risk[current_max_risk_level]
+        level = risk_num.get(item_risk, 0)
+        if level > current_max:
+            current_max = level
+        if current_max == 3:
+            return "High"
+    return level_to_risk[current_max]
 
 
-def overall_risk_func(row_struct: dict) -> str:
-    risk_values = [str(v).strip() for v in row_struct.values() if v is not None]
-    if "High" in risk_values:
-        return "High"
-    if "Medium" in risk_values:
-        return "Medium"
-    if "Low" in risk_values:
-        return "Low"
+def _build_risk_level_map(active_cdr_defs: dict, active_cys_defs: dict) -> dict[str, str]:
+    """Build a liability_name → risk_level lookup from active predefined definitions."""
+    risk_map = {}
+    for name, (_pat, risk, *_rest) in active_cdr_defs.items():
+        risk_map[name] = risk
+    for name, (risk, _fix) in active_cys_defs.items():
+        risk_map[name] = risk
+    return risk_map
+
+
+# ---------------------------------------------------------------------------
+# Fixability-aware classification functions (M1)
+# ---------------------------------------------------------------------------
+
+
+def _parse_liability_names(liabs_str: str) -> list[str]:
+    """Parse comma-separated liability string to a list of names, excluding None/Unknown."""
+    if not liabs_str or liabs_str in ("None", "Unknown"):
+        return []
+    return [name.strip() for name in liabs_str.split(",") if name.strip() not in ("", "None", "Unknown")]
+
+
+def classify_is_productive(region_to_liabs: dict[str, str], fixability_map: dict[str, str]) -> str:
+    """Fail if any disqualifying liability is found in any region."""
+    for liabs_str in region_to_liabs.values():
+        for name in _parse_liability_names(str(liabs_str) if liabs_str else "None"):
+            if fixability_map.get(name) == "disqualifying":
+                return "Fail"
+    return "Pass"
+
+
+def classify_structural_risk(region_to_liabs: dict[str, str], fixability_map: dict[str, str]) -> str:
+    """Present if any structural or hard_to_fix liability is found in any region."""
+    for liabs_str in region_to_liabs.values():
+        for name in _parse_liability_names(str(liabs_str) if liabs_str else "None"):
+            if fixability_map.get(name) in {"structural", "hard_to_fix"}:
+                return "Present"
     return "None"
+
+
+def classify_developability_risk(
+    region_to_liabs: dict[str, str],
+    fixability_map: dict[str, str],
+    risk_level_map: dict[str, str],
+) -> str:
+    """Max risk level across fixable and easily_fixable liabilities only."""
+    risk_order = {"None": 0, "Low": 1, "Medium": 2, "High": 3}
+    level_to_risk = {v: k for k, v in risk_order.items()}
+    current_max = 0
+    for liabs_str in region_to_liabs.values():
+        for name in _parse_liability_names(str(liabs_str) if liabs_str else "None"):
+            if fixability_map.get(name) not in _ENGINEERING_FIXABILITIES:
+                continue
+            risk = risk_level_map.get(name)
+            if risk:
+                level = risk_order.get(risk, 0)
+                if level > current_max:
+                    current_max = level
+                if current_max == 3:
+                    return "High"
+    return level_to_risk[current_max]
+
+
+def compute_developability_score(
+    col_to_liabs: dict[str, str],
+    fixability_map: dict[str, str],
+) -> float:
+    """Engineering burden: sum of fixability_weight × region_weight for all non-disqualifying liabilities.
+
+    Keys in col_to_liabs may be pure region names ('CDR3') or full column names
+    ('Heavy CDR1 aa liabilities'). The region weight is extracted from the key.
+    """
+    total = 0.0
+    for col_name, liabs_str in col_to_liabs.items():
+        region_match = re.search(r"\b(CDR[1-3]|FR[1-4])\b", col_name, re.IGNORECASE)
+        region = region_match.group(1).upper() if region_match else col_name
+        region_w = REGION_WEIGHTS.get(region, 0.5)
+        for name in _parse_liability_names(str(liabs_str) if liabs_str else "None"):
+            fix = fixability_map.get(name)
+            if fix == "disqualifying":
+                continue
+            total += FIXABILITY_WEIGHTS.get(fix, 0.0) * region_w
+    return total
 
 
 def _combine_heavy_light_prefixed_columns(
@@ -451,36 +563,87 @@ def main():
         type=str,
         help="Optional numbering schema name (e.g., imgt, kabat, chothia) to adjust conserved cysteine coordinates.",
     )
+    p.add_argument(
+        "--custom-liabilities",
+        type=str,
+        help="Path to a JSON file containing an array of custom liability definitions.",
+    )
+    p.add_argument(
+        "--use-predefined-liabilities",
+        type=str,
+        default="true",
+        help="Whether to apply predefined liability definitions (default: true).",
+    )
+    p.add_argument(
+        "--disabled-predefined-liabilities",
+        type=str,
+        help="Path to a JSON file containing an array of predefined liability names to disable.",
+    )
     args = p.parse_args()
 
-    CALCULATE_LIABILITIES = args.include_liabilities is not None
-    USER_REQUESTED_LIABILITIES = set()
-    if CALCULATE_LIABILITIES:
+    use_predefined = str(args.use_predefined_liabilities).strip().lower() not in ("false", "0", "no")
+
+    # When --include-liabilities is absent, default to all predefined names.
+    # The exclude-list (--disabled-predefined-liabilities) then trims specific entries.
+    CALCULATE_LIABILITIES = True
+    if args.include_liabilities is not None:
         raw_names = args.include_liabilities.split(",")
         USER_REQUESTED_LIABILITIES = {name.strip() for name in raw_names if name.strip()}
+    else:
+        USER_REQUESTED_LIABILITIES = (
+            set(ORIG_CDR_LIABILITIES) | set(ORIG_EXTRA_PATTERNS) | set(ORIG_CYS_LIABILITIES)
+        )
 
-    active_cdr_defs, active_extra_defs, active_cys_defs, active_liability_regex = get_active_liability_definitions(
-        USER_REQUESTED_LIABILITIES
-    )
+    if use_predefined:
+        active_cdr_defs, active_extra_defs, active_cys_defs, active_liability_regex = get_active_liability_definitions(
+            USER_REQUESTED_LIABILITIES
+        )
+        # Apply disabled predefined liabilities
+        if args.disabled_predefined_liabilities:
+            try:
+                with open(args.disabled_predefined_liabilities) as f:
+                    disabled_names = set(json.load(f))
+                active_cdr_defs = {n: d for n, d in active_cdr_defs.items() if n not in disabled_names}
+                active_extra_defs = {n: p for n, p in active_extra_defs.items() if n not in disabled_names}
+                active_cys_defs = {n: d for n, d in active_cys_defs.items() if n not in disabled_names}
+                active_liability_regex = {n: p for n, p in active_liability_regex.items() if n not in disabled_names}
+            except Exception as e:
+                print(f"Warning: Could not load --disabled-predefined-liabilities: {e}", file=sys.stderr)
+    else:
+        active_cdr_defs, active_extra_defs, active_cys_defs, active_liability_regex = {}, {}, {}, {}
+
+    # Load custom liabilities
+    active_custom_defs: dict[str, dict] = {}
+    if args.custom_liabilities:
+        try:
+            with open(args.custom_liabilities) as f:
+                custom_list = json.load(f)
+            for entry in custom_list:
+                name = entry["name"]
+                active_custom_defs[name] = {
+                    "pattern": entry["pattern"],
+                    "riskLevel": entry["riskLevel"],
+                    "fixability": entry["fixability"],
+                    "regions": entry["regions"],
+                }
+        except Exception as e:
+            print(f"Warning: Could not load --custom-liabilities: {e}", file=sys.stderr)
 
     expected_cys_map = build_expected_cys_map(args.numbering_schema)
 
-    if CALCULATE_LIABILITIES:
-        if not (active_cdr_defs or active_extra_defs or active_cys_defs):
-            print(
-                "Warning: --include-liabilities provided, but no recognized liability names matched"
-                " internal definitions. No liabilities will be calculated."
-            )
-            CALCULATE_LIABILITIES = False
-            active_cdr_defs, active_extra_defs, active_cys_defs, active_liability_regex = {}, {}, {}, {}
-        else:
-            pass  # liability definitions already populated in active_cdr_defs, active_extra_defs, active_cys_defs
-    else:
+    if not (active_cdr_defs or active_extra_defs or active_cys_defs or active_custom_defs):
         print(
-            "Warning: --include-liabilities not provided or no recognized names."
-            " Liability and risk calculations will be skipped."
+            "Warning: no active liability definitions after applying predefined/disabled/custom settings."
+            " Liability calculations will be skipped."
         )
+        CALCULATE_LIABILITIES = False
         active_cdr_defs, active_extra_defs, active_cys_defs, active_liability_regex = {}, {}, {}, {}
+
+    # Build combined fixability and risk-level maps (predefined + custom)
+    combined_fixability_map = dict(FIXABILITY_MAP)
+    combined_fixability_map.update({name: d["fixability"] for name, d in active_custom_defs.items()})
+    combined_risk_level_map = _build_risk_level_map(active_cdr_defs, active_cys_defs)
+    combined_risk_level_map.update({name: d["riskLevel"] for name, d in active_custom_defs.items()})
 
     initial_region_map = {}
     if args.label_map:
@@ -730,14 +893,14 @@ def main():
                 pl.col(frag_seq_col)
                 .cast(pl.Utf8)
                 .map_elements(
-                    lambda s, fsc=frag_seq_col, crn=core_region_name: identify_liabilities(
+                    lambda s, crn=core_region_name: identify_liabilities(
                         s,
                         crn,
                         active_cdr_defs,
                         active_extra_defs,
                         active_cys_defs,
                         expected_cys_map,
-                        debug_col_name=fsc,
+                        active_custom_defs=active_custom_defs,
                     ),
                     return_dtype=pl.Utf8,
                     skip_nulls=False,
@@ -771,7 +934,9 @@ def main():
                 pl.col(liab_col)
                 .cast(pl.Utf8)
                 .map_elements(
-                    lambda l_str: classify_risk(l_str, active_cdr_defs, active_cys_defs, set(active_extra_defs.keys())),
+                    lambda l_str, cfm=combined_fixability_map: classify_risk(
+                        l_str, active_cdr_defs, active_cys_defs, set(active_extra_defs.keys()), cfm
+                    ),
                     return_dtype=pl.Utf8,
                     skip_nulls=False,
                 )
@@ -781,16 +946,56 @@ def main():
         if risk_expressions:
             df_processed = df_processed.with_columns(risk_expressions)
 
-        existing_risk_cols_for_struct = [c for c in generated_risk_col_names if c in df_processed.columns]
-        if existing_risk_cols_for_struct:
+        # Global classification columns: replace the old "Liabilities risk" with four new columns
+        liab_cols_for_global = [c for c in generated_liability_summary_col_names if c in df_processed.columns]
+        if liab_cols_for_global:
+            cfm = combined_fixability_map
+            rlm = combined_risk_level_map
             df_processed = df_processed.with_columns(
-                pl.struct([pl.col(c) for c in existing_risk_cols_for_struct])
-                .map_elements(overall_risk_func, return_dtype=pl.Utf8, skip_nulls=False)
-                .fill_null("None")
-                .alias("Liabilities risk")
+                [
+                    pl.struct(liab_cols_for_global)
+                    .map_elements(
+                        lambda row, _cfm=cfm: classify_is_productive(row, _cfm),
+                        return_dtype=pl.Utf8,
+                        skip_nulls=False,
+                    )
+                    .fill_null("Pass")
+                    .alias("Is Productive"),
+                    pl.struct(liab_cols_for_global)
+                    .map_elements(
+                        lambda row, _cfm=cfm: classify_structural_risk(row, _cfm),
+                        return_dtype=pl.Utf8,
+                        skip_nulls=False,
+                    )
+                    .fill_null("None")
+                    .alias("Structural liabilities"),
+                    pl.struct(liab_cols_for_global)
+                    .map_elements(
+                        lambda row, _cfm=cfm, _rlm=rlm: classify_developability_risk(row, _cfm, _rlm),
+                        return_dtype=pl.Utf8,
+                        skip_nulls=False,
+                    )
+                    .fill_null("None")
+                    .alias("Developability risk"),
+                    pl.struct(liab_cols_for_global)
+                    .map_elements(
+                        lambda row, _cfm=cfm: compute_developability_score(row, _cfm),
+                        return_dtype=pl.Float64,
+                        skip_nulls=False,
+                    )
+                    .fill_null(0.0)
+                    .alias("Developability score"),
+                ]
             )
-        elif "Liabilities risk" not in df_processed.columns:
-            df_processed = df_processed.with_columns(pl.lit("None").cast(pl.Utf8).alias("Liabilities risk"))
+        else:
+            df_processed = df_processed.with_columns(
+                [
+                    pl.lit("Pass").cast(pl.Utf8).alias("Is Productive"),
+                    pl.lit("None").cast(pl.Utf8).alias("Structural liabilities"),
+                    pl.lit("None").cast(pl.Utf8).alias("Developability risk"),
+                    pl.lit(0.0).cast(pl.Float64).alias("Developability score"),
+                ]
+            )
 
         df_processed = _combine_heavy_light_prefixed_columns(df_processed, "risk")
         df_processed = _combine_heavy_light_prefixed_columns(df_processed, "liabilities")
@@ -826,10 +1031,6 @@ def main():
     combined_region_liabs, combined_region_risks = [], []
 
     overall_summary_cols = []  # Renamed from overall_liab_risk_col for clarity
-    print(
-        f"DEBUG: CALCULATE_LIABILITIES={CALCULATE_LIABILITIES}, df_processed.width={df_processed.width}",
-        file=sys.stderr,
-    )
     if CALCULATE_LIABILITIES:
         if df_processed.width > 0:  # Normal case - find existing columns
             all_liab_cols = [c for c in df_processed.columns if c.endswith(" liabilities")]
@@ -838,9 +1039,7 @@ def main():
             individual_frag_liabs = sorted(
                 [c for c in all_liab_cols if " aa liabilities" in c.lower() and c != "Sequence liabilities summary"]
             )
-            individual_frag_risks = sorted(
-                [c for c in all_risk_cols if " aa risk" in c.lower() and c != "Liabilities risk"]
-            )
+            individual_frag_risks = sorted([c for c in all_risk_cols if " aa risk" in c.lower()])
 
             combined_chain_liabs = sorted(
                 [
@@ -857,13 +1056,14 @@ def main():
                 ]
             )
 
+            _global_cols = {"Is Productive", "Structural liabilities", "Developability risk", "Developability score"}
             combined_region_liabs = sorted(
                 [
                     c
                     for c in all_liab_cols
                     if c not in individual_frag_liabs
                     and c not in combined_chain_liabs
-                    and c.lower() != "liabilities risk"
+                    and c not in _global_cols
                     and c != "Sequence liabilities summary"
                 ]
             )
@@ -871,61 +1071,48 @@ def main():
                 [
                     c
                     for c in all_risk_cols
-                    if c not in individual_frag_risks
-                    and c not in combined_chain_risks
-                    and c.lower() != "liabilities risk"
+                    if c not in individual_frag_risks and c not in combined_chain_risks and c not in _global_cols
                 ]
             )
 
-            # Build the overall_summary_cols list for output ordering
-            if "Liabilities risk" in df_processed.columns:
-                overall_summary_cols.append("Liabilities risk")
+            # Build overall_summary_cols: 4 new global columns + sequence summary
+            _new_global = [
+                c
+                for c in ["Is Productive", "Structural liabilities", "Developability risk", "Developability score"]
+                if c in df_processed.columns
+            ]
+            overall_summary_cols = _new_global
             if "Sequence liabilities summary" in df_processed.columns:
-                if "Liabilities risk" in overall_summary_cols:  # Try to place it after "Liabilities risk"
-                    try:
-                        idx = overall_summary_cols.index("Liabilities risk")
-                        overall_summary_cols.insert(idx + 1, "Sequence liabilities summary")
-                    except ValueError:  # Should not happen
-                        overall_summary_cols.append("Sequence liabilities summary")
-                else:  # No "Liabilities risk" column, just append
-                    overall_summary_cols.append("Sequence liabilities summary")
+                overall_summary_cols = overall_summary_cols + ["Sequence liabilities summary"]
         else:  # Empty input case - generate expected column names
-            # For empty input, always generate bulk columns (standard liability and risk columns)
             expected_regions = ["CDR1", "CDR2", "CDR3", "FR1"]
             for region in expected_regions:
                 individual_frag_liabs.append(f"{region} aa liabilities")
                 individual_frag_risks.append(f"{region} aa risk")
-
-            # Add summary columns
-            overall_summary_cols = ["Liabilities risk", "Sequence liabilities summary"]
-
-            # Sort the generated columns
             individual_frag_liabs = sorted(individual_frag_liabs)
             individual_frag_risks = sorted(individual_frag_risks)
-    else:  # If liabilities not calculated, ensure summary columns are not accidentally included
-        if "Liabilities risk" in df_processed.columns and "Liabilities risk" not in output_cols_core:
-            # If user wants it even without calc, they'd need to specify it or it's a pre-existing column to keep
-            pass  # For now, only add if CALCULATE_LIABILITIES is true for generated ones.
-        if (
-            "Sequence liabilities summary" in df_processed.columns
-            and "Sequence liabilities summary" not in output_cols_core
-        ):
-            pass
-
-        # For empty input without liabilities, still generate expected bulk columns
+            overall_summary_cols = [
+                "Is Productive",
+                "Structural liabilities",
+                "Developability risk",
+                "Developability score",
+                "Sequence liabilities summary",
+            ]
+    else:  # Liabilities not calculated
         if df_processed.width == 0:
-            # Generate expected liability and risk columns for empty input (even without calculating)
             expected_regions = ["CDR1", "CDR2", "CDR3", "FR1"]
             for region in expected_regions:
                 individual_frag_liabs.append(f"{region} aa liabilities")
                 individual_frag_risks.append(f"{region} aa risk")
-
-            # Add summary columns
-            overall_summary_cols = ["Liabilities risk", "Sequence liabilities summary"]
-
-            # Sort the generated columns
             individual_frag_liabs = sorted(individual_frag_liabs)
             individual_frag_risks = sorted(individual_frag_risks)
+            overall_summary_cols = [
+                "Is Productive",
+                "Structural liabilities",
+                "Developability risk",
+                "Developability score",
+                "Sequence liabilities summary",
+            ]
 
     output_cols_ordered = list(
         dict.fromkeys(
@@ -940,22 +1127,11 @@ def main():
             + combined_chain_risks
             + overall_summary_cols
         )
-    )  # <-- "Sequence liabilities summary" and "Liabilities risk" included here
-
-    print(f"DEBUG: Column generation - output_cols_core={output_cols_core}", file=sys.stderr)
-    print(f"DEBUG: Column generation - final_annotation_cols={final_annotation_cols}", file=sys.stderr)
-    print(f"DEBUG: Column generation - final_cdr3_seq_cols={final_cdr3_seq_cols}", file=sys.stderr)
-    print(f"DEBUG: Column generation - individual_frag_liabs={individual_frag_liabs}", file=sys.stderr)
-    print(f"DEBUG: Column generation - overall_summary_cols={overall_summary_cols}", file=sys.stderr)
+    )
 
     # For empty input or when no liabilities calculated, force generation of all expected bulk columns
     # Check if we have insufficient columns (only core + annotations, no liability/risk columns)
     has_insufficient_columns = len(output_cols_ordered) <= 2
-    print(
-        f"DEBUG: has_insufficient_columns={has_insufficient_columns},"
-        f" len(output_cols_ordered)={len(output_cols_ordered)}",
-        file=sys.stderr,
-    )
 
     if df_processed.width == 0 or (not CALCULATE_LIABILITIES and has_insufficient_columns):
         # Force generate all expected bulk columns
@@ -981,7 +1157,10 @@ def main():
                 "CDR2 aa risk",
                 "CDR3 aa risk",
                 "FR1 aa risk",
-                "Liabilities risk",
+                "Is Productive",
+                "Structural liabilities",
+                "Developability risk",
+                "Developability score",
                 "Sequence liabilities summary",
             ]
         )
@@ -989,18 +1168,11 @@ def main():
         # Create missing columns with empty/default values
         missing_columns = [c for c in expected_bulk_columns if c not in df_processed.columns]
         if missing_columns:
-            print(f"DEBUG: Creating missing columns: {missing_columns}", file=sys.stderr)
             # Add empty columns for missing ones
             for col in missing_columns:
                 df_processed = df_processed.with_columns(pl.lit("").alias(col))
 
         output_cols_existing = expected_bulk_columns
-        print(
-            f"DEBUG: Forcing bulk columns. df_processed.width={df_processed.width},"
-            f" CALCULATE_LIABILITIES={CALCULATE_LIABILITIES}",
-            file=sys.stderr,
-        )
-        print(f"DEBUG: All expected bulk columns: {output_cols_existing}", file=sys.stderr)
     else:
         output_cols_existing = [c for c in output_cols_ordered if c in df_processed.columns]
 
