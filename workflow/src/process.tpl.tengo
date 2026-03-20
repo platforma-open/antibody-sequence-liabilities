@@ -98,7 +98,7 @@ self.body(func(args) {
 					"pl7.app/discreteValues": string(json.encode(["None", "Low", "Medium", "High"])),
 					"pl7.app/isScore": "true",
 					"pl7.app/score/rankingOrder": "decreasing",
-					"pl7.app/score/defaultCutoff": string(json.encode(["None", "Low"])),
+					"pl7.app/score/defaultCutoff": string(json.encode(["None", "Low", "Medium"])),
 					"pl7.app/table/visibility": "default",
 					"pl7.app/table/orderPriority": "100"
 				}

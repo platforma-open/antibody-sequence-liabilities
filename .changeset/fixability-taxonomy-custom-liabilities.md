@@ -13,7 +13,7 @@ The old "Liabilities risk" column is replaced with four columns:
 - **Is Productive** (Pass/Fail) — fails only for disqualifying issues: stop codons and out-of-frame sequences
 - **Structural liabilities** (None/Present) — structural (missing Cys) and hard-to-fix (extra Cys) issues
 - **Developability risk** (None/Low/Medium/High) — max riskLevel of fixable/easily-fixable liabilities
-- **Developability score** (Float) — weighted sum of fixability_weight × region_weight
+- **Developability score** (Double) — weighted sum of fixability_weight × region_weight
 
 Predefined liability configuration changes from opt-in (`liabilityTypes`) to opt-out (`usePredefinedLiabilities` + `disabledPredefinedLiabilities`). Integrin binding is added as a new predefined liability, off by default. Fixability classifications updated: Deamidation (N[GS]) and other High-risk patterns are now `fixable` (surfacing in Developability risk), Extra Cysteines changed from `structural` to `hard_to_fix`.
 
