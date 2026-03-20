@@ -59,7 +59,7 @@ self.body(func(args) {
 					"pl7.app/score/rankingOrder": "decreasing",
 					"pl7.app/score/defaultCutoff": string(json.encode(["Pass"])),
 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "102"
+					"pl7.app/table/orderPriority": "150"
 				}
 			}
 		},
@@ -79,7 +79,7 @@ self.body(func(args) {
 					"pl7.app/score/rankingOrder": "decreasing",
 					"pl7.app/score/defaultCutoff": string(json.encode(["None"])),
 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "101"
+					"pl7.app/table/orderPriority": "140"
 				}
 			}
 		},
@@ -99,7 +99,7 @@ self.body(func(args) {
 					"pl7.app/score/rankingOrder": "decreasing",
 					"pl7.app/score/defaultCutoff": string(json.encode(["None", "Low", "Medium"])),
 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "100"
+					"pl7.app/table/orderPriority": "130"
 				}
 			}
 		},
@@ -116,7 +116,8 @@ self.body(func(args) {
 					"pl7.app/isScore": "true",
 					"pl7.app/score/rankingOrder": "increasing",
 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "99"
+					"pl7.app/table/orderPriority": "120",
+					"pl7.app/format": ".2~f"
 				}
 			}
 		},
@@ -132,7 +133,7 @@ self.body(func(args) {
 					"pl7.app/label": "Sequence liabilities summary",
 					"pl7.app/isSummary": "true",
 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "101"
+					"pl7.app/table/orderPriority": "110"
 				}
 			}
 		}
