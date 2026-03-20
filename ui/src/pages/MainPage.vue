@@ -84,6 +84,7 @@ const regionOptions = [
   { value: 'FR1', label: 'FR1' },
   { value: 'FR2', label: 'FR2' },
   { value: 'FR3', label: 'FR3' },
+  { value: 'FR4', label: 'FR4' },
 ];
 
 const riskLevelOptions = [
@@ -245,7 +246,7 @@ watch(importFileHandle, async (handle) => {
     />
 
     <!-- Predefined liabilities section (R12): collapsible, collapsed by default -->
-    <PlAccordionSection label="Predefined liabilities" v-model="predefinedSectionOpen">
+    <PlAccordionSection v-model="predefinedSectionOpen" label="Predefined liabilities">
       <PlCheckbox
         :model-value="app.model.args.usePredefinedLiabilities ?? true"
         @update:model-value="(v) => (app.model.args.usePredefinedLiabilities = v)"
@@ -307,13 +308,12 @@ watch(importFileHandle, async (handle) => {
           placeholder="e.g. Aspartate Isomerization"
           :error="isDuplicateName(index) ? 'Name must be unique' : undefined"
         />
-        <PlTooltip position="top">
-          <PlTextField
-            v-model="customItems[index].pattern"
-            label="Pattern (regex)"
-            placeholder="e.g. DG"
-            :error="customItems[index].pattern && !isPatternValid(customItems[index].pattern) ? 'Invalid regular expression' : undefined"
-          />
+        <PlTextField
+          v-model="customItems[index].pattern"
+          label="Pattern (regex)"
+          placeholder="e.g. DG"
+          :error="customItems[index].pattern && !isPatternValid(customItems[index].pattern) ? 'Invalid regular expression' : undefined"
+        >
           <template #tooltip>
             <div>
               <code>DG</code> — exact dipeptide<br>
@@ -322,7 +322,7 @@ watch(importFileHandle, async (handle) => {
               <code>N[GS]</code> — N followed by G or S
             </div>
           </template>
-        </PlTooltip>
+        </PlTextField>
         <PlDropdown
           v-model="customItems[index].riskLevel"
           label="Risk level"
@@ -336,9 +336,9 @@ watch(importFileHandle, async (handle) => {
           />
           <template #tooltip>
             <div>
-              <b>Easy fix:</b> Single AA substitution, e.g. N→Q, M→L<br>
-              <b>Fixable:</b> 1–2 mutations needed, assess binding impact, e.g. D→E<br>
-              <b>Hard to fix:</b> Structural change, high functional risk, e.g. unpaired Cys
+              <b>Easy fix:</b> Single conservative substitution, minimal binding impact (e.g. Met oxidation, Trp oxidation)<br>
+              <b>Fixable:</b> 1–2 mutations needed, moderate affinity risk (e.g. Deamidation N[GS], Fragmentation DP)<br>
+              <b>Hard to fix:</b> Requires significant reengineering (e.g. Extra Cysteines)
             </div>
           </template>
         </PlTooltip>
