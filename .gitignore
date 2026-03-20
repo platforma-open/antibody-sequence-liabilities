@@ -9,6 +9,7 @@ log/
 .turbo
 vite.config.*.timestamp-*
 .DS_Store
+.coverage
 
 # Python caches
 __pycache__/
