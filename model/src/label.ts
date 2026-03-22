@@ -1,4 +1,3 @@
-// Abbreviations for liability types
 const abbreviations: Record<string, string> = {
   'Deamidation (N[GS])': 'Deam(N[GS])',
   'Fragmentation (DP)': 'Frag(DP)',
@@ -15,7 +14,6 @@ const abbreviations: Record<string, string> = {
   'Extra Cysteines': 'ExtraCys',
 };
 
-// PTM types
 const ptmTypes = new Set([
   'Deamidation (N[GS])',
   'Isomerization (D[DGHST])',
@@ -24,7 +22,6 @@ const ptmTypes = new Set([
   'Methionine Oxidation (M)',
 ]);
 
-// Fragmentation types
 const fragTypes = new Set([
   'Fragmentation (DP)',
   'Hydrolysis (NP)',
@@ -40,10 +37,10 @@ export function getDefaultBlockLabel(data: {
     return '';
   }
 
-  const disabledSet = new Set(data.disabledPredefinedLiabilities ?? []);
+  const disabledSet = new Set(data.disabledPredefinedLiabilities);
   const selectedTypes = data.allLiabilityTypes.filter((t) => !disabledSet.has(t));
 
-  if (!selectedTypes || selectedTypes.length === 0) {
+  if (selectedTypes.length === 0) {
     return '';
   }
 
@@ -53,13 +50,9 @@ export function getDefaultBlockLabel(data: {
   }
 
   const selectedSet = new Set(selectedTypes);
-  // Check if all selected types are PTM types
   const allSelectedArePTM = selectedTypes.every((t) => ptmTypes.has(t));
-  // Check if all PTM types are selected
   const allPTMSelected = Array.from(ptmTypes).every((t) => selectedSet.has(t));
-  // Check if all selected types are Frag types
   const allSelectedAreFrag = selectedTypes.every((t) => fragTypes.has(t));
-  // Check if all Frag types are selected
   const allFragSelected = Array.from(fragTypes).every((t) => selectedSet.has(t));
 
   if (allPTMSelected && allFragSelected) {

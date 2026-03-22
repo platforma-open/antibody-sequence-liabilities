@@ -1,4 +1,4 @@
-import { getDefaultBlockLabel, liabilityTypes, model } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
+import { allLiabilityTypeValues, getDefaultBlockLabel, model } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import { defineApp } from '@platforma-sdk/ui-vue';
 import { watchEffect } from 'vue';
 import MainPage from './pages/MainPage.vue';
@@ -24,7 +24,7 @@ function syncDefaultBlockLabel(model: AppModel) {
     model.args.defaultBlockLabel = getDefaultBlockLabel({
       usePredefinedLiabilities: model.args.usePredefinedLiabilities ?? true,
       disabledPredefinedLiabilities: model.args.disabledPredefinedLiabilities ?? [],
-      allLiabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
+      allLiabilityTypes: allLiabilityTypeValues,
     });
   });
 }
