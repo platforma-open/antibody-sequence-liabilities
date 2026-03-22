@@ -2,8 +2,7 @@
 import { liabilityTypes } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import type { CustomLiability } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import strings from '@milaboratories/strings';
-import type { ImportFileHandle, LocalImportFileHandle, PlRef } from '@platforma-sdk/model';
-import { getRawPlatformaInstance } from '@platforma-sdk/model';
+import type { PlRef } from '@platforma-sdk/model';
 import {
   PlAccordionSection,
   PlAgDataTableV2,
@@ -21,6 +20,7 @@ import {
   PlSlideModal,
   PlTextField,
   PlTooltip,
+  ReactiveFileContent,
   usePlDataTableSettingsV2,
 } from '@platforma-sdk/ui-vue';
 import { computed, ref, watch } from 'vue';
@@ -182,52 +182,67 @@ function exportCustomLiabilities(): void {
   URL.revokeObjectURL(url);
 }
 
-const importFileHandle = ref<ImportFileHandle | undefined>(undefined);
 const importError = ref<string | undefined>(undefined);
 
-watch(importFileHandle, async (handle) => {
+const reactiveFileContent = ReactiveFileContent.useGlobal();
+
+const importedFileBytes = computed(() => {
+  const handle = app.model.outputs.importedFile;
+  if (!handle) return undefined;
+  return reactiveFileContent.getContentBytes(handle.handle).value;
+});
+
+watch(importedFileBytes, (bytes) => {
+  if (bytes === undefined) return;
+  if (app.model.args.importFileHandle === undefined) return;
+
   importError.value = undefined;
-  if (!handle) return;
   let data: unknown;
   try {
-    const bytes = await getRawPlatformaInstance().lsDriver.getLocalFileContent(handle as LocalImportFileHandle);
     data = JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     importError.value = 'Failed to read file — ensure it is valid JSON';
+    app.model.args.importFileHandle = undefined;
     return;
   }
   if (!Array.isArray(data)) {
     importError.value = 'Invalid format: expected a JSON array';
+    app.model.args.importFileHandle = undefined;
     return;
   }
   const names = (data as CustomLiability[]).map((item) => item.name);
   if (names.length !== new Set(names).size) {
     importError.value = 'Duplicate names in imported liabilities';
+    app.model.args.importFileHandle = undefined;
     return;
   }
   const predefinedCollision = names.find((n) => predefinedNameSet.has(n));
   if (predefinedCollision) {
     importError.value = `"${predefinedCollision}" collides with a predefined liability name`;
+    app.model.args.importFileHandle = undefined;
     return;
   }
   for (const item of data as CustomLiability[]) {
     if (!item.name || !item.pattern) {
       importError.value = 'Each liability must have a name and pattern';
+      app.model.args.importFileHandle = undefined;
       return;
     }
     try {
       new RegExp(item.pattern);
     } catch {
       importError.value = `Invalid regex: "${item.pattern}"`;
+      app.model.args.importFileHandle = undefined;
       return;
     }
     if (!item.regions || item.regions.length === 0) {
       importError.value = `"${item.name}" must have at least one region`;
+      app.model.args.importFileHandle = undefined;
       return;
     }
   }
   app.model.args.customLiabilities = data as CustomLiability[];
-  importFileHandle.value = undefined;
+  app.model.args.importFileHandle = undefined;
 });
 </script>
 
@@ -381,7 +396,7 @@ watch(importFileHandle, async (handle) => {
 
     <!-- R16: File-picker import with SDK component + validation -->
     <PlFileInput
-      v-model="importFileHandle"
+      v-model="app.model.args.importFileHandle"
       label="Import custom liabilities"
       :extensions="['json']"
       :error="importError"

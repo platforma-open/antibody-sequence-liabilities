@@ -14,6 +14,10 @@ json := import("json") // Import json module for encoding
 
 calculateLiabilitiesTpl := assets.importTemplate(":liabilities-calculation")
 processTpl := assets.importTemplate(":process")
+prerunTpl := assets.importTemplate(":prerun")
+
+wf.setPreRun(prerunTpl)
+
 // Prepare phase of the workflow - collects and sets up required data
 wf.prepare(func(args) {
 

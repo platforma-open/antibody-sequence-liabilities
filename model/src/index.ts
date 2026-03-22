@@ -1,4 +1,5 @@
 import type {
+  ImportFileHandle,
   PlDataTableStateV2,
   PlRef,
 } from '@platforma-sdk/model';
@@ -24,6 +25,7 @@ export type BlockArgs = {
   usePredefinedLiabilities?: boolean;
   disabledPredefinedLiabilities?: string[];
   customLiabilities?: CustomLiability[];
+  importFileHandle?: ImportFileHandle;
 };
 
 export type UiState = {
@@ -118,6 +120,25 @@ export const model = BlockModel.create()
   })
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
+
+  // SDK quirk: getImportProgress() registers each handle with the UploadDriver,
+  // triggering the actual file upload. Without this active output, the prerun
+  // never resolves and the blob is never uploaded.
+  .output('prerunFileImports', (ctx) => {
+    return Object.fromEntries(
+      ctx.prerun
+        ?.resolve({ field: 'fileImports', assertFieldType: 'Input' })
+        ?.mapFields(
+          (handle, acc) => [handle as ImportFileHandle, acc.getImportProgress()],
+          { skipUnresolved: true },
+        ) ?? [],
+    );
+  }, { isActive: true })
+
+  // Blob handle for the uploaded file, readable by ReactiveFileContent in the UI
+  .retentiveOutput('importedFile', (ctx) =>
+    ctx.prerun?.resolveAny({ field: 'importedFile' })?.getFileHandle(),
+  )
 
   .title(() => 'Antibody Sequence Liabilities')
 
