@@ -124,9 +124,10 @@ export const model = BlockModel.create()
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
 
-  // SDK quirk: getImportProgress() registers each handle with the UploadDriver,
-  // triggering the actual file upload. Without this active output, the prerun
-  // never resolves and the blob is never uploaded.
+  // isActive forces this output to be evaluated even when nothing subscribes to it.
+  // That evaluation is what drives the file upload: getImportProgress() causes the
+  // underlying context to begin the upload for each pending ImportFileHandle.
+  // Without isActive, the output is never rendered and the prerun never resolves.
   .output('prerunFileImports', (ctx) => {
     return Object.fromEntries(
       ctx.prerun
