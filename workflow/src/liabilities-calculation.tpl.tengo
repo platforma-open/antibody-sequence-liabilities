@@ -58,7 +58,6 @@ self.body(func(args) {
 
 	liabilitiesResult := liabilitiesCalcCmd.run()
 
-	// Get the results from the calculation
 	result := liabilitiesResult.getFile("result.tsv")
 	
 	newMapping := liabilitiesResult.getFileContent("output.json")

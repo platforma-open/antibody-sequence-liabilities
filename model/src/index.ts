@@ -55,16 +55,20 @@ export const liabilityTypes: {
   { value: 'Extra Cysteines', label: 'Extra Cysteines', pattern: '—', riskLevel: 'High', fixability: 'hard_to_fix', enabledByDefault: true },
 ];
 
+const defaultDisabled = liabilityTypes.filter((l) => !l.enabledByDefault).map((l) => l.value);
+const allLiabilityTypeValues = liabilityTypes.map((l) => l.value);
+const predefinedLiabilityNames = new Set(allLiabilityTypeValues);
+
 export const model = BlockModel.create()
   .withArgs<BlockArgs>({
     defaultBlockLabel: getDefaultBlockLabel({
       usePredefinedLiabilities: true,
-      disabledPredefinedLiabilities: liabilityTypes.filter((l) => !l.enabledByDefault).map((l) => l.value),
-      allLiabilityTypes: liabilityTypes.map((liabilityType) => liabilityType.value),
+      disabledPredefinedLiabilities: defaultDisabled,
+      allLiabilityTypes: allLiabilityTypeValues,
     }),
     customBlockLabel: '',
     usePredefinedLiabilities: true,
-    disabledPredefinedLiabilities: liabilityTypes.filter((l) => !l.enabledByDefault).map((l) => l.value),
+    disabledPredefinedLiabilities: defaultDisabled,
     customLiabilities: [],
   })
 
@@ -74,13 +78,12 @@ export const model = BlockModel.create()
 
   .argsValid((ctx) => {
     if (ctx.args.inputAnchor === undefined) return false;
-    const predefinedNames = new Set(liabilityTypes.map((l) => l.value));
     const customs = ctx.args.customLiabilities ?? [];
     const customNames = customs.map((c) => c.name);
     if (customNames.length !== new Set(customNames).size) return false;
     for (const c of customs) {
       if (!c.name || !c.pattern) return false;
-      if (predefinedNames.has(c.name)) return false;
+      if (predefinedLiabilityNames.has(c.name)) return false;
       try {
         new RegExp(c.pattern);
       } catch {
@@ -150,4 +153,5 @@ export const model = BlockModel.create()
 
   .done(2);
 
+export { allLiabilityTypeValues, predefinedLiabilityNames };
 export { getDefaultBlockLabel } from './label';

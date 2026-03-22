@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { liabilityTypes } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
+import { liabilityTypes, predefinedLiabilityNames } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import type { CustomLiability } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import strings from '@milaboratories/strings';
 import type { PlRef } from '@platforma-sdk/model';
@@ -52,7 +52,7 @@ watch(
 
 const predefinedSectionOpen = ref(false);
 
-const predefinedItems = computed(() => liabilityTypes.map((lt) => ({ ...lt })));
+const predefinedItems = liabilityTypes.map((lt) => ({ ...lt }));
 
 function isLiabilityEnabled(item: (typeof liabilityTypes)[number]): boolean {
   const disabled = app.model.args.disabledPredefinedLiabilities ?? [];
@@ -148,12 +148,10 @@ function isPatternValid(pattern: string): boolean {
   }
 }
 
-const predefinedNameSet = new Set(liabilityTypes.map((lt) => lt.value));
-
 function isPredefinedName(index: number): boolean {
   const name = (app.model.args.customLiabilities ?? [])[index]?.name;
   if (!name) return false;
-  return predefinedNameSet.has(name);
+  return predefinedLiabilityNames.has(name);
 }
 
 function isDuplicateName(index: number): boolean {
@@ -186,64 +184,73 @@ const importError = ref<string | undefined>(undefined);
 
 const reactiveFileContent = ReactiveFileContent.useGlobal();
 
+// Used as a loading sentinel: getContentJson returns undefined for both "still loading"
+// and "JSON parse failed". Watching bytes alongside data lets us tell the difference —
+// bytes being defined means the file is loaded; data being undefined at that point is a parse error.
 const importedFileBytes = computed(() => {
   const handle = app.model.outputs.importedFile;
   if (!handle) return undefined;
   return reactiveFileContent.getContentBytes(handle.handle).value;
 });
-
-watch(importedFileBytes, (bytes) => {
-  if (bytes === undefined) return;
-  if (app.model.args.importFileHandle === undefined) return;
-
-  importError.value = undefined;
-  let data: unknown;
-  try {
-    data = JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    importError.value = 'Failed to read file — ensure it is valid JSON';
-    app.model.args.importFileHandle = undefined;
-    return;
-  }
-  if (!Array.isArray(data)) {
-    importError.value = 'Invalid format: expected a JSON array';
-    app.model.args.importFileHandle = undefined;
-    return;
-  }
-  const names = (data as CustomLiability[]).map((item) => item.name);
-  if (names.length !== new Set(names).size) {
-    importError.value = 'Duplicate names in imported liabilities';
-    app.model.args.importFileHandle = undefined;
-    return;
-  }
-  const predefinedCollision = names.find((n) => predefinedNameSet.has(n));
-  if (predefinedCollision) {
-    importError.value = `"${predefinedCollision}" collides with a predefined liability name`;
-    app.model.args.importFileHandle = undefined;
-    return;
-  }
-  for (const item of data as CustomLiability[]) {
-    if (!item.name || !item.pattern) {
-      importError.value = 'Each liability must have a name and pattern';
-      app.model.args.importFileHandle = undefined;
-      return;
-    }
-    try {
-      new RegExp(item.pattern);
-    } catch {
-      importError.value = `Invalid regex: "${item.pattern}"`;
-      app.model.args.importFileHandle = undefined;
-      return;
-    }
-    if (!item.regions || item.regions.length === 0) {
-      importError.value = `"${item.name}" must have at least one region`;
-      app.model.args.importFileHandle = undefined;
-      return;
-    }
-  }
-  app.model.args.customLiabilities = data as CustomLiability[];
-  app.model.args.importFileHandle = undefined;
+const importedFileData = computed(() => {
+  const handle = app.model.outputs.importedFile;
+  if (!handle) return undefined;
+  return reactiveFileContent.getContentJson(handle.handle).value;
 });
+
+watch(
+  [importedFileBytes, importedFileData] as const,
+  ([bytes, data]) => {
+    if (bytes === undefined) return;
+    if (app.model.args.importFileHandle === undefined) return;
+
+    importError.value = undefined;
+
+    if (data === undefined) {
+      importError.value = 'Failed to read file — ensure it is valid JSON';
+      app.model.args.importFileHandle = undefined;
+      return;
+    }
+    if (!Array.isArray(data)) {
+      importError.value = 'Invalid format: expected a JSON array';
+      app.model.args.importFileHandle = undefined;
+      return;
+    }
+    const names = (data as CustomLiability[]).map((item) => item.name);
+    if (names.length !== new Set(names).size) {
+      importError.value = 'Duplicate names in imported liabilities';
+      app.model.args.importFileHandle = undefined;
+      return;
+    }
+    const predefinedCollision = names.find((n) => predefinedLiabilityNames.has(n));
+    if (predefinedCollision) {
+      importError.value = `"${predefinedCollision}" collides with a predefined liability name`;
+      app.model.args.importFileHandle = undefined;
+      return;
+    }
+    for (const item of data as CustomLiability[]) {
+      if (!item.name || !item.pattern) {
+        importError.value = 'Each liability must have a name and pattern';
+        app.model.args.importFileHandle = undefined;
+        return;
+      }
+      try {
+        new RegExp(item.pattern);
+      } catch {
+        importError.value = `Invalid regex: "${item.pattern}"`;
+        app.model.args.importFileHandle = undefined;
+        return;
+      }
+      if (!item.regions || item.regions.length === 0) {
+        importError.value = `"${item.name}" must have at least one region`;
+        app.model.args.importFileHandle = undefined;
+        return;
+      }
+    }
+    app.model.args.customLiabilities = data as CustomLiability[];
+    app.model.args.importFileHandle = undefined;
+  },
+);
 </script>
 
 <template>
