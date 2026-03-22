@@ -33,6 +33,40 @@ from scoring import (
 )
 
 
+def _is_productive_expr(liab_cols: list[str], fixability_map: dict[str, str]) -> pl.Expr:
+    """Return a Polars expression that evaluates to 'Fail'/'Pass' for each row.
+
+    'Fail' when any liability column contains the name of a disqualifying liability.
+    Uses vectorised str.contains + any_horizontal instead of per-row map_elements.
+    """
+    disqualifying = {name for name, fix in fixability_map.items() if fix == "disqualifying"}
+    conditions = [
+        pl.col(c).str.contains(name, literal=True)
+        for c in liab_cols
+        for name in disqualifying
+    ]
+    if not conditions:
+        return pl.lit("Pass")
+    return pl.when(pl.any_horizontal(conditions)).then(pl.lit("Fail")).otherwise(pl.lit("Pass"))
+
+
+def _structural_risk_expr(liab_cols: list[str], fixability_map: dict[str, str]) -> pl.Expr:
+    """Return a Polars expression that evaluates to 'Present'/'None' for each row.
+
+    'Present' when any liability column contains the name of a structural or hard_to_fix liability.
+    Uses vectorised str.contains + any_horizontal instead of per-row map_elements.
+    """
+    structural = {name for name, fix in fixability_map.items() if fix in {"structural", "hard_to_fix"}}
+    conditions = [
+        pl.col(c).str.contains(name, literal=True)
+        for c in liab_cols
+        for name in structural
+    ]
+    if not conditions:
+        return pl.lit("None")
+    return pl.when(pl.any_horizontal(conditions)).then(pl.lit("Present")).otherwise(pl.lit("None"))
+
+
 def _combine_heavy_light_prefixed_columns(
     df: pl.DataFrame, suffix: str, prefixes: tuple = ("Heavy", "Light")
 ) -> pl.DataFrame:
@@ -620,22 +654,8 @@ def main():
             rlm = combined_risk_level_map
             df_processed = df_processed.with_columns(
                 [
-                    pl.struct(liab_cols_for_global)
-                    .map_elements(
-                        lambda row, _cfm=cfm: classify_is_productive(row, _cfm),
-                        return_dtype=pl.Utf8,
-                        skip_nulls=False,
-                    )
-                    .fill_null("Pass")
-                    .alias("Is Productive"),
-                    pl.struct(liab_cols_for_global)
-                    .map_elements(
-                        lambda row, _cfm=cfm: classify_structural_risk(row, _cfm),
-                        return_dtype=pl.Utf8,
-                        skip_nulls=False,
-                    )
-                    .fill_null("None")
-                    .alias("Structural liabilities"),
+                    _is_productive_expr(liab_cols_for_global, cfm).alias("Is Productive"),
+                    _structural_risk_expr(liab_cols_for_global, cfm).alias("Structural liabilities"),
                     pl.struct(liab_cols_for_global)
                     .map_elements(
                         lambda row, _cfm=cfm, _rlm=rlm: classify_developability_risk(row, _cfm, _rlm),
