@@ -4,7 +4,7 @@ Covers the four new global output columns introduced in M2:
   - Is Productive
   - Structural liabilities
   - Developability risk
-  - Developability score
+  - Developability cost
 
 Also exercises --disabled-predefined-liabilities, --use-predefined-liabilities, and --custom-liabilities flags.
 
@@ -61,7 +61,7 @@ def test_clean_sequence_passes_all(tmp_path):
     assert r["Is Productive"] == "Pass"
     assert r["Structural liabilities"] == "None"
     assert r["Developability risk"] == "None"
-    assert r["Developability score"] == pytest.approx(0.0)
+    assert r["Developability cost"] == pytest.approx(0.0)
 
 
 def test_stop_codon_is_not_productive(tmp_path):
@@ -70,7 +70,7 @@ def test_stop_codon_is_not_productive(tmp_path):
     assert r["Is Productive"] == "Fail"
     assert r["Structural liabilities"] == "None"
     assert r["Developability risk"] == "None"
-    assert r["Developability score"] == pytest.approx(0.0)
+    assert r["Developability cost"] == pytest.approx(0.0)
 
 
 def test_out_of_frame_is_not_productive(tmp_path):
@@ -79,7 +79,7 @@ def test_out_of_frame_is_not_productive(tmp_path):
     assert r["Is Productive"] == "Fail"
     assert r["Structural liabilities"] == "None"
     assert r["Developability risk"] == "None"
-    assert r["Developability score"] == pytest.approx(0.0)
+    assert r["Developability cost"] == pytest.approx(0.0)
 
 
 def test_missing_cys_is_structural(tmp_path):
@@ -89,7 +89,7 @@ def test_missing_cys_is_structural(tmp_path):
     assert r["Structural liabilities"] == "Present"
     assert r["Developability risk"] == "None"
     # FR1 weight=1.0, structural fixability_weight=20.0
-    assert r["Developability score"] == pytest.approx(20.0)
+    assert r["Developability cost"] == pytest.approx(20.0)
 
 
 def test_extra_cys_is_structural(tmp_path):
@@ -99,7 +99,7 @@ def test_extra_cys_is_structural(tmp_path):
     assert r["Structural liabilities"] == "Present"
     assert r["Developability risk"] == "None"
     # CDR3 weight=1.5, hard_to_fix fixability_weight=8.0
-    assert r["Developability score"] == pytest.approx(12.0)
+    assert r["Developability cost"] == pytest.approx(12.0)
 
 
 def test_met_oxidation_cdr3_medium_risk(tmp_path):
@@ -109,7 +109,7 @@ def test_met_oxidation_cdr3_medium_risk(tmp_path):
     assert r["Structural liabilities"] == "None"
     assert r["Developability risk"] == "Medium"
     # CDR3 weight=1.5, easily_fixable weight=1.0
-    assert r["Developability score"] == pytest.approx(1.5)
+    assert r["Developability cost"] == pytest.approx(1.5)
 
 
 def test_ngs_cdr3_high_risk(tmp_path):
@@ -119,7 +119,7 @@ def test_ngs_cdr3_high_risk(tmp_path):
     assert r["Structural liabilities"] == "None"
     assert r["Developability risk"] == "High"
     # CDR3 weight=1.5, fixable weight=3.0
-    assert r["Developability score"] == pytest.approx(4.5)
+    assert r["Developability cost"] == pytest.approx(4.5)
 
 
 def test_ngs_and_met_combined_score(tmp_path):
@@ -131,7 +131,7 @@ def test_ngs_and_met_combined_score(tmp_path):
     assert r["Developability risk"] == "High"
     # CDR2 Met: easily_fixable(1.0) × CDR2_weight(1.2) = 1.2
     # CDR3 N[GS]: fixable(3.0) × CDR3_weight(1.5) = 4.5
-    assert r["Developability score"] == pytest.approx(5.7, abs=1e-9)
+    assert r["Developability cost"] == pytest.approx(5.7, abs=1e-9)
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +172,7 @@ def test_stop_codon_with_coexisting_fixable_liability(tmp_path):
     r = row(df, "clone_stop_and_met")
     assert r["Is Productive"] == "Fail"
     # Met oxidation in CDR3 (easily_fixable × CDR3_weight = 1.0 × 1.5 = 1.5)
-    assert r["Developability score"] == pytest.approx(1.5)
+    assert r["Developability cost"] == pytest.approx(1.5)
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +187,7 @@ def test_disabled_deamidation_clears_ngs_risk(tmp_path):
     r = row(df, "clone_ngs_cdr3")
     # Deamidation suppressed — no fixable liabilities remain
     assert r["Developability risk"] == "None"
-    assert r["Developability score"] == pytest.approx(0.0)
+    assert r["Developability cost"] == pytest.approx(0.0)
 
 
 def test_disabled_cys_clears_structural(tmp_path):
@@ -196,7 +196,7 @@ def test_disabled_cys_clears_structural(tmp_path):
     df = run_main(tmp_path, ["--disabled-predefined-liabilities", str(disabled)])
     r = row(df, "clone_missing_cys")
     assert r["Structural liabilities"] == "None"
-    assert r["Developability score"] == pytest.approx(0.0)
+    assert r["Developability cost"] == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -233,13 +233,13 @@ def test_custom_only_detects_ww_motif(tmp_path):
     assert "WW motif" in ww["CDR3 aa liabilities"]
     assert ww["Developability risk"] == "High"
     # CDR3 weight=1.5, fixable=3.0
-    assert ww["Developability score"] == pytest.approx(4.5)
+    assert ww["Developability cost"] == pytest.approx(4.5)
 
     # All other clones should be clean (no predefined, no WW)
     clean = row(df, "clone_clean")
     assert clean["Is Productive"] == "Pass"
     assert clean["Developability risk"] == "None"
-    assert clean["Developability score"] == pytest.approx(0.0)
+    assert clean["Developability cost"] == pytest.approx(0.0)
 
 
 def test_no_active_liabilities_emits_empty_columns(tmp_path):
@@ -257,7 +257,7 @@ def test_no_active_liabilities_emits_empty_columns(tmp_path):
         ],
     )
     # Columns are present (consistent output schema) but hold empty/null values
-    for col in ("Is Productive", "Structural liabilities", "Developability risk", "Developability score"):
+    for col in ("Is Productive", "Structural liabilities", "Developability risk", "Developability cost"):
         assert col in df.columns, f"Expected {col!r} to be present for consistent schema"
     r = row(df, "clone_clean")
     assert r["Is Productive"] in ("", None), "Expected empty value when no liabilities active"
@@ -345,7 +345,7 @@ def test_annotation_path_clean_sequence(tmp_path):
     assert r["Is Productive"] == "Pass"
     assert r["Structural liabilities"] == "None"
     assert r["Developability risk"] == "None"
-    assert r["Developability score"] == pytest.approx(0.0)
+    assert r["Developability cost"] == pytest.approx(0.0)
 
 
 def test_annotation_path_met_oxidation_cdr3(tmp_path):
@@ -356,7 +356,7 @@ def test_annotation_path_met_oxidation_cdr3(tmp_path):
     r = row(df, "ann_met_cdr3")
     assert r["Is Productive"] == "Pass"
     assert r["Developability risk"] == "Medium"
-    assert r["Developability score"] == pytest.approx(1.5)  # CDR3 weight=1.5, easily_fixable=1.0
+    assert r["Developability cost"] == pytest.approx(1.5)  # CDR3 weight=1.5, easily_fixable=1.0
 
 
 def test_annotation_path_ngs_deamidation_cdr3(tmp_path):
@@ -367,7 +367,7 @@ def test_annotation_path_ngs_deamidation_cdr3(tmp_path):
     r = row(df, "ann_ngs_cdr3")
     assert r["Is Productive"] == "Pass"
     assert r["Developability risk"] == "High"
-    assert r["Developability score"] == pytest.approx(4.5)  # CDR3 weight=1.5, fixable=3.0
+    assert r["Developability cost"] == pytest.approx(4.5)  # CDR3 weight=1.5, fixable=3.0
 
 
 def test_annotation_path_label_map_output(tmp_path):
@@ -398,7 +398,7 @@ def test_sc_clean_sequence_passes(tmp_path):
     assert r["Is Productive"] == "Pass"
     assert r["Structural liabilities"] == "None"
     assert r["Developability risk"] == "None"
-    assert r["Developability score"] == pytest.approx(0.0)
+    assert r["Developability cost"] == pytest.approx(0.0)
 
 
 def test_sc_heavy_chain_liability_detected(tmp_path):
@@ -407,7 +407,7 @@ def test_sc_heavy_chain_liability_detected(tmp_path):
     r = row(df, "sc_heavy_met_cdr3")
     assert r["Is Productive"] == "Pass"
     assert r["Developability risk"] == "Medium"
-    assert r["Developability score"] == pytest.approx(1.5)
+    assert r["Developability cost"] == pytest.approx(1.5)
 
 
 def test_sc_summary_has_chain_prefix(tmp_path):
@@ -435,7 +435,7 @@ def test_sc_both_chains_liabilities(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Custom liability per-region risk (R8)
+# Custom liability per-region risk
 #
 # Custom fixable/easily_fixable liabilities must appear in per-region risk
 # columns, not only in global developability columns.

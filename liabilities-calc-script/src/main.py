@@ -671,7 +671,7 @@ def main():
                         skip_nulls=False,
                     )
                     .fill_null(0.0)
-                    .alias("Developability score"),
+                    .alias("Developability cost"),
                 ]
             )
         else:
@@ -680,7 +680,7 @@ def main():
                     pl.lit("Pass").cast(pl.Utf8).alias("Is Productive"),
                     pl.lit("None").cast(pl.Utf8).alias("Structural liabilities"),
                     pl.lit("None").cast(pl.Utf8).alias("Developability risk"),
-                    pl.lit(0.0).cast(pl.Float64).alias("Developability score"),
+                    pl.lit(0.0).cast(pl.Float64).alias("Developability cost"),
                 ]
             )
 
@@ -743,7 +743,7 @@ def main():
                 ]
             )
 
-            _global_cols = {"Is Productive", "Structural liabilities", "Developability risk", "Developability score"}
+            _global_cols = {"Is Productive", "Structural liabilities", "Developability risk", "Developability cost"}
             combined_region_liabs = sorted(
                 [
                     c
@@ -765,7 +765,7 @@ def main():
             # Build overall_summary_cols: 4 new global columns + sequence summary
             _new_global = [
                 c
-                for c in ["Is Productive", "Structural liabilities", "Developability risk", "Developability score"]
+                for c in ["Is Productive", "Structural liabilities", "Developability risk", "Developability cost"]
                 if c in df_processed.columns
             ]
             overall_summary_cols = _new_global
@@ -782,7 +782,7 @@ def main():
                 "Is Productive",
                 "Structural liabilities",
                 "Developability risk",
-                "Developability score",
+                "Developability cost",
                 "Sequence liabilities summary",
             ]
     else:  # Liabilities not calculated
@@ -797,7 +797,7 @@ def main():
                 "Is Productive",
                 "Structural liabilities",
                 "Developability risk",
-                "Developability score",
+                "Developability cost",
                 "Sequence liabilities summary",
             ]
 
@@ -847,7 +847,7 @@ def main():
                 "Is Productive",
                 "Structural liabilities",
                 "Developability risk",
-                "Developability score",
+                "Developability cost",
                 "Sequence liabilities summary",
             ]
         )
