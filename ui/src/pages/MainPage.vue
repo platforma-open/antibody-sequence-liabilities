@@ -51,6 +51,7 @@ watch(
 // ── Predefined liabilities ────────────────────────────────────────────────────
 
 const predefinedSectionOpen = ref(false);
+const advancedSectionOpen = ref(false);
 
 const predefinedItems = liabilityTypes.map((lt) => ({ ...lt }));
 
@@ -286,15 +287,20 @@ watch(
       @update:model-value="setInput"
     />
 
-    <!-- Predefined liabilities section (R12): collapsible, collapsed by default -->
-    <PlAccordionSection v-model="predefinedSectionOpen" label="Predefined liabilities">
+    <PlTooltip position="top">
       <PlCheckbox
         :model-value="app.model.args.usePredefinedLiabilities ?? true"
         @update:model-value="(v) => (app.model.args.usePredefinedLiabilities = v)"
       >
         Use predefined liabilities
       </PlCheckbox>
+      <template #tooltip>
+        Curated library of 13 patterns - deamidation, oxidation, fragmentation, glycosylation, and structural issues. Disable to exclude all built-in checks from scoring.
+      </template>
+    </PlTooltip>
 
+    <!-- Predefined liabilities section: collapsible, collapsed by default -->
+    <PlAccordionSection v-model="predefinedSectionOpen" label="Predefined liabilities">
       <!-- Predefined list: grayed out when disabled -->
       <div
         :style="{
@@ -303,25 +309,33 @@ watch(
           transition: 'opacity 0.2s',
         }"
       >
-        <PlElementList
-          :items="predefinedItems"
-          :get-item-key="(item) => item.value"
-          :is-toggled="(item) => !isLiabilityEnabled(item)"
-          :on-toggle="(item) => toggleLiability(item)"
-          :is-removable="() => false"
-          :disable-dragging="true"
-        >
-          <template #item-title="{ item }">
+        <template v-for="item in predefinedItems" :key="item.value">
+          <PlTooltip v-if="item.value === 'Integrin binding'" position="top">
+            <PlCheckbox
+              :model-value="isLiabilityEnabled(item)"
+              @update:model-value="() => toggleLiability(item)"
+            >
+              {{ item.label }}
+              <span :style="{ fontSize: '11px', opacity: 0.6, marginLeft: '6px' }">{{ fixabilityLabel[item.fixability] }}</span>
+            </PlCheckbox>
+            <template #tooltip>
+              Off by default. RGD/RYD/LDV motifs trigger off-target cell adhesion via integrin receptors.
+              Enable for in vivo therapeutic candidates where off-target binding is a safety concern.
+            </template>
+          </PlTooltip>
+          <PlCheckbox
+            v-else
+            :model-value="isLiabilityEnabled(item)"
+            @update:model-value="() => toggleLiability(item)"
+          >
             {{ item.label }}
-            <span :style="{ fontSize: '11px', opacity: 0.6, marginLeft: '6px' }">
-              <code>{{ item.pattern }}</code> · {{ item.riskLevel }} · {{ fixabilityLabel[item.fixability] }}
-            </span>
-          </template>
-        </PlElementList>
+            <span :style="{ fontSize: '11px', opacity: 0.6, marginLeft: '6px' }">{{ fixabilityLabel[item.fixability] }}</span>
+          </PlCheckbox>
+        </template>
       </div>
     </PlAccordionSection>
 
-    <!-- Warn when no liabilities are active (R13a) — shown outside the collapsible so always visible -->
+    <!-- Warn when no liabilities are active — shown outside the collapsible so always visible -->
     <PlAlert
       v-if="!app.model.args.usePredefinedLiabilities && (app.model.args.customLiabilities?.length ?? 0) === 0"
       type="warn"
@@ -329,85 +343,88 @@ watch(
       No liabilities active — all sequences will pass without scoring.
     </PlAlert>
 
-    <!-- Custom liabilities -->
-    <PlElementList
-      v-model:items="customItems"
-      :get-item-key="(item, index) => index"
-      :is-expanded="(_item, index) => expandedIndices.has(index)"
-      :on-expand="(_item, index) => toggleExpanded(index)"
-      :is-removable="() => true"
-      :on-remove="(_item, index) => removeCustomLiability(index)"
-      :disable-dragging="true"
-    >
-      <template #item-title="{ item }">
-        {{ item.name || 'New custom liability' }}
-      </template>
-      <template #item-content="{ index }">
-        <PlTextField
-          v-model="customItems[index].name"
-          label="Name"
-          placeholder="e.g. Aspartate Isomerization"
-          :error="customNameError(index)"
-        />
-        <PlTextField
-          v-model="customItems[index].pattern"
-          label="Pattern (regex)"
-          placeholder="e.g. N[GS]"
-          :error="customItems[index].pattern && !isPatternValid(customItems[index].pattern) ? 'Invalid regular expression' : undefined"
-        >
-          <template #tooltip>
-            <div>
-              <code>W</code> — single character literal<br>
-              <code>[GS]</code> — character class (G or S)<br>
-              <code>[^P]</code> — negated class (not P)<br>
-              <code>DP</code> — exact dipeptide
-            </div>
-          </template>
-        </PlTextField>
-        <PlDropdown
-          v-model="customItems[index].riskLevel"
-          label="Risk level"
-          :options="riskLevelOptions"
-        />
-        <PlTooltip position="top">
-          <PlDropdown
-            v-model="customItems[index].fixability"
-            label="Fixability"
-            :options="fixabilityOptions"
+    <PlAccordionSection v-model="advancedSectionOpen" label="Advanced features">
+      <!-- Custom liabilities -->
+      <PlElementList
+        v-model:items="customItems"
+        :get-item-key="(_item, index) => index"
+        :is-expanded="(_item, index) => expandedIndices.has(index)"
+        :on-expand="(_item, index) => toggleExpanded(index)"
+        :is-removable="() => true"
+        :on-remove="(_item, index) => removeCustomLiability(index)"
+        :disable-dragging="true"
+      >
+        <template #item-title="{ item }">
+          {{ item.name || 'New custom liability' }}
+        </template>
+        <template #item-content="{ index }">
+          <PlTextField
+            v-model="customItems[index].name"
+            label="Name"
+            placeholder="e.g. Aspartate Isomerization"
+            :error="customNameError(index)"
           />
-          <template #tooltip>
-            <div>
-              <b>Easy fix:</b> Single conservative substitution, minimal binding impact (e.g. Met oxidation, Trp oxidation)<br>
-              <b>Fixable:</b> 1–2 mutations needed, moderate affinity risk (e.g. Deamidation N[GS], Fragmentation DP)<br>
-              <b>Hard to fix:</b> Requires significant reengineering (e.g. Extra Cysteines)
-            </div>
-          </template>
-        </PlTooltip>
-        <PlDropdownMulti
-          v-model="customItems[index].regions"
-          label="Regions"
-          :options="regionOptions"
-          :error="(customItems[index].regions?.length ?? 0) === 0 ? 'At least one region must be selected' : undefined"
-        />
-      </template>
-    </PlElementList>
+          <PlTextField
+            v-model="customItems[index].pattern"
+            label="Pattern (regex)"
+            placeholder="e.g. N[GS]"
+            :error="customItems[index].pattern && !isPatternValid(customItems[index].pattern) ? 'Invalid regular expression' : undefined"
+          >
+            <template #tooltip>
+              <div>
+                <code>W</code> — single character literal<br>
+                <code>[GS]</code> — character class (G or S)<br>
+                <code>[^P]</code> — negated class (not P)<br>
+                <code>DP</code> — exact dipeptide
+              </div>
+            </template>
+          </PlTextField>
+          <PlDropdown
+            v-model="customItems[index].riskLevel"
+            label="Risk level"
+            :options="riskLevelOptions"
+          />
+          <PlTooltip position="top">
+            <PlDropdown
+              v-model="customItems[index].fixability"
+              label="Fixability"
+              :options="fixabilityOptions"
+            />
+            <template #tooltip>
+              <div>
+                <b>Easy fix:</b> One conservative substitution, minimal binding impact (e.g. Met oxidation, Trp oxidation)<br>
+                <b>Fixable:</b> 1–2 mutations, moderate affinity risk (e.g. Deamidation N[GS], Fragmentation DP)<br>
+                <b>Hard to fix:</b> Significant reengineering required (e.g. Extra Cysteines)
+              </div>
+            </template>
+          </PlTooltip>
+          <PlDropdownMulti
+            v-model="customItems[index].regions"
+            label="Regions"
+            :options="regionOptions"
+            :error="(customItems[index].regions?.length ?? 0) === 0 ? 'At least one region must be selected' : undefined"
+          />
+        </template>
+      </PlElementList>
 
-    <div :style="{ display: 'flex', gap: '8px', flexWrap: 'wrap' }">
-      <PlBtnSecondary icon="add" @click="addCustomLiability">
+      <PlBtnSecondary icon="add" :style="{ width: '100%' }" @click="addCustomLiability">
         Add custom liability
       </PlBtnSecondary>
-      <PlBtnSecondary @click="exportCustomLiabilities">
-        Export
+      <PlBtnSecondary :style="{ width: '100%' }" @click="exportCustomLiabilities">
+        Export custom liabilities
       </PlBtnSecondary>
-    </div>
-
-    <!-- R16: File-picker import with SDK component + validation -->
-    <PlFileInput
-      v-model="app.model.args.importFileHandle"
-      label="Import custom liabilities"
-      :extensions="['json']"
-      :error="importError"
-      placeholder="Select JSON file"
-    />
+      <PlTooltip position="top">
+        <PlFileInput
+          v-model="app.model.args.importFileHandle"
+          label="Import custom liabilities"
+          :extensions="['json']"
+          :error="importError"
+          placeholder="Select JSON file"
+        />
+        <template #tooltip>
+          Importing replaces your current custom liabilities.
+        </template>
+      </PlTooltip>
+    </PlAccordionSection>
   </PlSlideModal>
 </template>
