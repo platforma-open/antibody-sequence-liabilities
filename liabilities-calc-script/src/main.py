@@ -328,7 +328,7 @@ def main():
             for entry in custom_list:
                 name = entry["name"]
                 active_custom_defs[name] = {
-                    "pattern": entry["pattern"],
+                    "pattern": re.compile(entry["pattern"]),
                     "riskLevel": entry["riskLevel"],
                     "fixability": entry["fixability"],
                     "regions": entry["regions"],
@@ -380,6 +380,8 @@ def main():
     df_processed = df.clone()
 
     ann_cols = [c for c in df_processed.columns if c.lower().endswith("annotations")]
+    # Path A: input has annotation columns (MiXCR-origin data — regions extracted from annotations).
+    # Path B: no annotation columns (pre-fragmented user data — CDR/FR columns already present).
     has_input_ann_cols = bool(ann_cols)
     all_seq_cols = [c for c in df_processed.columns if c.lower().endswith("aa")]  # All potential sequence columns
     TARGET_REGION_KEYS = ["cdr1 aa", "cdr2 aa", "cdr3 aa", "fr1 aa", "fr2 aa", "fr3 aa"]  # For Path B
@@ -619,18 +621,22 @@ def main():
                     continue
                 liab_col_name = f"{full_seq_col} liabilities"
                 generated_liability_summary_col_names.append(liab_col_name)
+                # Use native Polars str.contains() — runs in Rust, no Python per-row.
+                # ORIG_EXTRA_PATTERNS contains exactly two literal patterns (\* and _),
+                # so a when/then chain is cleaner and faster than map_elements.
+                _col = pl.col(full_seq_col).cast(pl.Utf8)
+                _stop = _col.str.contains(r"\*", literal=False)
+                _oof = _col.str.contains(r"_", literal=False)
                 liability_expressions.append(
-                    pl.col(full_seq_col)
-                    .cast(pl.Utf8)
-                    .map_elements(
-                        lambda s, defs=active_extra_defs_full_seq: (
-                            ", ".join(name for name, pat in defs.items() if re.search(pat, s or ""))
-                            or "None"
-                        ),
-                        return_dtype=pl.Utf8,
-                        skip_nulls=False,
-                    )
-                    .fill_null("None")
+                    pl.when(_col.is_null())
+                    .then(pl.lit("None"))
+                    .when(_stop & _oof)
+                    .then(pl.lit("Contains stop codon, Out of frame"))
+                    .when(_stop)
+                    .then(pl.lit("Contains stop codon"))
+                    .when(_oof)
+                    .then(pl.lit("Out of frame"))
+                    .otherwise(pl.lit("None"))
                     .alias(liab_col_name)
                 )
 
