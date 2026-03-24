@@ -313,6 +313,12 @@ def main():
     else:
         active_cdr_defs, active_extra_defs, active_cys_defs, active_liability_regex = {}, {}, {}, {}
 
+    # Stop codon (*) and out-of-frame (_) detection always runs — no user setting disables it.
+    # Kept separate from active_extra_defs so it routes to the full chain sequence (for MiXCR
+    # data) rather than per-region fragments, where MiXCR's boundary artifacts cause false
+    # positives. See active_extra_defs_for_per_region below for the routing decision.
+    active_extra_defs_full_seq = dict(ORIG_EXTRA_PATTERNS)
+
     # Load custom liabilities
     active_custom_defs: dict[str, dict] = {}
     if args.custom_liabilities:
@@ -332,7 +338,7 @@ def main():
 
     expected_cys_map = build_expected_cys_map(args.numbering_schema)
 
-    if not (active_cdr_defs or active_extra_defs or active_cys_defs or active_custom_defs):
+    if not (active_cdr_defs or active_extra_defs or active_cys_defs or active_custom_defs or active_extra_defs_full_seq):
         print(
             "Warning: no active liability definitions after applying predefined/disabled/custom settings."
             " Liability calculations will be skipped."
@@ -379,6 +385,16 @@ def main():
     TARGET_REGION_KEYS = ["cdr1 aa", "cdr2 aa", "cdr3 aa", "fr1 aa", "fr2 aa", "fr3 aa"]  # For Path B
     cols_for_liability_analysis = []
     skip_extraction_due_to_preexisting_regions = False
+
+    # Collect full-chain AA columns (e.g. "Heavy sequence aa") for stop codon / OOF detection.
+    # MiXCR places * at CDR/FR region boundaries when a codon spans a V-D-J junction — checking
+    # the full chain avoids these false positives in per-region fragments.
+    _fragment_keys_lower = {"cdr1", "cdr2", "cdr3", "fr1", "fr2", "fr3", "fr4"}
+    full_input_sequence_cols = [
+        c for c in df_processed.columns
+        if c.lower().endswith(" aa")
+        and not any(k in c.lower() for k in _fragment_keys_lower)
+    ]
 
     if has_input_ann_cols:
         unique_ann_prefixes = set()
@@ -583,6 +599,41 @@ def main():
         liability_expressions, risk_expressions = [], []
         generated_liability_summary_col_names, generated_risk_col_names = [], []
 
+        # MiXCR places * at CDR/FR boundaries (split codons at V-D-J junctions), so per-region
+        # stop codon / OOF detection produces false positives on MiXCR-origin data. Annotation
+        # columns identify MiXCR-origin data — strip these patterns and rely on the full-sequence
+        # check instead. Pre-fragmented input (Path B, no annotations) contains genuine sequences.
+        active_extra_defs_for_per_region = (
+            {n: p for n, p in active_extra_defs.items() if n not in ORIG_EXTRA_PATTERNS}
+            if has_input_ann_cols  # MiXCR data: per-region seqs may have boundary artifacts
+            else active_extra_defs  # pre-fragmented user data: stop codon/OOF in fragments is real
+        )
+
+        # Stop codon / OOF check on the full chain sequence. Only runs when a non-fragmented
+        # chain column exists (e.g. "Heavy sequence aa" from non-scFv MiXCR upstreams).
+        # The scFv upstream provides only CDR/FR columns, so this block is skipped — scFv
+        # already guarantees productivity via --export-productive-clones-only.
+        if active_extra_defs_full_seq and full_input_sequence_cols:
+            for full_seq_col in full_input_sequence_cols:
+                if full_seq_col not in df_processed.columns:
+                    continue
+                liab_col_name = f"{full_seq_col} liabilities"
+                generated_liability_summary_col_names.append(liab_col_name)
+                liability_expressions.append(
+                    pl.col(full_seq_col)
+                    .cast(pl.Utf8)
+                    .map_elements(
+                        lambda s, defs=active_extra_defs_full_seq: (
+                            ", ".join(name for name, pat in defs.items() if re.search(pat, s or ""))
+                            or "None"
+                        ),
+                        return_dtype=pl.Utf8,
+                        skip_nulls=False,
+                    )
+                    .fill_null("None")
+                    .alias(liab_col_name)
+                )
+
         for frag_seq_col in cols_for_liability_analysis:
             if frag_seq_col not in df_processed.columns:
                 continue  # Should not happen if logic is correct
@@ -598,7 +649,7 @@ def main():
                         s,
                         crn,
                         active_cdr_defs,
-                        active_extra_defs,
+                        active_extra_defs_for_per_region,
                         active_cys_defs,
                         expected_cys_map,
                         active_custom_defs=active_custom_defs,
@@ -636,7 +687,8 @@ def main():
                 .cast(pl.Utf8)
                 .map_elements(
                     lambda l_str, cfm=combined_fixability_map, rlm=combined_risk_level_map: classify_risk(
-                        l_str, active_cdr_defs, active_cys_defs, set(active_extra_defs.keys()), cfm, rlm
+                        l_str, active_cdr_defs, active_cys_defs,
+                        set(active_extra_defs_for_per_region.keys()) | set(active_extra_defs_full_seq.keys()), cfm, rlm
                     ),
                     return_dtype=pl.Utf8,
                     skip_nulls=False,
