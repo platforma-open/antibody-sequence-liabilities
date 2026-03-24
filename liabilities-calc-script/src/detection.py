@@ -94,7 +94,7 @@ def identify_liabilities(
     if active_custom_defs:
         for name, custom_def in active_custom_defs.items():
             if region in custom_def["regions"]:
-                if re.search(custom_def["pattern"], seq):
+                if custom_def["pattern"].search(seq):
                     liabilities_found.append(name)
 
     return ", ".join(sorted(set(liabilities_found))) if liabilities_found else "None"
