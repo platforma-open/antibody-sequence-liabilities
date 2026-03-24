@@ -243,8 +243,9 @@ def test_custom_only_detects_ww_motif(tmp_path):
 
 
 def test_no_active_liabilities_emits_empty_columns(tmp_path):
-    """When predefined is disabled and no custom defs are provided, the script warns
-    and skips calculation. Global columns are still emitted (consistent schema) but empty."""
+    """When predefined is disabled and no custom defs are provided, stop codon / OOF detection
+    still runs (always active). Global columns are present and Is Productive reflects the
+    stop codon / OOF check result for each sequence."""
     custom = tmp_path / "custom.json"
     custom.write_text(json.dumps([]))
     df = run_main(
@@ -256,12 +257,14 @@ def test_no_active_liabilities_emits_empty_columns(tmp_path):
             str(custom),
         ],
     )
-    # Columns are present (consistent output schema) but hold empty/null values
+    # Columns are always present (consistent output schema)
     for col in ("Is Productive", "Structural liabilities", "Developability risk", "Developability cost"):
         assert col in df.columns, f"Expected {col!r} to be present for consistent schema"
     r = row(df, "clone_clean")
-    assert r["Is Productive"] in ("", None), "Expected empty value when no liabilities active"
-    assert r["Structural liabilities"] in ("", None)
+    # Stop codon / OOF is always active — clean sequence passes
+    assert r["Is Productive"] == "Pass"
+    # No cys or CDR defs active — structural and developability columns are empty/None/None
+    assert r["Structural liabilities"] in ("None", "", None)
 
 
 # ---------------------------------------------------------------------------
