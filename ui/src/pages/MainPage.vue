@@ -343,7 +343,7 @@ watch(
       No liabilities active — all sequences will pass without scoring.
     </PlAlert>
 
-    <PlAccordionSection v-model="advancedSectionOpen" label="Advanced features">
+    <PlAccordionSection v-model="advancedSectionOpen" label="Custom liabilities">
       <!-- Custom liabilities -->
       <PlElementList
         v-model:items="customItems"
