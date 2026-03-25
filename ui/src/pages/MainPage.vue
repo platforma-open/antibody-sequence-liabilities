@@ -287,7 +287,7 @@ watch(
       @update:model-value="setInput"
     />
 
-    <PlTooltip position="top">
+    <PlTooltip position="left">
       <PlCheckbox
         :model-value="app.model.args.usePredefinedLiabilities ?? true"
         @update:model-value="(v) => (app.model.args.usePredefinedLiabilities = v)"
@@ -310,7 +310,7 @@ watch(
         }"
       >
         <template v-for="item in predefinedItems" :key="item.value">
-          <PlTooltip v-if="item.value === 'Integrin binding'" position="top">
+          <PlTooltip v-if="item.value === 'Integrin binding'" position="left">
             <PlCheckbox
               :model-value="isLiabilityEnabled(item)"
               @update:model-value="() => toggleLiability(item)"
