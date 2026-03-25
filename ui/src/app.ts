@@ -25,6 +25,7 @@ function syncDefaultBlockLabel(model: AppModel) {
       usePredefinedLiabilities: model.args.usePredefinedLiabilities ?? true,
       disabledPredefinedLiabilities: model.args.disabledPredefinedLiabilities ?? [],
       allLiabilityTypes: allLiabilityTypeValues,
+      customLiabilities: model.args.customLiabilities ?? [],
     });
   });
 }

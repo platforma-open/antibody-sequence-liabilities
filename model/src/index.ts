@@ -65,6 +65,7 @@ export const model = BlockModel.create()
       usePredefinedLiabilities: true,
       disabledPredefinedLiabilities: defaultDisabled,
       allLiabilityTypes: allLiabilityTypeValues,
+      customLiabilities: [],
     }),
     customBlockLabel: '',
     usePredefinedLiabilities: true,
