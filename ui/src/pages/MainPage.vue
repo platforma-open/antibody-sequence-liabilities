@@ -337,7 +337,10 @@ watch(
 
     <!-- Warn when no liabilities are active — shown outside the collapsible so always visible -->
     <PlAlert
-      v-if="!app.model.args.usePredefinedLiabilities && (app.model.args.customLiabilities?.length ?? 0) === 0"
+      v-if="(
+        !app.model.args.usePredefinedLiabilities ||
+        (app.model.args.disabledPredefinedLiabilities?.length ?? 0) >= liabilityTypes.length
+      ) && (app.model.args.customLiabilities?.length ?? 0) === 0"
       type="warn"
     >
       No liabilities active — all sequences will pass without scoring.
