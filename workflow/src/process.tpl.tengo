@@ -24,7 +24,6 @@ self.body(func(args) {
     isSingleCell := params.isSingleCell
     coveredFeatures := params.coveredFeatures
     hasAnnotations := params.hasAnnotations
-    liabilityTypes := params.liabilityTypes
     newMapping := json.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
 
@@ -38,45 +37,90 @@ self.body(func(args) {
 		}
 	]
 
-	discreteValues := string(json.encode(["None", "Low", "Medium", "High"]))
+	perRegionDiscreteValues := string(json.encode(["None", "Low", "Medium", "High"]))
 
 	liabilityColumns := []
 
-    // Define the output columns - starting with the overall liabilities risk
+    // Define the output columns - starting with the four global classification columns
     liabilityColumns += [
 		{
-			column: "Liabilities risk",
-			id: "liabilitiesRisk",
+			column: "Is Productive",
+			id: "isProductive",
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/liabilitiesRisk",
+				name: "pl7.app/vdj/isProductive",
 				valueType: "String",
 				annotations: {
-					"pl7.app/label": "Liabilities risk",
-					"pl7.app/isDiscreteFilter": "true",
-            		"pl7.app/discreteValues": discreteValues,
+					"pl7.app/label": "Is Productive",
+					"pl7.app/description": "Pass: in-frame with no stop codons - a valid antibody. Fail sequences are unproductive and excluded from Lead Selection by default.",
 					"pl7.app/isScore": "true",
-					"pl7.app/score/rankValues": "decreasing",
-					"pl7.app/score/defaultCutoff": string(json.encode(["None"])),
+					"pl7.app/isDiscreteFilter": "true",
+					"pl7.app/discreteValues": string(json.encode(["Pass", "Fail"])),
+					"pl7.app/score/rankingOrder": "decreasing",
+					"pl7.app/score/defaultCutoff": string(json.encode(["Pass"])),
 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "100"
+					"pl7.app/table/orderPriority": "103"
 				}
 			}
 		},
 		{
-			column: "Sequence liabilities summary",
-			id: "sequence-liabilities-summary",
+			column: "Structural liabilities",
+			id: "structuralLiabilities",
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/sequenceLiabilitiesSummary",
+				name: "pl7.app/vdj/structuralLiabilities",
 				valueType: "String",
 				annotations: {
-					"pl7.app/label": "Sequence liabilities summary",
-					"pl7.app/isSummary": "true",
+					"pl7.app/label": "Structural liabilities",
+					"pl7.app/description": "Present when a conserved disulfide cysteine is missing or an unpaired cysteine appears. Structural issues require scaffold redesign; Lead Selection excludes them by default.",
+					"pl7.app/isScore": "true",
+					"pl7.app/isDiscreteFilter": "true",
+					"pl7.app/discreteValues": string(json.encode(["None", "Present"])),
+					"pl7.app/score/rankingOrder": "decreasing",
 					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "101"
+					"pl7.app/table/orderPriority": "102"
+				}
+			}
+		},
+		{
+			column: "Developability risk",
+			id: "developabilityRisk",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/developabilityRisk",
+				valueType: "String",
+				annotations: {
+					"pl7.app/label": "Developability risk",
+					"pl7.app/description": "Highest risk level across fixable liabilities (deamidation, oxidation, fragmentation, glycosylation). Unlike structural issues, one or two substitutions address these. All risk levels are shown; Lead Selection excludes High by default.",
+					"pl7.app/isScore": "true",
+					"pl7.app/isDiscreteFilter": "true",
+					"pl7.app/discreteValues": string(json.encode(["None", "Low", "Medium", "High"])),
+					"pl7.app/score/rankingOrder": "decreasing",
+					"pl7.app/score/defaultCutoff": string(json.encode(["None", "Low", "Medium"])),
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "105"
+				}
+			}
+		},
+		{
+			column: "Developability cost",
+			id: "developabilityScore",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/developabilityScore",
+				valueType: "Double",
+				annotations: {
+					"pl7.app/label": "Developability cost",
+					"pl7.app/description": "Lower is better. Sum of fixability weight × region weight across all non-disqualifying liabilities. Rank candidates by this score rather than applying hard cutoffs.",
+					"pl7.app/isScore": "true",
+					"pl7.app/score/rankingOrder": "increasing",
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": "104",
+					"pl7.app/format": ".2~f"
 				}
 			}
 		}
@@ -117,8 +161,9 @@ self.body(func(args) {
 					annotations: {
 						"pl7.app/label": f_name + " Risk",
 						"pl7.app/table/visibility": "default",
+						"pl7.app/isScore": "true",
 						"pl7.app/isDiscreteFilter": "true",
-						"pl7.app/discreteValues": discreteValues,
+						"pl7.app/discreteValues": perRegionDiscreteValues,
 						"pl7.app/table/orderPriority": string(orderPriorityBase - 1)
 					}
 				}
@@ -126,6 +171,25 @@ self.body(func(args) {
 		]
 		orderPriorityBase -= 2
 	}
+
+	liabilityColumns += [
+		{
+			column: "Sequence liabilities summary",
+			id: "sequence-liabilities-summary",
+			naRegex: "",
+			allowNA: true,
+			spec: {
+				name: "pl7.app/vdj/sequenceLiabilitiesSummary",
+				valueType: "String",
+				annotations: {
+					"pl7.app/label": "Sequence liabilities summary",
+					"pl7.app/isSummary": "true",
+					"pl7.app/table/visibility": "default",
+					"pl7.app/table/orderPriority": string(orderPriorityBase - 1)
+				}
+			}
+		}
+	]
 
     sequenceColumns := []
 
@@ -152,7 +216,7 @@ self.body(func(args) {
 					annotations: {
 						"pl7.app/label": chainLabel + " " + "CDR3 aa",
 						"pl7.app/table/visibility": "default",
-						"pl7.app/table/orderPriority": "101"
+						"pl7.app/table/orderPriority": (chain_val == "A" ? "101" : "100")
 					}
 				}
 			}]
@@ -230,13 +294,7 @@ self.body(func(args) {
 		}
 	}
 
-    columns := []
-
-    if len(liabilityTypes) > 0 {
-        columns = liabilityColumns + sequenceColumns
-    } else {
-        columns = sequenceColumns
-    }
+    columns := liabilityColumns + sequenceColumns
 
 
 
@@ -297,18 +355,6 @@ self.body(func(args) {
 		label: blockLabel,
 		id: blockId
 	}]
-
-	// Add individual trace steps for each liability type with decreasing importance
-	importance := 29
-	for liabilityType in liabilityTypes {
-		traceSteps += [{
-			type: "milaboratories.antibody-sequence-liabilities/" + text.to_lower(text.re_replace(" ", liabilityType , "-")),
-			importance: importance,
-			label: liabilityType,
-			id: blockId
-		}]
-		importance -= 1
-	}
 
 	// Create the trace with all steps. Spread operator is used to pass the trace steps as individual arguments.
 	liabilityTrace := pSpec.makeTrace(datasetSpec, traceSteps...)

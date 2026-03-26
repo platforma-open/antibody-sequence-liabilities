@@ -1,30 +1,32 @@
-// Import required modules
 wf := import("@platforma-sdk/workflow-tengo:workflow")
 render := import("@platforma-sdk/workflow-tengo:render")
 smart := import("@platforma-sdk/workflow-tengo:smart")
 file := import("@platforma-sdk/workflow-tengo:file")
-exec := import("@platforma-sdk/workflow-tengo:exec")    // Command execution utilities
-assets:= import("@platforma-sdk/workflow-tengo:assets") // Asset management
-xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
-ll := import("@platforma-sdk/workflow-tengo:ll")        // Logging utilities
-pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 pFrames := import("@platforma-sdk/workflow-tengo:pframes")
-text := import("text")                                   // Text manipulation utilities
-json := import("json") // Import json module for encoding
+text := import("text")
+json := import("json")
 
 calculateLiabilitiesTpl := assets.importTemplate(":liabilities-calculation")
 processTpl := assets.importTemplate(":process")
+prerunTpl := assets.importTemplate(":prerun")
+
+wf.setPreRun(prerunTpl)
+
 // Prepare phase of the workflow - collects and sets up required data
 wf.prepare(func(args) {
 
 	bundleBuilder := wf.createPBundleBuilder()
-	bundleBuilder.ignoreMissingDomains()  // Allow missing domains in the input data
-	bundleBuilder.addAnchor("main", args.inputAnchor)  // Set the main anchor point for data
+	bundleBuilder.ignoreMissingDomains()
+	bundleBuilder.addAnchor("main", args.inputAnchor)
 
 	// Collect all amino acid sequences from the input data
 	bundleBuilder.addMulti({
 		axes: [{ anchor: "main", idx: 1 }],
-	//	name: "pl7.app/vdj/sequence",
 		annotations: {
 			"pl7.app/vdj/isAssemblingFeature": "true"
 		},
@@ -54,7 +56,7 @@ wf.prepare(func(args) {
 	}, "additionalSequences")
 
 		return {
-			columns: bundleBuilder.build()  // Build the column bundle for processing
+			columns: bundleBuilder.build()
 		}
 	}
 )
@@ -68,14 +70,10 @@ wf.body(func(args) {
 	annotations := columnsWithSequences.getColumns("annotations")
 	additionalSequences := columnsWithSequences.getColumns("additionalSequences")
 	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
-	liabilityTypes := args.liabilityTypes
-
-
 	// Determine if we're working with single cell data
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
 
-	// Start building the table with sequence data
-	seqTableBuilder := pFrames.tsvFileBuilder() // Use a different name to avoid confusion before build()
+	seqTableBuilder := pFrames.tsvFileBuilder()
 	seqTableBuilder.setAxisHeader(datasetSpec.axesSpec[1], "clonotypeKey")
 
 	// Determine the primary assembling feature (e.g., CDR3)
@@ -84,7 +82,7 @@ wf.body(func(args) {
 	if len(sequences) > 0 {
 		feature = sequences[0].spec.domain["pl7.app/vdj/feature"]
 	} else {
-		ll.panic("No sequences found to determine the primary feature.") // Or handle as an error/empty case
+		ll.panic("No sequences found to determine the primary feature.")
 	}
 
 	hasAnnotations := len(annotations) > 0
@@ -144,10 +142,15 @@ wf.body(func(args) {
 			}
 		}
 	} else { // Bulk data handling
-		// Add the primary sequence
+		// Add the primary assembling feature sequence.
+		// Mark it in coveredFeatures so the additionalSequences loop below skips it.
+		// On imported data, CDR3 satisfies both the assembling-feature query (sequences)
+		// and the region query (additionalSequences), so without this guard the TSV
+		// builder would receive "CDR3 aa" twice and throw a duplicate-header error.
 		if len(sequences) > 0 {
 			if sequences[0].spec.domain["pl7.app/vdj/feature"] == "CDR3" {
 				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "CDR3 aa"})
+				coveredFeatures["CDR3"] = 1
 			} else {
 				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "sequence aa"})
 			}
@@ -155,7 +158,7 @@ wf.body(func(args) {
 		// Add FR/CDR sequences from additionalSequences (bulk, no annotations)
 		for additionalSeq in additionalSequences {
 			for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"] {
-				if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr {
+				if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr && !coveredFeatures[fr] {
 					seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: fr + " aa"})
 					if coveredFeatures[fr] {
 						coveredFeatures[fr] += 1
@@ -177,16 +180,17 @@ wf.body(func(args) {
 		features += [k]
 	}
 
-	// Build the final TSV table
 	seqTableBuilder.mem("16GiB")
 	seqTableBuilder.cpu(1)
-	seqTable := seqTableBuilder.build() // Assign to a new variable
+	seqTable := seqTableBuilder.build()
 
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
 		table: seqTable,
 		mapping: hasAnnotations ? annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"] : undefined,
-		liabilityTypes: liabilityTypes,
-		numberingSchema: numberingSchema
+		numberingSchema: numberingSchema,
+		customLiabilities: args.customLiabilities,
+		usePredefinedLiabilities: args.usePredefinedLiabilities,
+		disabledPredefinedLiabilities: args.disabledPredefinedLiabilities
 	})
 
 	liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
@@ -204,15 +208,13 @@ wf.body(func(args) {
 			datasetSpec: datasetSpec,
 			isSingleCell: isSingleCell,
 			coveredFeatures: features,
-			hasAnnotations: hasAnnotations,
-			liabilityTypes: liabilityTypes
+			hasAnnotations: hasAnnotations
 		})
 	})
 
 	outputLiabilities := processResult.output("outputLiabilities", 24 * 60 * 60 * 1000)
 	exportPframe := processResult.output("exportPframe", 24 * 60 * 60 * 1000)
 
-	// Return the output and export the results
 	return {
 		outputs: {
 			outputLiabilities: outputLiabilities
