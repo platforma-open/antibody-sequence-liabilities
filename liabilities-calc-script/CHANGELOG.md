@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 5.0.0
+
+### Major Changes
+
+- 6ca5696: Ensure software is updated
+
 ## 4.2.0
 
 ### Minor Changes
