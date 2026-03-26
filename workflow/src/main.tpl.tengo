@@ -142,10 +142,15 @@ wf.body(func(args) {
 			}
 		}
 	} else { // Bulk data handling
-		// Add the primary sequence
+		// Add the primary assembling feature sequence.
+		// Mark it in coveredFeatures so the additionalSequences loop below skips it.
+		// On imported data, CDR3 satisfies both the assembling-feature query (sequences)
+		// and the region query (additionalSequences), so without this guard the TSV
+		// builder would receive "CDR3 aa" twice and throw a duplicate-header error.
 		if len(sequences) > 0 {
 			if sequences[0].spec.domain["pl7.app/vdj/feature"] == "CDR3" {
 				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "CDR3 aa"})
+				coveredFeatures["CDR3"] = 1
 			} else {
 				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "sequence aa"})
 			}
@@ -153,7 +158,7 @@ wf.body(func(args) {
 		// Add FR/CDR sequences from additionalSequences (bulk, no annotations)
 		for additionalSeq in additionalSequences {
 			for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"] {
-				if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr {
+				if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr && !coveredFeatures[fr] {
 					seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: fr + " aa"})
 					if coveredFeatures[fr] {
 						coveredFeatures[fr] += 1
