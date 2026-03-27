@@ -425,7 +425,9 @@ watch(
           placeholder="Select JSON file"
         />
         <template #tooltip>
-          Importing replaces your current custom liabilities.
+          Importing replaces your current custom liabilities. See
+          <a href="https://docs.platforma.bio/guides/antibody-discovery/sequence-liabilities/" target="_blank">documentation</a>
+          for the expected JSON format.
         </template>
       </PlTooltip>
     </PlAccordionSection>
