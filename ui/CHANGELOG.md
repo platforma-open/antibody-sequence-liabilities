@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 5.0.1
+
+### Patch Changes
+
+- 32c76f3: Add docs link to import tooltip
+
 ## 5.0.0
 
 ### Major Changes
