@@ -10,6 +10,7 @@ pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 pFrames := import("@platforma-sdk/workflow-tengo:pframes")
 text := import("text")
 json := import("json")
+math := import("math")
 
 calculateLiabilitiesTpl := assets.importTemplate(":liabilities-calculation")
 processTpl := assets.importTemplate(":process")
@@ -180,7 +181,12 @@ wf.body(func(args) {
 		features += [k]
 	}
 
-	seqTableBuilder.mem("16GiB")
+	baseMemGiB := 16
+	if !is_undefined(args.mem) {
+		baseMemGiB = args.mem
+	}
+
+	seqTableBuilder.mem(string(int(math.max(16, baseMemGiB / 4))) + "GiB")
 	seqTableBuilder.cpu(1)
 	seqTable := seqTableBuilder.build()
 
@@ -190,7 +196,8 @@ wf.body(func(args) {
 		numberingSchema: numberingSchema,
 		customLiabilities: args.customLiabilities,
 		usePredefinedLiabilities: args.usePredefinedLiabilities,
-		disabledPredefinedLiabilities: args.disabledPredefinedLiabilities
+		disabledPredefinedLiabilities: args.disabledPredefinedLiabilities,
+		mem: args.mem
 	})
 
 	liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
@@ -204,6 +211,7 @@ wf.body(func(args) {
 		blockId: blockId,
 		customBlockLabel: args.customBlockLabel,
 		defaultBlockLabel: args.defaultBlockLabel,
+		mem: args.mem,
 		params: smart.createJsonResource({
 			datasetSpec: datasetSpec,
 			isSingleCell: isSingleCell,
