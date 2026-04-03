@@ -17,6 +17,7 @@ import {
   PlElementList,
   PlFileInput,
   PlMaskIcon24,
+  PlNumberField,
   PlSlideModal,
   PlTextField,
   PlTooltip,
@@ -52,6 +53,7 @@ watch(
 
 const predefinedSectionOpen = ref(false);
 const advancedSectionOpen = ref(false);
+const resourceSectionOpen = ref(false);
 
 const predefinedItems = liabilityTypes.map((lt) => ({ ...lt }));
 
@@ -430,6 +432,20 @@ watch(
           for the expected JSON format.
         </template>
       </PlTooltip>
+    </PlAccordionSection>
+
+    <PlAccordionSection v-model="resourceSectionOpen" label="Resource Allocation">
+      <PlNumberField
+        v-model="app.model.args.mem"
+        label="Memory (GiB)"
+        :minValue="1"
+        :step="1"
+        :maxValue="1012"
+      >
+        <template #tooltip>
+          Sets the amount of memory available for the liabilities calculation. Increase for large datasets (&gt;10M clonotypes).
+        </template>
+      </PlNumberField>
     </PlAccordionSection>
   </PlSlideModal>
 </template>
