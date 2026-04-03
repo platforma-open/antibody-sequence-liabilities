@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.ui",
-  "version": "5.0.1",
+  "version": "5.1.0",
   "type": "module",
   "scripts": {
     "dev": "ts-builder serve --target block-ui",
