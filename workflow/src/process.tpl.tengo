@@ -8,6 +8,7 @@ pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handli
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
 text := import("text")                                   // Text manipulation utilities
 json := import("json")
+math := import("math")
 
 self.defineOutputs("outputLiabilities", "exportPframe")
 
@@ -17,6 +18,12 @@ self.body(func(args) {
     blockId := args.blockId
     customBlockLabel := args.customBlockLabel
     defaultBlockLabel := args.defaultBlockLabel
+
+	baseMemGiB := 16
+	if !is_undefined(args.mem) {
+		baseMemGiB = args.mem
+	}
+	convMemGiB := string(int(math.max(16, baseMemGiB / 4))) + "GiB"
 	
     params := args.params
     liabilitiesTable := args.liabilitiesTable
@@ -335,14 +342,14 @@ self.body(func(args) {
 		liabilitiesTable,
 		"tsv",
 		outputSpecs,
-		{ cpu: 1, mem: "16GiB" }
+		{ cpu: 1, mem: convMemGiB }
 	)
 
 	exportOutput := xsv.importFile(
 		liabilitiesTable,
 		"tsv",
 		exportSpecs,
-        {splitDataAndSpec: true, cpu: 1, mem: "16GiB"}
+        {splitDataAndSpec: true, cpu: 1, mem: convMemGiB}
 	)
 
 	// Determine the label for the trace

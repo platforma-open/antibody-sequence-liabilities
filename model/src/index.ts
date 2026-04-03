@@ -26,6 +26,7 @@ export type BlockArgs = {
   disabledPredefinedLiabilities?: string[];
   customLiabilities?: CustomLiability[];
   importFileHandle?: ImportFileHandle;
+  mem?: number;
 };
 
 export type UiState = {
