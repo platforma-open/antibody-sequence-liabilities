@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 5.1.0
+
+### Minor Changes
+
+- b4901a2: Improved performance on large datasets
+
+### Patch Changes
+
+- Updated dependencies [b4901a2]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@5.1.0
+
 ## 5.0.1
 
 ### Patch Changes
