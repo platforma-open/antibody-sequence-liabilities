@@ -12,10 +12,9 @@
     },
     "build": {
       "inputs": ["$TURBO_DEFAULT$"],
-      "env": ["PL_PKG_DEV"],
+      "env": ["PL_PKG_DEV", "PL_DOCKER_REGISTRY_PUSH_TO"],
       "outputs": ["./dist/**", "./block-pack/**", "./pkg-*.tgz"],
-      "dependsOn": ["type-check", "lint", "^build"],
-      "passThroughEnv": ["PL_DOCKER_REGISTRY_PUSH_TO"]
+      "dependsOn": ["type-check", "lint", "^build"]
     },
     "do-pack": {
       "dependsOn": ["build"],
