@@ -23,17 +23,18 @@
       "ui": "@platforma-open/milaboratories.antibody-sequence-liabilities.ui/dist"
     },
     "meta": {
-      "title": "Antibody Sequence Liabilities",
+      "title": "Sequence Liabilities",
       "logo": "file:../logos/block-logo.png",
       "url": "https://github.com/platforma-open/antibody-sequence-liabilities",
       "docs": "https://docs.platforma.bio/guides/antibody-discovery/sequence-liabilities/",
       "support": "mailto:support@milaboratories.com",
-      "description": "Identifies sequence liabilities in antibody sequences that may impact manufacturability, stability, or safety.",
+      "description": "Identifies sequence liabilities that may impact manufacturability, stability, or safety in antibody/TCR or peptide sequences.",
       "longDescription": "file:../docs/description.md",
       "changelog": "file:../CHANGELOG.md",
       "tags": [
         "airr",
         "antibody",
+        "peptide",
         "downstream"
       ],
       "organization": {

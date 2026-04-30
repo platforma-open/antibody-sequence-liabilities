@@ -12,8 +12,10 @@ text := import("text")
 json := import("json")
 math := import("math")
 
-calculateLiabilitiesTpl := assets.importTemplate(":liabilities-calculation")
-processTpl := assets.importTemplate(":process")
+calculateLiabilitiesTpl := assets.importTemplate(":clonotype-liabilities")
+processTpl := assets.importTemplate(":clonotype-process")
+peptideLiabilitiesTpl := assets.importTemplate(":peptide-liabilities")
+peptideProcessTpl := assets.importTemplate(":peptide-process")
 prerunTpl := assets.importTemplate(":prerun")
 
 wf.setPreRun(prerunTpl)
@@ -56,6 +58,19 @@ wf.prepare(func(args) {
 		}
 	}, "additionalSequences")
 
+	// aa peptide sequence
+	bundleBuilder.addMulti({
+		axes: [{ anchor: "main", idx: 1 }],
+		name: "pl7.app/sequence",
+		annotations: {
+			"pl7.app/isAssemblingFeature": "true"
+		},
+		domain: {
+			"pl7.app/feature": "peptide",
+			"pl7.app/alphabet": "aminoacid"
+		}
+	}, "peptideSequences")
+
 		return {
 			columns: bundleBuilder.build()
 		}
@@ -67,10 +82,64 @@ wf.body(func(args) {
 	blockId := wf.blockId().getDataAsJson()
 
 	columnsWithSequences := args.columns
+	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
+
+	baseMemGiB := 16
+	if !is_undefined(args.mem) {
+		baseMemGiB = args.mem
+	}
+
+	// ───────────────────────────────────────────────────────────────────────
+	// Peptide branch
+	// ───────────────────────────────────────────────────────────────────────
+	if datasetSpec.axesSpec[1].name == "pl7.app/variantKey" {
+		peptideSeqs := columnsWithSequences.getColumns("peptideSequences")
+		if len(peptideSeqs) == 0 {
+			ll.panic("No peptide aa sequence found on variantKey axis. Expected pl7.app/sequence with domain.pl7.app/feature: peptide and pl7.app/alphabet: aminoacid.")
+		}
+		peptideSeq := peptideSeqs[0]
+
+		seqTableBuilder := pFrames.tsvFileBuilder()
+		seqTableBuilder.setAxisHeader(datasetSpec.axesSpec[1].name, "variantKey")
+		seqTableBuilder.add(columnsWithSequences.getColumn(peptideSeq.key), {header: "sequence aa"})
+		seqTableBuilder.mem(string(int(math.max(8, baseMemGiB / 4))) + "GiB")
+		seqTableBuilder.cpu(1)
+		seqTable := seqTableBuilder.build()
+
+		liabilitiesResultCalc := render.create(peptideLiabilitiesTpl, {
+			table: seqTable,
+			customLiabilities: args.customLiabilities,
+			usePredefinedLiabilities: args.usePredefinedLiabilities,
+			disabledPredefinedLiabilities: args.disabledPredefinedLiabilities,
+			mem: args.mem
+		})
+		liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
+
+		peptideProcess := render.create(peptideProcessTpl, {
+			liabilitiesTable: liabilitiesResult,
+			blockId: blockId,
+			customBlockLabel: args.customBlockLabel,
+			defaultBlockLabel: args.defaultBlockLabel,
+			datasetSpec: datasetSpec,
+			mem: args.mem
+		})
+
+		return {
+			outputs: {
+				outputLiabilities: peptideProcess.output("outputLiabilities", 24 * 60 * 60 * 1000)
+			},
+			exports: {
+				exportPframe: peptideProcess.output("exportPframe", 24 * 60 * 60 * 1000)
+			}
+		}
+	}
+
+	// ───────────────────────────────────────────────────────────────────────
+	// Antibody / VDJ branch
+	// ───────────────────────────────────────────────────────────────────────
 	sequences := columnsWithSequences.getColumns("sequences")
 	annotations := columnsWithSequences.getColumns("annotations")
 	additionalSequences := columnsWithSequences.getColumns("additionalSequences")
-	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
 	// Determine if we're working with single cell data
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
 
@@ -179,11 +248,6 @@ wf.body(func(args) {
 	features := []
 	for k, v in coveredFeatures {
 		features += [k]
-	}
-
-	baseMemGiB := 16
-	if !is_undefined(args.mem) {
-		baseMemGiB = args.mem
 	}
 
 	seqTableBuilder.mem(string(int(math.max(16, baseMemGiB / 4))) + "GiB")

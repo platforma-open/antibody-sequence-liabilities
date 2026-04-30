@@ -33,6 +33,8 @@ export type UiState = {
   tableState: PlDataTableStateV2;
 };
 
+export type Modality = 'antibody' | 'peptide';
+
 export const liabilityTypes: {
   value: string;
   label: string;
@@ -40,20 +42,22 @@ export const liabilityTypes: {
   riskLevel: 'Low' | 'Medium' | 'High';
   fixability: 'easily_fixable' | 'fixable' | 'hard_to_fix' | 'structural';
   enabledByDefault: boolean;
+  /** Modalities for which this rule is offered. */
+  applicableTo: Modality[];
 }[] = [
-  { value: 'Deamidation (N[GS])', label: 'Deamidation (N[GS])', pattern: 'N[GS]', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
-  { value: 'Fragmentation (DP)', label: 'Fragmentation (DP)', pattern: 'DP', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
-  { value: 'Isomerization (D[DGHST])', label: 'Isomerization (D[DGHST])', pattern: 'D[DGHST]', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
-  { value: 'N-linked Glycosylation (N[^P][ST])', label: 'N-linked Glycosylation (N[^P][ST])', pattern: 'N[^P][ST]', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true },
-  { value: 'Deamidation (N[AHNT])', label: 'Deamidation (N[AHNT])', pattern: 'N[AHNT]', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
-  { value: 'Hydrolysis (NP)', label: 'Hydrolysis (NP)', pattern: 'NP', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true },
-  { value: 'Fragmentation (TS)', label: 'Fragmentation (TS)', pattern: 'TS', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true },
-  { value: 'Tryptophan Oxidation (W)', label: 'Tryptophan Oxidation (W)', pattern: 'W', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
-  { value: 'Methionine Oxidation (M)', label: 'Methionine Oxidation (M)', pattern: 'M', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true },
-  { value: 'Deamidation ([STK]N)', label: 'Deamidation ([STK]N)', pattern: '[STK]N', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: true },
-  { value: 'Integrin binding', label: 'Integrin binding', pattern: 'RGD|RYD|KGD|NGR|LDV|DGE|GPR', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: false },
-  { value: 'Missing Cysteines', label: 'Missing Cysteines', pattern: '—', riskLevel: 'High', fixability: 'structural', enabledByDefault: true },
-  { value: 'Extra Cysteines', label: 'Extra Cysteines', pattern: '—', riskLevel: 'High', fixability: 'hard_to_fix', enabledByDefault: true },
+  { value: 'Deamidation (N[GS])', label: 'Deamidation (N[GS])', pattern: 'N[GS]', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true, applicableTo: ['antibody', 'peptide'] },
+  { value: 'Fragmentation (DP)', label: 'Fragmentation (DP)', pattern: 'DP', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true, applicableTo: ['antibody', 'peptide'] },
+  { value: 'Isomerization (D[DGHST])', label: 'Isomerization (D[DGHST])', pattern: 'D[DGHST]', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true, applicableTo: ['antibody', 'peptide'] },
+  { value: 'N-linked Glycosylation (N[^P][ST])', label: 'N-linked Glycosylation (N[^P][ST])', pattern: 'N[^P][ST]', riskLevel: 'High', fixability: 'fixable', enabledByDefault: true, applicableTo: ['antibody'] },
+  { value: 'Deamidation (N[AHNT])', label: 'Deamidation (N[AHNT])', pattern: 'N[AHNT]', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true, applicableTo: ['antibody', 'peptide'] },
+  { value: 'Hydrolysis (NP)', label: 'Hydrolysis (NP)', pattern: 'NP', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true, applicableTo: ['antibody', 'peptide'] },
+  { value: 'Fragmentation (TS)', label: 'Fragmentation (TS)', pattern: 'TS', riskLevel: 'Medium', fixability: 'fixable', enabledByDefault: true, applicableTo: ['antibody'] },
+  { value: 'Tryptophan Oxidation (W)', label: 'Tryptophan Oxidation (W)', pattern: 'W', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true, applicableTo: ['antibody', 'peptide'] },
+  { value: 'Methionine Oxidation (M)', label: 'Methionine Oxidation (M)', pattern: 'M', riskLevel: 'Medium', fixability: 'easily_fixable', enabledByDefault: true, applicableTo: ['antibody', 'peptide'] },
+  { value: 'Deamidation ([STK]N)', label: 'Deamidation ([STK]N)', pattern: '[STK]N', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: true, applicableTo: ['antibody', 'peptide'] },
+  { value: 'Integrin binding', label: 'Integrin binding', pattern: 'RGD|RYD|KGD|NGR|LDV|DGE|GPR', riskLevel: 'Low', fixability: 'easily_fixable', enabledByDefault: false, applicableTo: ['antibody', 'peptide'] },
+  { value: 'Missing Cysteines', label: 'Missing Cysteines', pattern: '—', riskLevel: 'High', fixability: 'structural', enabledByDefault: true, applicableTo: ['antibody'] },
+  { value: 'Extra Cysteines', label: 'Extra Cysteines', pattern: '—', riskLevel: 'High', fixability: 'hard_to_fix', enabledByDefault: true, applicableTo: ['antibody'] },
 ];
 
 const defaultDisabled = liabilityTypes.filter((l) => !l.enabledByDefault).map((l) => l.value);
@@ -80,6 +84,16 @@ export const model = BlockModel.create()
 
   .argsValid((ctx) => {
     if (ctx.args.inputAnchor === undefined) return false;
+
+    // Determine modality from the input-anchor spec.
+    let isPeptide = false;
+    try {
+      const spec = ctx.resultPool.getPColumnSpecByRef(ctx.args.inputAnchor);
+      isPeptide = spec?.axesSpec[1]?.name === 'pl7.app/variantKey';
+    } catch {
+      // resultPool not available; assume antibody mode (default).
+    }
+
     const customs = ctx.args.customLiabilities ?? [];
     const customNames = customs.map((c) => c.name);
     if (customNames.length !== new Set(customNames).size) return false;
@@ -91,7 +105,9 @@ export const model = BlockModel.create()
       } catch {
         return false;
       }
-      if (!c.regions || c.regions.length === 0) return false;
+      // Antibody mode: regions selection is required. Peptide mode: regions
+      // is unused (whole-sequence regex), so empty list is valid.
+      if (!isPeptide && (!c.regions || c.regions.length === 0)) return false;
     }
     return true;
   })
@@ -109,8 +125,22 @@ export const model = BlockModel.create()
         { name: 'pl7.app/vdj/scClonotypeKey' },
       ],
       annotations: { 'pl7.app/isAnchor': 'true' },
+    }, {
+      axes: [
+        { name: 'pl7.app/sampleId' },
+        { name: 'pl7.app/variantKey' },
+      ],
+      annotations: { 'pl7.app/isAnchor': 'true' },
     }]),
   )
+
+  .output('modality', (ctx) => {
+    const ref = ctx.args.inputAnchor;
+    if (ref === undefined) return undefined;
+    const spec = ctx.resultPool.getPColumnSpecByRef(ref);
+    if (!spec) return undefined;
+    return spec.axesSpec[1]?.name === 'pl7.app/variantKey' ? 'peptide' : 'antibody';
+  }, { retentive: true })
 
   .outputWithStatus('pt', (ctx) => {
     const pCols = ctx.outputs?.resolve('outputLiabilities')?.getPColumns();
@@ -146,7 +176,7 @@ export const model = BlockModel.create()
     ctx.prerun?.resolveAny({ field: 'importedFile' })?.getFileHandle(),
   )
 
-  .title(() => 'Antibody Sequence Liabilities')
+  .title(() => 'Sequence Liabilities')
 
   .subtitle((ctx) => ctx.args.customBlockLabel || ctx.args.defaultBlockLabel)
 
@@ -156,5 +186,5 @@ export const model = BlockModel.create()
 
   .done(2);
 
-export { allLiabilityTypeValues, predefinedLiabilityNames };
 export { getDefaultBlockLabel } from './label';
+export { allLiabilityTypeValues, predefinedLiabilityNames };

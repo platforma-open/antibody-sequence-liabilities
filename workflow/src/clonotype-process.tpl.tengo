@@ -97,7 +97,7 @@ self.body(func(args) {
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/developabilityRisk",
+				name: "pl7.app/developabilityRisk",
 				valueType: "String",
 				annotations: {
 					"pl7.app/label": "Developability risk",
@@ -118,7 +118,7 @@ self.body(func(args) {
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/developabilityScore",
+				name: "pl7.app/developabilityScore",
 				valueType: "Double",
 				annotations: {
 					"pl7.app/label": "Developability cost",
@@ -186,7 +186,7 @@ self.body(func(args) {
 			naRegex: "",
 			allowNA: true,
 			spec: {
-				name: "pl7.app/vdj/sequenceLiabilitiesSummary",
+				name: "pl7.app/sequenceLiabilitiesSummary",
 				valueType: "String",
 				annotations: {
 					"pl7.app/label": "Sequence liabilities summary",
@@ -357,7 +357,7 @@ self.body(func(args) {
 
 	// Create the base block-level trace
 	traceSteps := [{
-		type: "milaboratories.antibody-sequence-liabilities",
+		type: "milaboratories.sequence-liabilities",
 		importance: 30,
 		label: blockLabel,
 		id: blockId
