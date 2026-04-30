@@ -1,6 +1,6 @@
 # Liability Definitions
 # Format: name → (pattern, risk_level, fixability)
-ORIG_CDR_LIABILITIES = {
+ORIG_REGEX_LIABILITIES = {
     "Deamidation (N[GS])": (r"N[GS]", "High", "fixable"),
     "Fragmentation (DP)": (r"DP", "High", "fixable"),
     "Isomerization (D[DGHST])": (r"D[DGHST]", "High", "fixable"),
@@ -13,6 +13,19 @@ ORIG_CDR_LIABILITIES = {
     "Deamidation ([STK]N)": (r"[STK]N", "Low", "easily_fixable"),
     "Integrin binding": (r"RGD|RYD|KGD|NGR|LDV|DGE|GPR", "Low", "easily_fixable"),
 }
+
+# Phase 1 enabled set for peptide modality.
+PEPTIDE_LIABILITY_NAMES = frozenset({
+    "Deamidation (N[GS])",
+    "Fragmentation (DP)",
+    "Isomerization (D[DGHST])",
+    "Deamidation (N[AHNT])",
+    "Hydrolysis (NP)",
+    "Tryptophan Oxidation (W)",
+    "Methionine Oxidation (M)",
+    "Deamidation ([STK]N)",
+    "Integrin binding",
+})
 # Format: name → pattern  (fixability is always "disqualifying")
 ORIG_EXTRA_PATTERNS = {
     "Contains stop codon": r"\*",
@@ -25,7 +38,7 @@ ORIG_CYS_LIABILITIES = {
 }
 
 # Unified fixability lookup for all predefined liabilities
-FIXABILITY_MAP: dict[str, str] = {name: fixability for name, (_pat, _risk, fixability) in ORIG_CDR_LIABILITIES.items()}
+FIXABILITY_MAP: dict[str, str] = {name: fixability for name, (_pat, _risk, fixability) in ORIG_REGEX_LIABILITIES.items()}
 FIXABILITY_MAP.update({name: "disqualifying" for name in ORIG_EXTRA_PATTERNS})
 FIXABILITY_MAP.update({name: fixability for name, (_risk, fixability) in ORIG_CYS_LIABILITIES.items()})
 
@@ -58,7 +71,7 @@ REGION_ORDER_MAP = {"FR1": 1, "CDR1": 2, "CDR2": 3, "CDR3": 4, "FR2": 5, "FR3": 
 def get_active_liability_definitions(user_requested_set: set):
     if not user_requested_set:
         return {}, {}, {}, {}
-    active_cdr_l = {n: d for n, d in ORIG_CDR_LIABILITIES.items() if n in user_requested_set}
+    active_cdr_l = {n: d for n, d in ORIG_REGEX_LIABILITIES.items() if n in user_requested_set}
     active_extra_p = {n: p for n, p in ORIG_EXTRA_PATTERNS.items() if n in user_requested_set}
     active_cys_l = {n: d for n, d in ORIG_CYS_LIABILITIES.items() if n in user_requested_set}
     # active_liability_regex: name → pattern (CDR patterns + extra patterns)

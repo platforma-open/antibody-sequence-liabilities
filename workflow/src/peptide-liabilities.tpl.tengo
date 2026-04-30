@@ -1,0 +1,65 @@
+// Peptide-mode liability calculation. Mirrors clonotype-liabilities.tpl.tengo
+// but invokes the peptide_main.py entry point (no per-region / chain logic,
+// no CDR-boundary annotations, no Cys-position checks).
+
+self := import("@platforma-sdk/workflow-tengo:tpl")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+json := import("json")
+math := import("math")
+
+peptideLiabilitiesSw := assets.importSoftware("@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script:peptide")
+
+self.defineOutputs("result")
+
+
+self.body(func(args) {
+
+	inputTable := args.table
+	customLiabilities := args.customLiabilities
+	usePredefinedLiabilities := args.usePredefinedLiabilities
+	disabledPredefinedLiabilities := args.disabledPredefinedLiabilities
+
+	baseMemGiB := 16
+	if !is_undefined(args.mem) {
+		baseMemGiB = args.mem
+	}
+
+	// Run the peptide-only liability scanner.
+	cmd := exec.builder().
+		software(peptideLiabilitiesSw).
+		mem(string(int(math.max(8, baseMemGiB))) + "GiB").
+		cpu(1).
+		addFile("input.tsv", inputTable).
+		arg("--input_tsv").arg("input.tsv").
+		arg("--output_tsv").arg("result.tsv").
+		saveFile("result.tsv")
+
+	if usePredefinedLiabilities != undefined && usePredefinedLiabilities {
+		cmd = cmd.arg("--use_predefined_liabilities")
+	}
+
+	if customLiabilities && len(customLiabilities) > 0 {
+		cmd = cmd.writeFile("custom-liabilities.json", json.encode(customLiabilities)).
+			arg("--custom_liabilities").arg("custom-liabilities.json")
+	} else {
+		cmd = cmd.writeFile("custom-liabilities.json", "[]").
+			arg("--custom_liabilities").arg("custom-liabilities.json")
+	}
+
+	if disabledPredefinedLiabilities && len(disabledPredefinedLiabilities) > 0 {
+		cmd = cmd.writeFile("disabled.json", json.encode(disabledPredefinedLiabilities)).
+			arg("--disabled_predefined_liabilities").arg("disabled.json")
+	} else {
+		cmd = cmd.writeFile("disabled.json", "[]").
+			arg("--disabled_predefined_liabilities").arg("disabled.json")
+	}
+
+	run := cmd.run()
+	result := run.getFile("result.tsv")
+
+	return {
+		result: result
+	}
+})
