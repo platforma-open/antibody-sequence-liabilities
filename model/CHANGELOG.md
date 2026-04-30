@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.model
 
+## 6.0.0
+
+### Major Changes
+
+- 853c958: Support peptides
+
 ## 5.1.0
 
 ### Minor Changes

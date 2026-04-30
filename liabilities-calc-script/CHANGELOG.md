@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 6.0.0
+
+### Major Changes
+
+- 853c958: Support peptides
+
 ## 5.0.0
 
 ### Major Changes
