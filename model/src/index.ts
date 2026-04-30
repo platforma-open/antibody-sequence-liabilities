@@ -9,6 +9,7 @@ import {
   createPlDataTableV2,
 } from '@platforma-sdk/model';
 import { getDefaultBlockLabel } from './label';
+export type * from '@milaboratories/helpers';
 
 export type CustomLiability = {
   name: string;
