@@ -1,0 +1,184 @@
+// Peptide-mode post-processing. Imports the result TSV from peptide-liabilities.tpl.tengo
+// as a pframe with the variantKey axis and 3 modality-neutral output columns:
+// developabilityRisk, developabilityScore, sequenceLiabilitiesSummary.
+
+self := import("@platforma-sdk/workflow-tengo:tpl")
+xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+pframes := import("@platforma-sdk/workflow-tengo:pframes")
+pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
+json := import("json")
+math := import("math")
+
+self.defineOutputs("outputLiabilities", "exportPframe")
+
+
+self.body(func(args) {
+
+    blockId := args.blockId
+    customBlockLabel := args.customBlockLabel
+    defaultBlockLabel := args.defaultBlockLabel
+    liabilitiesTable := args.liabilitiesTable
+    datasetSpec := args.datasetSpec
+
+    baseMemGiB := 16
+    if !is_undefined(args.mem) {
+        baseMemGiB = args.mem
+    }
+    convMemGiB := string(int(math.max(8, baseMemGiB / 4))) + "GiB"
+
+    variantKeySpec := datasetSpec.axesSpec[1]
+
+    axes := [
+        {
+            column: "variantKey",
+            spec: variantKeySpec
+        }
+    ]
+
+    riskDiscreteValues := string(json.encode(["None", "Low", "Medium", "High"]))
+
+    columns := [
+        {
+            column: "peptide_aa",
+            id: "peptide-aa",
+            naRegex: "",
+            allowNA: true,
+            spec: {
+                name: "pl7.app/sequence",
+                valueType: "String",
+                domain: {
+                    "pl7.app/feature": "peptide",
+                    "pl7.app/alphabet": "aminoacid"
+                },
+                annotations: {
+                    "pl7.app/label": "Peptide aa",
+                    "pl7.app/isMainSequence": "true",
+                    "pl7.app/table/fontFamily": "monospace",
+                    "pl7.app/table/visibility": "default",
+                    "pl7.app/table/orderPriority": "200"
+                }
+            }
+        },
+        {
+            column: "developability_risk",
+            id: "developabilityRisk",
+            naRegex: "",
+            allowNA: true,
+            spec: {
+                name: "pl7.app/developabilityRisk",
+                valueType: "String",
+                annotations: {
+                    "pl7.app/label": "Developability risk",
+                    "pl7.app/description": "Maximum risk level across engineering-fixable liabilities matched in the peptide sequence.",
+                    "pl7.app/isScore": "true",
+                    "pl7.app/isDiscreteFilter": "true",
+                    "pl7.app/discreteValues": riskDiscreteValues,
+                    "pl7.app/score/rankingOrder": "increasing",
+                    "pl7.app/score/defaultCutoff": string(json.encode(["None", "Low"])),
+                    "pl7.app/table/visibility": "default",
+                    "pl7.app/table/orderPriority": "105"
+                }
+            }
+        },
+        {
+            column: "developability_cost",
+            id: "developabilityScore",
+            naRegex: "",
+            allowNA: true,
+            spec: {
+                name: "pl7.app/developabilityScore",
+                valueType: "Double",
+                annotations: {
+                    "pl7.app/label": "Developability cost",
+                    "pl7.app/description": "Lower is better. Sum of fixability weights across all non-disqualifying liabilities (flat per-peptide scoring; no region weights since peptides have no regions).",
+                    "pl7.app/isScore": "true",
+                    "pl7.app/score/rankingOrder": "increasing",
+                    "pl7.app/table/visibility": "default",
+                    "pl7.app/table/orderPriority": "104",
+                    "pl7.app/format": ".2~f"
+                }
+            }
+        },
+        {
+            column: "liabilities_summary",
+            id: "sequence-liabilities-summary",
+            naRegex: "",
+            allowNA: true,
+            spec: {
+                name: "pl7.app/sequenceLiabilitiesSummary",
+                valueType: "String",
+                annotations: {
+                    "pl7.app/label": "Sequence liabilities summary",
+                    "pl7.app/isSummary": "true",
+                    "pl7.app/table/visibility": "default",
+                    "pl7.app/table/orderPriority": "100"
+                }
+            }
+        }
+    ]
+
+    // Pick export columns (score / summary), tagging blockId in domain.
+    exportColumns := []
+    for col in columns {
+        if (col.spec.annotations && col.spec.annotations["pl7.app/isScore"] == "true") ||
+            (col.spec.annotations && col.spec.annotations["pl7.app/isSummary"] == "true") {
+            if !col.spec.domain {
+                col.spec.domain = {}
+            }
+            col.spec.domain["pl7.app/blockId"] = blockId
+            exportColumns += [col]
+        }
+    }
+
+    outputSpecs := {
+        axes: axes,
+        columns: columns,
+        storageFormat: "Parquet",
+        partitionKeyLength: 0
+    }
+
+    exportSpecs := {
+        axes: axes,
+        columns: exportColumns,
+        storageFormat: "Parquet",
+        partitionKeyLength: 0
+    }
+
+    outputLiabilities := xsv.importFile(
+        liabilitiesTable,
+        "tsv",
+        outputSpecs,
+        { cpu: 1, mem: convMemGiB }
+    )
+
+    exportOutput := xsv.importFile(
+        liabilitiesTable,
+        "tsv",
+        exportSpecs,
+        { splitDataAndSpec: true, cpu: 1, mem: convMemGiB }
+    )
+
+    blockLabel := customBlockLabel || defaultBlockLabel || "Sequence liabilities"
+
+    // Trace type matches the antibody pipeline so downstream consumers
+    // (lead-selection's score collection) treat the two modalities uniformly.
+    traceSteps := [{
+        type: "milaboratories.sequence-liabilities",
+        importance: 30,
+        label: blockLabel,
+        id: blockId
+    }]
+    liabilityTrace := pSpec.makeTrace(datasetSpec, traceSteps...)
+
+    exportPframe := pframes.pFrameBuilder()
+    for k, v in exportOutput {
+        exportPframe.add(k, liabilityTrace.inject(v.spec), v.data)
+    }
+    exportPframe = exportPframe.build()
+
+    return {
+        outputLiabilities: pframes.exportFrame(outputLiabilities),
+        exportPframe: exportPframe
+    }
+})

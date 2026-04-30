@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { liabilityTypes, predefinedLiabilityNames } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
-import type { CustomLiability } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import strings from '@milaboratories/strings';
+import type { CustomLiability } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
+import { liabilityTypes, predefinedLiabilityNames } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import type { PlRef } from '@platforma-sdk/model';
 import {
   PlAccordionSection,
@@ -55,7 +55,19 @@ const predefinedSectionOpen = ref(false);
 const advancedSectionOpen = ref(false);
 const resourceSectionOpen = ref(false);
 
-const predefinedItems = liabilityTypes.map((lt) => ({ ...lt }));
+const isPeptide = computed(() => app.model.outputs.modality === 'peptide');
+
+// Predefined liability list filtered by modality (per applicableTo). Defaults
+// to the full list when modality is undefined (during initial load).
+const predefinedItems = computed(() =>
+  liabilityTypes
+    .filter((lt) => {
+      const modality = app.model.outputs.modality;
+      if (!modality) return true;
+      return lt.applicableTo.includes(modality as 'antibody' | 'peptide');
+    })
+    .map((lt) => ({ ...lt })),
+);
 
 function isLiabilityEnabled(item: (typeof liabilityTypes)[number]): boolean {
   const disabled = app.model.args.disabledPredefinedLiabilities ?? [];
@@ -116,7 +128,8 @@ function addCustomLiability(): void {
     pattern: '',
     riskLevel: 'Medium',
     fixability: 'fixable',
-    regions: ['CDR1', 'CDR2', 'CDR3'],
+    // Peptide mode: rule applies to the whole sequence
+    regions: isPeptide.value ? [] : ['CDR1', 'CDR2', 'CDR3'],
   };
   expandedIndices.value = new Set([...expandedIndices.value, current.length]);
   app.model.args.customLiabilities = [...current, newItem];
@@ -244,7 +257,9 @@ watch(
         app.model.args.importFileHandle = undefined;
         return;
       }
-      if (!item.regions || item.regions.length === 0) {
+      // Regions check applies only in antibody mode.
+      const regions = item.regions ?? [];
+      if (!isPeptide.value && regions.length === 0) {
         importError.value = `"${item.name}" must have at least one region`;
         app.model.args.importFileHandle = undefined;
         return;
@@ -260,7 +275,7 @@ watch(
   <PlBlockPage
     v-model:subtitle="app.model.args.customBlockLabel"
     :subtitle-placeholder="app.model.args.defaultBlockLabel"
-    title="Antibody Sequence Liabilities"
+    title="Sequence Liabilities"
   >
     <template #append>
       <PlBtnGhost @click.stop="settingsIsShown = true">
@@ -321,8 +336,10 @@ watch(
               <span :style="{ fontSize: '11px', opacity: 0.6, marginLeft: '6px' }">{{ fixabilityLabel[item.fixability] }}</span>
             </PlCheckbox>
             <template #tooltip>
-              Off by default. RGD/RYD/LDV motifs trigger off-target cell adhesion via integrin receptors.
+              Off by default. RGD/RYD/KGD/NGR/LDV/DGE/GPR motifs trigger off-target cell adhesion via integrin receptors.
               Enable for in vivo therapeutic candidates where off-target binding is a safety concern.
+              <br /><br />
+              For peptides intentionally targeting integrins, keep this rule disabled.
             </template>
           </PlTooltip>
           <PlCheckbox
@@ -341,7 +358,7 @@ watch(
     <PlAlert
       v-if="(
         !app.model.args.usePredefinedLiabilities ||
-        (app.model.args.disabledPredefinedLiabilities?.length ?? 0) >= liabilityTypes.length
+        predefinedItems.every((item) => !isLiabilityEnabled(item))
       ) && (app.model.args.customLiabilities?.length ?? 0) === 0"
       type="warn"
     >
@@ -404,6 +421,7 @@ watch(
             </template>
           </PlTooltip>
           <PlDropdownMulti
+            v-if="!isPeptide"
             v-model="customItems[index].regions"
             label="Regions"
             :options="regionOptions"

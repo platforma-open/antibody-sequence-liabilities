@@ -1,6 +1,6 @@
 import re
 
-from definitions import ORIG_CDR_LIABILITIES, ORIG_CYS_LIABILITIES, _ENGINEERING_FIXABILITIES
+from definitions import ORIG_REGEX_LIABILITIES, ORIG_CYS_LIABILITIES, _ENGINEERING_FIXABILITIES
 
 
 # Cysteine position helpers
