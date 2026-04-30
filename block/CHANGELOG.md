@@ -1,5 +1,18 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 5.0.0
+
+### Major Changes
+
+- 853c958: Support peptides
+
+### Patch Changes
+
+- Updated dependencies [853c958]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.workflow@6.0.0
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@6.0.0
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.ui@6.0.0
+
 ## 4.0.3
 
 ### Patch Changes
