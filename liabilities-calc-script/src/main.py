@@ -11,7 +11,7 @@ from polars.exceptions import ShapeError
 from annotations import base36_encode, extract_cdrs_fr1, parse_annotations
 from definitions import (
     FIXABILITY_MAP,
-    ORIG_CDR_LIABILITIES,
+    ORIG_REGEX_LIABILITIES,
     ORIG_CYS_LIABILITIES,
     ORIG_EXTRA_PATTERNS,
     REGION_ORDER_MAP,
@@ -292,7 +292,7 @@ def main():
         USER_REQUESTED_LIABILITIES = {name.strip() for name in raw_names if name.strip()}
     else:
         USER_REQUESTED_LIABILITIES = (
-            set(ORIG_CDR_LIABILITIES) | set(ORIG_EXTRA_PATTERNS) | set(ORIG_CYS_LIABILITIES)
+            set(ORIG_REGEX_LIABILITIES) | set(ORIG_EXTRA_PATTERNS) | set(ORIG_CYS_LIABILITIES)
         )
 
     if use_predefined:
