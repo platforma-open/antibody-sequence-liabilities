@@ -312,7 +312,7 @@ watch(
         Use predefined liabilities
       </PlCheckbox>
       <template #tooltip>
-        Curated library of 13 patterns - deamidation, oxidation, fragmentation, glycosylation, and structural issues. Disable to exclude all built-in checks from scoring.
+        Curated library of patterns covering deamidation, oxidation, fragmentation, glycosylation, and structural issues. Disable to exclude all built-in checks from scoring.
       </template>
     </PlTooltip>
 
@@ -461,7 +461,7 @@ watch(
         :maxValue="1012"
       >
         <template #tooltip>
-          Sets the amount of memory available for the liabilities calculation. Increase for large datasets (&gt;10M clonotypes).
+          Sets the amount of memory available for the liabilities calculation. Increase for large datasets (&gt;10M sequences).
         </template>
       </PlNumberField>
     </PlAccordionSection>
