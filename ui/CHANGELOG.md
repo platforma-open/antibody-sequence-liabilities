@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 6.0.1
+
+### Patch Changes
+
+- 9e17876: Include peptides in documentation
+
 ## 6.0.0
 
 ### Major Changes
