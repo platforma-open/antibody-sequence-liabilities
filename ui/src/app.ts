@@ -7,6 +7,7 @@ export const sdkPlugin = defineAppV3(platforma, (app) => {
   app.model.data.customBlockLabel ??= '';
 
   syncDefaultBlockLabel(app.model);
+  syncModality(app.model);
 
   return {
     routes: {
@@ -18,6 +19,15 @@ export const sdkPlugin = defineAppV3(platforma, (app) => {
 export const useApp = sdkPlugin.useApp;
 
 type AppModel = ReturnType<typeof useApp>['model'];
+
+function syncModality(model: AppModel) {
+  watchEffect(() => {
+    const modality = model.outputs.modality;
+    if (modality !== undefined) {
+      model.data.modality = modality;
+    }
+  });
+}
 
 function syncDefaultBlockLabel(model: AppModel) {
   watchEffect(() => {
