@@ -12,6 +12,8 @@ import {
 import { getDefaultBlockLabel } from './label';
 export type * from '@milaboratories/helpers';
 
+export type Modality = 'antibody' | 'peptide';
+
 export type CustomLiability = {
   name: string;
   pattern: string;
@@ -39,6 +41,7 @@ export type BlockData = {
   defaultBlockLabel: string;
   customBlockLabel: string;
   inputAnchor?: PlRef;
+  modality?: Modality;
   usePredefinedLiabilities?: boolean;
   disabledPredefinedLiabilities?: string[];
   customLiabilities?: CustomLiability[];
@@ -46,8 +49,6 @@ export type BlockData = {
   mem?: number;
   tableState: PlDataTableStateV2;
 };
-
-export type Modality = 'antibody' | 'peptide';
 
 export const liabilityTypes: {
   value: string;
@@ -114,6 +115,11 @@ export const platforma = BlockModelV3.create(dataModel)
       } catch {
         throw new Error(`Invalid regex: "${c.pattern}"`);
       }
+      // Antibody mode: regions selection is required. Peptide mode: regions
+      // is unused (whole-sequence regex), so empty list is valid.
+      // data.modality defaults to undefined until synced; treat as antibody (conservative).
+      if (data.modality !== 'peptide' && (!c.regions || c.regions.length === 0))
+        throw new Error(`Custom liability "${c.name}" must have at least one region selected`);
     }
 
     return {
