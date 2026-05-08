@@ -31,14 +31,14 @@ const app = useApp();
 
 function setInput(inputRef?: PlRef) {
   if (!inputRef) return;
-  app.model.args.inputAnchor = inputRef;
+  app.model.data.inputAnchor = inputRef;
 }
 
 const tableSettings = usePlDataTableSettingsV2({
   model: () => app.model.outputs.pt,
 });
 
-const settingsIsShown = ref(app.model.args.inputAnchor === undefined);
+const settingsIsShown = ref(app.model.data.inputAnchor === undefined);
 
 watch(
   () => app.model.outputs.isRunning,
@@ -70,16 +70,16 @@ const predefinedItems = computed(() =>
 );
 
 function isLiabilityEnabled(item: (typeof liabilityTypes)[number]): boolean {
-  const disabled = app.model.args.disabledPredefinedLiabilities ?? [];
+  const disabled = app.model.data.disabledPredefinedLiabilities ?? [];
   return !disabled.includes(item.value);
 }
 
 function toggleLiability(item: (typeof liabilityTypes)[number]): void {
-  const disabled = app.model.args.disabledPredefinedLiabilities ?? [];
+  const disabled = app.model.data.disabledPredefinedLiabilities ?? [];
   if (disabled.includes(item.value)) {
-    app.model.args.disabledPredefinedLiabilities = disabled.filter((v) => v !== item.value);
+    app.model.data.disabledPredefinedLiabilities = disabled.filter((v) => v !== item.value);
   } else {
-    app.model.args.disabledPredefinedLiabilities = [...disabled, item.value];
+    app.model.data.disabledPredefinedLiabilities = [...disabled, item.value];
   }
 }
 
@@ -115,14 +115,14 @@ const fixabilityOptions = [
 ];
 
 const customItems = computed({
-  get: () => app.model.args.customLiabilities ?? [],
-  set: (value) => { app.model.args.customLiabilities = value; },
+  get: () => app.model.data.customLiabilities ?? [],
+  set: (value) => { app.model.data.customLiabilities = value; },
 });
 
 const expandedIndices = ref<Set<number>>(new Set());
 
 function addCustomLiability(): void {
-  const current = app.model.args.customLiabilities ?? [];
+  const current = app.model.data.customLiabilities ?? [];
   const newItem: CustomLiability = {
     name: '',
     pattern: '',
@@ -132,11 +132,11 @@ function addCustomLiability(): void {
     regions: isPeptide.value ? [] : ['CDR1', 'CDR2', 'CDR3'],
   };
   expandedIndices.value = new Set([...expandedIndices.value, current.length]);
-  app.model.args.customLiabilities = [...current, newItem];
+  app.model.data.customLiabilities = [...current, newItem];
 }
 
 function removeCustomLiability(index: number): void {
-  const current = [...(app.model.args.customLiabilities ?? [])];
+  const current = [...(app.model.data.customLiabilities ?? [])];
   current.splice(index, 1);
   const next = new Set<number>();
   for (const i of expandedIndices.value) {
@@ -144,7 +144,7 @@ function removeCustomLiability(index: number): void {
     else if (i > index) next.add(i - 1);
   }
   expandedIndices.value = next;
-  app.model.args.customLiabilities = current;
+  app.model.data.customLiabilities = current;
 }
 
 function toggleExpanded(index: number): void {
@@ -165,13 +165,13 @@ function isPatternValid(pattern: string): boolean {
 }
 
 function isPredefinedName(index: number): boolean {
-  const name = (app.model.args.customLiabilities ?? [])[index]?.name;
+  const name = (app.model.data.customLiabilities ?? [])[index]?.name;
   if (!name) return false;
   return predefinedLiabilityNames.has(name);
 }
 
 function isDuplicateName(index: number): boolean {
-  const items = app.model.args.customLiabilities ?? [];
+  const items = app.model.data.customLiabilities ?? [];
   const name = items[index]?.name;
   if (!name) return false;
   return items.some((item, i) => i !== index && item.name === name);
@@ -186,7 +186,7 @@ function customNameError(index: number): string | undefined {
 // ── Export / Import custom liabilities ───────────────────────────────────────
 
 function exportCustomLiabilities(): void {
-  const data = JSON.stringify(app.model.args.customLiabilities ?? [], null, 2);
+  const data = JSON.stringify(app.model.data.customLiabilities ?? [], null, 2);
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -218,63 +218,63 @@ watch(
   [importedFileBytes, importedFileData] as const,
   ([bytes, data]) => {
     if (bytes === undefined) return;
-    if (app.model.args.importFileHandle === undefined) return;
+    if (app.model.data.importFileHandle === undefined) return;
 
     importError.value = undefined;
 
     if (data === undefined) {
       importError.value = 'Failed to read file — ensure it is valid JSON';
-      app.model.args.importFileHandle = undefined;
+      app.model.data.importFileHandle = undefined;
       return;
     }
     if (!Array.isArray(data)) {
       importError.value = 'Invalid format: expected a JSON array';
-      app.model.args.importFileHandle = undefined;
+      app.model.data.importFileHandle = undefined;
       return;
     }
     const names = (data as CustomLiability[]).map((item) => item.name);
     if (names.length !== new Set(names).size) {
       importError.value = 'Duplicate names in imported liabilities';
-      app.model.args.importFileHandle = undefined;
+      app.model.data.importFileHandle = undefined;
       return;
     }
     const predefinedCollision = names.find((n) => predefinedLiabilityNames.has(n));
     if (predefinedCollision) {
       importError.value = `"${predefinedCollision}" collides with a predefined liability name`;
-      app.model.args.importFileHandle = undefined;
+      app.model.data.importFileHandle = undefined;
       return;
     }
     for (const item of data as CustomLiability[]) {
       if (!item.name || !item.pattern) {
         importError.value = 'Each liability must have a name and pattern';
-        app.model.args.importFileHandle = undefined;
+        app.model.data.importFileHandle = undefined;
         return;
       }
       try {
         new RegExp(item.pattern);
       } catch {
         importError.value = `Invalid regex: "${item.pattern}"`;
-        app.model.args.importFileHandle = undefined;
+        app.model.data.importFileHandle = undefined;
         return;
       }
       // Regions check applies only in antibody mode.
       const regions = item.regions ?? [];
       if (!isPeptide.value && regions.length === 0) {
         importError.value = `"${item.name}" must have at least one region`;
-        app.model.args.importFileHandle = undefined;
+        app.model.data.importFileHandle = undefined;
         return;
       }
     }
-    app.model.args.customLiabilities = data as CustomLiability[];
-    app.model.args.importFileHandle = undefined;
+    app.model.data.customLiabilities = data as CustomLiability[];
+    app.model.data.importFileHandle = undefined;
   },
 );
 </script>
 
 <template>
   <PlBlockPage
-    v-model:subtitle="app.model.args.customBlockLabel"
-    :subtitle-placeholder="app.model.args.defaultBlockLabel"
+    v-model:subtitle="app.model.data.customBlockLabel"
+    :subtitle-placeholder="app.model.data.defaultBlockLabel"
     title="Sequence Liabilities"
   >
     <template #append>
@@ -286,7 +286,7 @@ watch(
       </PlBtnGhost>
     </template>
     <PlAgDataTableV2
-      v-model="app.model.ui.tableState"
+      v-model="app.model.data.tableState"
       :settings="tableSettings"
       show-export-button
       :not-ready-text="strings.callToActions.configureSettingsAndRun"
@@ -297,7 +297,7 @@ watch(
   <PlSlideModal v-model="settingsIsShown">
     <template #title>{{ strings.titles.settings }}</template>
     <PlDropdownRef
-      v-model="app.model.args.inputAnchor"
+      v-model="app.model.data.inputAnchor"
       :options="app.model.outputs.inputOptions ?? []"
       :label="strings.titles.dataset"
       required
@@ -306,8 +306,8 @@ watch(
 
     <PlTooltip position="left">
       <PlCheckbox
-        :model-value="app.model.args.usePredefinedLiabilities ?? true"
-        @update:model-value="(v) => (app.model.args.usePredefinedLiabilities = v)"
+        :model-value="app.model.data.usePredefinedLiabilities ?? true"
+        @update:model-value="(v) => (app.model.data.usePredefinedLiabilities = v)"
       >
         Use predefined liabilities
       </PlCheckbox>
@@ -321,8 +321,8 @@ watch(
       <!-- Predefined list: grayed out when disabled -->
       <div
         :style="{
-          opacity: (app.model.args.usePredefinedLiabilities ?? true) ? 1 : 0.4,
-          pointerEvents: (app.model.args.usePredefinedLiabilities ?? true) ? 'auto' : 'none',
+          opacity: (app.model.data.usePredefinedLiabilities ?? true) ? 1 : 0.4,
+          pointerEvents: (app.model.data.usePredefinedLiabilities ?? true) ? 'auto' : 'none',
           transition: 'opacity 0.2s',
         }"
       >
@@ -357,9 +357,9 @@ watch(
     <!-- Warn when no liabilities are active — shown outside the collapsible so always visible -->
     <PlAlert
       v-if="(
-        !app.model.args.usePredefinedLiabilities ||
+        !app.model.data.usePredefinedLiabilities ||
         predefinedItems.every((item) => !isLiabilityEnabled(item))
-      ) && (app.model.args.customLiabilities?.length ?? 0) === 0"
+      ) && (app.model.data.customLiabilities?.length ?? 0) === 0"
       type="warn"
     >
       No liabilities active — all sequences will pass without scoring.
@@ -438,7 +438,7 @@ watch(
       </PlBtnSecondary>
       <PlTooltip position="top">
         <PlFileInput
-          v-model="app.model.args.importFileHandle"
+          v-model="app.model.data.importFileHandle"
           label="Import custom liabilities"
           :extensions="['json']"
           :error="importError"
@@ -454,7 +454,7 @@ watch(
 
     <PlAccordionSection v-model="resourceSectionOpen" label="Resource Allocation">
       <PlNumberField
-        v-model="app.model.args.mem"
+        v-model="app.model.data.mem"
         label="Memory (GiB)"
         :minValue="1"
         :step="1"

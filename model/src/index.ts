@@ -4,12 +4,15 @@ import type {
   PlRef,
 } from '@platforma-sdk/model';
 import {
-  BlockModel,
+  BlockModelV3,
+  DataModelBuilder,
   createPlDataTableStateV2,
   createPlDataTableV2,
 } from '@platforma-sdk/model';
 import { getDefaultBlockLabel } from './label';
 export type * from '@milaboratories/helpers';
+
+export type Modality = 'antibody' | 'peptide';
 
 export type CustomLiability = {
   name: string;
@@ -19,7 +22,7 @@ export type CustomLiability = {
   regions: string[];
 };
 
-export type BlockArgs = {
+type OldArgs = {
   defaultBlockLabel: string;
   customBlockLabel: string;
   inputAnchor?: PlRef;
@@ -30,11 +33,22 @@ export type BlockArgs = {
   mem?: number;
 };
 
-export type UiState = {
+type OldUiState = {
   tableState: PlDataTableStateV2;
 };
 
-export type Modality = 'antibody' | 'peptide';
+export type BlockData = {
+  defaultBlockLabel: string;
+  customBlockLabel: string;
+  inputAnchor?: PlRef;
+  modality?: Modality;
+  usePredefinedLiabilities?: boolean;
+  disabledPredefinedLiabilities?: string[];
+  customLiabilities?: CustomLiability[];
+  importFileHandle?: ImportFileHandle;
+  mem?: number;
+  tableState: PlDataTableStateV2;
+};
 
 export const liabilityTypes: {
   value: string;
@@ -65,8 +79,13 @@ const defaultDisabled = liabilityTypes.filter((l) => !l.enabledByDefault).map((l
 const allLiabilityTypeValues = liabilityTypes.map((l) => l.value);
 const predefinedLiabilityNames = new Set(allLiabilityTypeValues);
 
-export const model = BlockModel.create()
-  .withArgs<BlockArgs>({
+const dataModel = new DataModelBuilder()
+  .from<BlockData>('v1')
+  .upgradeLegacy<OldArgs, OldUiState>(({ args, uiState }) => ({
+    ...args,
+    tableState: uiState.tableState,
+  }))
+  .init(() => ({
     defaultBlockLabel: getDefaultBlockLabel({
       usePredefinedLiabilities: true,
       disabledPredefinedLiabilities: defaultDisabled,
@@ -77,41 +96,46 @@ export const model = BlockModel.create()
     usePredefinedLiabilities: true,
     disabledPredefinedLiabilities: defaultDisabled,
     customLiabilities: [],
-  })
-
-  .withUiState<UiState>({
     tableState: createPlDataTableStateV2(),
-  })
+  }));
 
-  .argsValid((ctx) => {
-    if (ctx.args.inputAnchor === undefined) return false;
+export const platforma = BlockModelV3.create(dataModel)
 
-    // Determine modality from the input-anchor spec.
-    let isPeptide = false;
-    try {
-      const spec = ctx.resultPool.getPColumnSpecByRef(ctx.args.inputAnchor);
-      isPeptide = spec?.axesSpec[1]?.name === 'pl7.app/variantKey';
-    } catch {
-      // resultPool not available; assume antibody mode (default).
-    }
+  .args((data) => {
+    if (!data.inputAnchor) throw new Error('Input anchor is required');
 
-    const customs = ctx.args.customLiabilities ?? [];
+    const customs = data.customLiabilities ?? [];
     const customNames = customs.map((c) => c.name);
-    if (customNames.length !== new Set(customNames).size) return false;
+    if (customNames.length !== new Set(customNames).size) throw new Error('Duplicate custom liability names');
     for (const c of customs) {
-      if (!c.name || !c.pattern) return false;
-      if (predefinedLiabilityNames.has(c.name)) return false;
+      if (!c.name || !c.pattern) throw new Error('Custom liability must have name and pattern');
+      if (predefinedLiabilityNames.has(c.name)) throw new Error(`"${c.name}" collides with predefined liability name`);
       try {
         new RegExp(c.pattern);
       } catch {
-        return false;
+        throw new Error(`Invalid regex: "${c.pattern}"`);
       }
       // Antibody mode: regions selection is required. Peptide mode: regions
       // is unused (whole-sequence regex), so empty list is valid.
-      if (!isPeptide && (!c.regions || c.regions.length === 0)) return false;
+      // data.modality defaults to undefined until synced; treat as antibody (conservative).
+      if (data.modality !== 'peptide' && (!c.regions || c.regions.length === 0))
+        throw new Error(`Custom liability "${c.name}" must have at least one region selected`);
     }
-    return true;
+
+    return {
+      defaultBlockLabel: data.defaultBlockLabel,
+      customBlockLabel: data.customBlockLabel,
+      inputAnchor: data.inputAnchor,
+      usePredefinedLiabilities: data.usePredefinedLiabilities,
+      disabledPredefinedLiabilities: data.disabledPredefinedLiabilities,
+      customLiabilities: data.customLiabilities,
+      importFileHandle: data.importFileHandle,
+      mem: data.mem,
+    };
   })
+
+  // prerunArgs allows file import to run independently of whether inputAnchor is set
+  .prerunArgs((data) => ({ importFileHandle: data.importFileHandle }))
 
   .output('inputOptions', (ctx) =>
     ctx.resultPool.getOptions([{
@@ -136,7 +160,7 @@ export const model = BlockModel.create()
   )
 
   .output('modality', (ctx) => {
-    const ref = ctx.args.inputAnchor;
+    const ref = ctx.data.inputAnchor;
     if (ref === undefined) return undefined;
     const spec = ctx.resultPool.getPColumnSpecByRef(ref);
     if (!spec) return undefined;
@@ -151,7 +175,7 @@ export const model = BlockModel.create()
     return createPlDataTableV2(
       ctx,
       pCols,
-      ctx.uiState.tableState,
+      ctx.data.tableState,
     );
   })
 
@@ -179,13 +203,13 @@ export const model = BlockModel.create()
 
   .title(() => 'Sequence Liabilities')
 
-  .subtitle((ctx) => ctx.args.customBlockLabel || ctx.args.defaultBlockLabel)
+  .subtitle((ctx) => ctx.data.customBlockLabel || ctx.data.defaultBlockLabel)
 
   .sections((_) => [
     { type: 'link', href: '/', label: 'Table' },
   ])
 
-  .done(2);
+  .done();
 
 export { getDefaultBlockLabel } from './label';
 export { allLiabilityTypeValues, predefinedLiabilityNames };
