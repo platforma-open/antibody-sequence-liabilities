@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.model
 
+## 6.0.1
+
+### Patch Changes
+
+- 169fc9c: migrate to block model v3
+
 ## 6.0.0
 
 ### Major Changes
