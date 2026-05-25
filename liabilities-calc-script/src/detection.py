@@ -115,9 +115,9 @@ def classify_risk(
     per-region risk reflects all liabilities except disqualifying. The implementor
     picked A; R8 (:71), Step 2 (:252-253), Defaults (:304), M1 (:346), and Risks
     (:395) then encoded that choice as binding. User feedback (Slack 2026-05-24)
-    showed A's predicted counter-argument materialized — per-region Liabilities
-    and Risk columns visibly disagree when a region's only liabilities are
-    hard_to_fix / structural. This function now implements Option B.
+    confirmed A's counter-argument: per-region Liabilities and Risk visibly
+    disagree when a region carries only hard_to_fix / structural matches. This
+    function now implements Option B.
 
     Engineering-only severity is still available in the global "Developability
     risk" column (see scoring.classify_developability_risk), which keeps
