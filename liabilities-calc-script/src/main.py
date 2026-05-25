@@ -11,9 +11,9 @@ from polars.exceptions import ShapeError
 from annotations import base36_encode, extract_cdrs_fr1, parse_annotations
 from definitions import (
     FIXABILITY_MAP,
-    ORIG_REGEX_LIABILITIES,
     ORIG_CYS_LIABILITIES,
     ORIG_EXTRA_PATTERNS,
+    ORIG_REGEX_LIABILITIES,
     REGION_ORDER_MAP,
     build_expected_cys_map,
     get_active_liability_definitions,
@@ -27,8 +27,6 @@ from detection import (
 )
 from scoring import (
     classify_developability_risk,
-    classify_is_productive,
-    classify_structural_risk,
     compute_developability_score,
 )
 
@@ -40,11 +38,7 @@ def _is_productive_expr(liab_cols: list[str], fixability_map: dict[str, str]) ->
     Uses vectorised str.contains + any_horizontal instead of per-row map_elements.
     """
     disqualifying = {name for name, fix in fixability_map.items() if fix == "disqualifying"}
-    conditions = [
-        pl.col(c).str.contains(name, literal=True)
-        for c in liab_cols
-        for name in disqualifying
-    ]
+    conditions = [pl.col(c).str.contains(name, literal=True) for c in liab_cols for name in disqualifying]
     if not conditions:
         return pl.lit("Pass")
     return pl.when(pl.any_horizontal(conditions)).then(pl.lit("Fail")).otherwise(pl.lit("Pass"))
@@ -57,11 +51,7 @@ def _structural_risk_expr(liab_cols: list[str], fixability_map: dict[str, str]) 
     Uses vectorised str.contains + any_horizontal instead of per-row map_elements.
     """
     structural = {name for name, fix in fixability_map.items() if fix in {"structural", "hard_to_fix"}}
-    conditions = [
-        pl.col(c).str.contains(name, literal=True)
-        for c in liab_cols
-        for name in structural
-    ]
+    conditions = [pl.col(c).str.contains(name, literal=True) for c in liab_cols for name in structural]
     if not conditions:
         return pl.lit("None")
     return pl.when(pl.any_horizontal(conditions)).then(pl.lit("Present")).otherwise(pl.lit("None"))
@@ -291,9 +281,7 @@ def main():
         raw_names = args.include_liabilities.split(",")
         USER_REQUESTED_LIABILITIES = {name.strip() for name in raw_names if name.strip()}
     else:
-        USER_REQUESTED_LIABILITIES = (
-            set(ORIG_REGEX_LIABILITIES) | set(ORIG_EXTRA_PATTERNS) | set(ORIG_CYS_LIABILITIES)
-        )
+        USER_REQUESTED_LIABILITIES = set(ORIG_REGEX_LIABILITIES) | set(ORIG_EXTRA_PATTERNS) | set(ORIG_CYS_LIABILITIES)
 
     if use_predefined:
         active_cdr_defs, active_extra_defs, active_cys_defs, active_liability_regex = get_active_liability_definitions(
@@ -338,7 +326,9 @@ def main():
 
     expected_cys_map = build_expected_cys_map(args.numbering_schema)
 
-    if not (active_cdr_defs or active_extra_defs or active_cys_defs or active_custom_defs or active_extra_defs_full_seq):
+    if not (
+        active_cdr_defs or active_extra_defs or active_cys_defs or active_custom_defs or active_extra_defs_full_seq
+    ):
         print(
             "Warning: no active liability definitions after applying predefined/disabled/custom settings."
             " Liability calculations will be skipped."
@@ -393,9 +383,9 @@ def main():
     # the full chain avoids these false positives in per-region fragments.
     _fragment_keys_lower = {"cdr1", "cdr2", "cdr3", "fr1", "fr2", "fr3", "fr4"}
     full_input_sequence_cols = [
-        c for c in df_processed.columns
-        if c.lower().endswith(" aa")
-        and not any(k in c.lower() for k in _fragment_keys_lower)
+        c
+        for c in df_processed.columns
+        if c.lower().endswith(" aa") and not any(k in c.lower() for k in _fragment_keys_lower)
     ]
 
     if has_input_ann_cols:
@@ -693,8 +683,7 @@ def main():
                 .cast(pl.Utf8)
                 .map_elements(
                     lambda l_str, cfm=combined_fixability_map, rlm=combined_risk_level_map: classify_risk(
-                        l_str, active_cdr_defs, active_cys_defs,
-                        set(active_extra_defs_for_per_region.keys()) | set(active_extra_defs_full_seq.keys()), cfm, rlm
+                        l_str, cfm, rlm
                     ),
                     return_dtype=pl.Utf8,
                     skip_nulls=False,
