@@ -483,8 +483,9 @@ def test_custom_liability_per_region_risk_by_fixability(
     fixability class (Option B at spec :126). The Structural liabilities column
     additionally flags Present for hard_to_fix/structural matches; engineering-
     only fixabilities (fixable, easily_fixable) leave it None. Developability
-    risk reflects the engineering severity (None/Low/Medium/High) for engineering-
-    only fixabilities, and switches to Non-Developable when Structural = Present.
+    risk reflects the engineering severity (None/Low/Medium/High) for
+    engineering-only fixabilities; Very High when hard_to_fix; Non-Developable
+    when structural.
     """
     liability_name = f"Custom {fixability}"
     custom = tmp_path / "custom.json"
