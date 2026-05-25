@@ -1,3 +1,14 @@
+from typing import Literal, TypeAlias
+
+# Type aliases for the bounded enum strings used across detection / scoring / Tengo.
+# Centralising these catches typos and serves as the source of truth that the
+# Tengo PColumn discreteValues annotations must match.
+Fixability: TypeAlias = Literal["disqualifying", "structural", "hard_to_fix", "fixable", "easily_fixable"]
+RiskLevel: TypeAlias = Literal["Low", "Medium", "High"]
+PerRegionRisk: TypeAlias = Literal["None", "Low", "Medium", "High"]
+DevelopabilityRisk: TypeAlias = Literal["None", "Low", "Medium", "High", "Very High", "Non-Developable"]
+
+
 # Liability Definitions
 # Format: name → (pattern, risk_level, fixability)
 ORIG_REGEX_LIABILITIES = {
@@ -15,17 +26,19 @@ ORIG_REGEX_LIABILITIES = {
 }
 
 # Phase 1 enabled set for peptide modality.
-PEPTIDE_LIABILITY_NAMES = frozenset({
-    "Deamidation (N[GS])",
-    "Fragmentation (DP)",
-    "Isomerization (D[DGHST])",
-    "Deamidation (N[AHNT])",
-    "Hydrolysis (NP)",
-    "Tryptophan Oxidation (W)",
-    "Methionine Oxidation (M)",
-    "Deamidation ([STK]N)",
-    "Integrin binding",
-})
+PEPTIDE_LIABILITY_NAMES = frozenset(
+    {
+        "Deamidation (N[GS])",
+        "Fragmentation (DP)",
+        "Isomerization (D[DGHST])",
+        "Deamidation (N[AHNT])",
+        "Hydrolysis (NP)",
+        "Tryptophan Oxidation (W)",
+        "Methionine Oxidation (M)",
+        "Deamidation ([STK]N)",
+        "Integrin binding",
+    }
+)
 # Format: name → pattern  (fixability is always "disqualifying")
 ORIG_EXTRA_PATTERNS = {
     "Contains stop codon": r"\*",
@@ -38,7 +51,9 @@ ORIG_CYS_LIABILITIES = {
 }
 
 # Unified fixability lookup for all predefined liabilities
-FIXABILITY_MAP: dict[str, str] = {name: fixability for name, (_pat, _risk, fixability) in ORIG_REGEX_LIABILITIES.items()}
+FIXABILITY_MAP: dict[str, Fixability] = {
+    name: fixability for name, (_pat, _risk, fixability) in ORIG_REGEX_LIABILITIES.items()
+}
 FIXABILITY_MAP.update({name: "disqualifying" for name in ORIG_EXTRA_PATTERNS})
 FIXABILITY_MAP.update({name: fixability for name, (_risk, fixability) in ORIG_CYS_LIABILITIES.items()})
 

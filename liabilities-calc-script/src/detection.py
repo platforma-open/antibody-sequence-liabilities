@@ -1,6 +1,6 @@
 import re
 
-from definitions import ORIG_REGEX_LIABILITIES, ORIG_CYS_LIABILITIES, _ENGINEERING_FIXABILITIES
+from definitions import Fixability, PerRegionRisk, RiskLevel
 
 
 # Cysteine position helpers
@@ -28,7 +28,7 @@ def _evaluate_cys_liabilities(seq: str, expected_positions: list, expected_count
 
 # Liability & Risk Functions
 def identify_liabilities(
-    seq: str,
+    seq: str | None,
     region: str,
     active_cdr_defs: dict,
     active_extra_defs: dict,
@@ -101,32 +101,45 @@ def identify_liabilities(
 
 
 def classify_risk(
-    liabilities_str: str,
-    active_cdr_defs: dict,
-    active_cys_defs: dict,
-    active_extra_pattern_names: set,
-    fixability_map: dict[str, str],
-    risk_level_map: dict[str, str] | None = None,
-) -> str:
-    """Per-region engineering risk — counts fixable and easily_fixable liabilities only."""
+    liabilities_str: str | None,
+    fixability_map: dict[str, Fixability],
+    risk_level_map: dict[str, RiskLevel],
+) -> PerRegionRisk:
+    """Per-region risk: worst riskLevel across all non-disqualifying liabilities
+    detected in the region's liabilities column.
+
+    Looks up each liability's risk level in `risk_level_map`, which the caller
+    (main.py) builds by merging predefined CDR / Cys liability definitions
+    (via _build_risk_level_map) with any custom liabilities. Skips items whose
+    fixability is `disqualifying` — those are surfaced via Is Productive = Fail
+    and would otherwise force every region to High because identify_liabilities
+    appends them to every region's liabilities string.
+
+    The spec (docs/text/work/projects/sequence-liability-fixability-scoring/README.md)
+    flagged this at line :126 (Open Questions) as a coin-flip with two defensible
+    options: (A) per-region risk reflects fixable + easily_fixable only, or (B)
+    per-region risk reflects all liabilities except disqualifying. The implementor
+    picked A; R8 (:71), Step 2 (:252-253), Defaults (:304), M1 (:346), and Risks
+    (:395) then encoded that choice as binding. User feedback (Slack 2026-05-24)
+    confirmed A's counter-argument: per-region Liabilities and Risk visibly
+    disagree when a region carries only hard_to_fix / structural matches. This
+    function now implements Option B.
+
+    Engineering-only severity is still available in the global "Developability
+    risk" column (see scoring.classify_developability_risk), which keeps
+    Option-A semantics per R6 (:66) plus a Non-Developable override when
+    structural / hard_to_fix matches are present.
+    """
     if not liabilities_str or liabilities_str == "None" or not isinstance(liabilities_str, str):
         return "None"
-    items = [item.strip() for item in liabilities_str.split(",")]
     risk_num = {"None": 0, "Low": 1, "Medium": 2, "High": 3}
     level_to_risk = {v: k for k, v in risk_num.items()}
     current_max = 0
-    for item in items:
-        if fixability_map.get(item) not in _ENGINEERING_FIXABILITIES:
-            continue  # Disqualifying, structural, and hard_to_fix excluded from per-region risk
-        if item in active_cys_defs:
-            item_risk = active_cys_defs[item][0]  # (risk_level, fixability)
-        elif item in active_cdr_defs:
-            item_risk = active_cdr_defs[item][1]  # (pattern, risk_level, fixability)
-        elif item in active_extra_pattern_names:
-            item_risk = "High"
-        elif risk_level_map and item in risk_level_map:
-            item_risk = risk_level_map[item]  # custom liability
-        else:
+    for item in (n.strip() for n in liabilities_str.split(",")):
+        if fixability_map.get(item) == "disqualifying":
+            continue
+        item_risk = risk_level_map.get(item)
+        if not item_risk:
             continue
         level = risk_num.get(item_risk, 0)
         if level > current_max:
@@ -136,9 +149,9 @@ def classify_risk(
     return level_to_risk[current_max]
 
 
-def _build_risk_level_map(active_cdr_defs: dict, active_cys_defs: dict) -> dict[str, str]:
+def _build_risk_level_map(active_cdr_defs: dict, active_cys_defs: dict) -> dict[str, RiskLevel]:
     """Build a liability_name → risk_level lookup from active predefined definitions."""
-    risk_map = {}
+    risk_map: dict[str, RiskLevel] = {}
     for name, (_pat, risk, *_rest) in active_cdr_defs.items():
         risk_map[name] = risk
     for name, (risk, _fix) in active_cys_defs.items():

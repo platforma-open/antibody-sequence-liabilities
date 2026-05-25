@@ -81,12 +81,12 @@ self.body(func(args) {
 				valueType: "String",
 				annotations: {
 					"pl7.app/label": "Structural liabilities",
-					"pl7.app/description": "Present when a conserved disulfide cysteine is missing or an unpaired cysteine appears. Structural issues require scaffold redesign; Lead Selection excludes them by default.",
+					"pl7.app/description": "Present when a Structural or Hard to fix liability is found.",
 					"pl7.app/isScore": "true",
 					"pl7.app/isDiscreteFilter": "true",
 					"pl7.app/discreteValues": string(json.encode(["None", "Present"])),
 					"pl7.app/score/rankingOrder": "decreasing",
-					"pl7.app/table/visibility": "default",
+					"pl7.app/table/visibility": "hidden",
 					"pl7.app/table/orderPriority": "102"
 				}
 			}
@@ -101,10 +101,10 @@ self.body(func(args) {
 				valueType: "String",
 				annotations: {
 					"pl7.app/label": "Developability risk",
-					"pl7.app/description": "Highest risk level across fixable liabilities (deamidation, oxidation, fragmentation, glycosylation). Unlike structural issues, one or two substitutions address these. All risk levels are shown; Lead Selection excludes High by default.",
+					"pl7.app/description": "Engineering risk severity for fixable liabilities: None / Low / Medium / High. Very High when a Hard to fix liability is present (e.g. Extra Cysteines). Non-Developable when a Structural liability is present (e.g. Missing Cysteines). Lead Selection keeps None / Low / Medium by default.",
 					"pl7.app/isScore": "true",
 					"pl7.app/isDiscreteFilter": "true",
-					"pl7.app/discreteValues": string(json.encode(["None", "Low", "Medium", "High"])),
+					"pl7.app/discreteValues": string(json.encode(["None", "Low", "Medium", "High", "Very High", "Non-Developable"])),
 					"pl7.app/score/rankingOrder": "decreasing",
 					"pl7.app/score/defaultCutoff": string(json.encode(["None", "Low", "Medium"])),
 					"pl7.app/table/visibility": "default",
