@@ -6,11 +6,10 @@ The block evaluates sequences for deamidation (`N[GS]`, `N[AHNT]`, `[STK]N`), fr
 
 Two output columns are emitted for both modalities:
 
-- **Developability risk** — `None`/`Low`/`Medium`/`High`: severity of fixable liabilities (PTM motifs, fragmentation sites)
+- **Developability risk** — `None` / `Low` / `Medium` / `High` / `Very High` / `Non-Developable`: engineering severity for fixable liabilities at the lower end of the scale; `Very High` when a Hard to fix liability is present (e.g. Extra Cysteines); `Non-Developable` when a Structural liability is present (e.g. Missing Cysteines)
 - **Developability cost** — continuous score: sum of engineering effort weighted by fixability class (antibody mode also weights by region importance); lower = easier to engineer
 
 Antibody/TCR inputs additionally produce:
 - **Is Productive** — `Pass`/`Fail`: fails on stop codons or out-of-frame sequences
-- **Structural liabilities** — `None`/`Present`: flags missing or extra cysteines
 
 You can extend the predefined liability set with custom motifs defined in the block settings or imported from a JSON file.
