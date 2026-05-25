@@ -499,13 +499,19 @@ def test_custom_hard_to_fix_raises_per_region_risk_and_structural_present(tmp_pa
     per-region risk now includes hard_to_fix matches.
     """
     custom = tmp_path / "custom.json"
-    custom.write_text(json.dumps([{
-        "name": "WW hard",
-        "pattern": "WW",
-        "riskLevel": "High",
-        "fixability": "hard_to_fix",
-        "regions": ["CDR3"],
-    }]))
+    custom.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "WW hard",
+                    "pattern": "WW",
+                    "riskLevel": "High",
+                    "fixability": "hard_to_fix",
+                    "regions": ["CDR3"],
+                }
+            ]
+        )
+    )
     df = run_main(
         tmp_path,
         ["--use-predefined-liabilities", "false", "--custom-liabilities", str(custom)],
