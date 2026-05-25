@@ -87,7 +87,7 @@ def test_missing_cys_is_structural(tmp_path):
     r = row(df, "clone_missing_cys")
     assert r["Is Productive"] == "Pass"
     assert r["Structural liabilities"] == "Present"
-    # Structural override: any structural / hard_to_fix → Developability risk = Non-Developable.
+    # Structural override: Missing Cys is 'structural' fixability → Non-Developable.
     assert r["Developability risk"] == "Non-Developable"
     # FR1 weight=1.0, structural fixability_weight=20.0
     assert r["Developability cost"] == pytest.approx(20.0)
@@ -98,8 +98,9 @@ def test_extra_cys_is_structural(tmp_path):
     r = row(df, "clone_extra_cys")
     assert r["Is Productive"] == "Pass"
     assert r["Structural liabilities"] == "Present"
-    # Structural override: any structural / hard_to_fix → Developability risk = Non-Developable.
-    assert r["Developability risk"] == "Non-Developable"
+    # hard_to_fix override: Developability risk = Very High (structural class
+    # would be Non-Developable; Extra Cys is hard_to_fix, the milder bucket).
+    assert r["Developability risk"] == "Very High"
     # CDR3 weight=1.5, hard_to_fix fixability_weight=8.0
     assert r["Developability cost"] == pytest.approx(12.0)
 
@@ -464,9 +465,9 @@ def test_sc_both_chains_liabilities(tmp_path):
     [
         ("easily_fixable", "GR", "CDR2", "clone_clean", "Medium", "None", "Medium"),
         ("fixable", "WW", "CDR3", "clone_custom_ww", "High", "None", "High"),
-        ("hard_to_fix", "WW", "CDR3", "clone_custom_ww", "High", "Present", "Non-Developable"),
+        ("hard_to_fix", "WW", "CDR3", "clone_custom_ww", "High", "Present", "Very High"),
     ],
-    ids=["easily_fixable-cdr2-medium", "fixable-cdr3-high", "hard_to_fix-cdr3-high"],
+    ids=["easily_fixable-cdr2-medium", "fixable-cdr3-high", "hard_to_fix-cdr3-veryhigh"],
 )
 def test_custom_liability_per_region_risk_by_fixability(
     tmp_path,
@@ -519,9 +520,9 @@ def test_custom_liability_per_region_risk_by_fixability(
     "custom_name, pattern, custom_fixability, expected_devel_risk",
     [
         ("MG motif", "MG", "fixable", "High"),
-        ("Custom hard M", "M", "hard_to_fix", "Non-Developable"),
+        ("Custom hard M", "M", "hard_to_fix", "Very High"),
     ],
-    ids=["custom-fixable-high", "custom-hard_to_fix-high"],
+    ids=["custom-fixable-high", "custom-hard_to_fix-veryhigh"],
 )
 def test_custom_high_overrides_predefined_easily_fixable_medium_in_same_region(
     tmp_path, custom_name, pattern, custom_fixability, expected_devel_risk
@@ -529,16 +530,16 @@ def test_custom_high_overrides_predefined_easily_fixable_medium_in_same_region(
     """Per-region risk takes the max across all non-disqualifying liabilities in
     the region. clone_met_cdr3 CDR3 has predefined Methionine Oxidation
     (Medium/easily_fixable); adding a custom High in the same region must raise
-    CDR3 risk to High. Developability risk also depends on the custom's class:
+    CDR3 risk to High. Developability risk depends on the custom's class:
     fixable contributes to engineering severity (High); hard_to_fix triggers the
-    structural override (Non-Developable).
+    hard_to_fix override (Very High).
 
     Cases:
     - custom-fixable-high: Option A already produced High here (both items
       counted toward engineering risk). Confirms behavior is unchanged.
-    - custom-hard_to_fix-high: under Option A the custom was excluded so CDR3
-      risk stayed at Medium. Under Option B it now contributes; CDR3 → High.
-      The hard_to_fix class also flips Developability risk to Non-Developable.
+    - custom-hard_to_fix-veryhigh: under Option A the custom was excluded so
+      CDR3 risk stayed at Medium. Under Option B it now contributes; CDR3 → High.
+      The hard_to_fix class also flips Developability risk to Very High.
     """
     custom = tmp_path / "custom.json"
     custom.write_text(
@@ -564,28 +565,26 @@ def test_custom_high_overrides_predefined_easily_fixable_medium_in_same_region(
 
 def test_extra_cys_raises_per_region_risk(tmp_path):
     """Extra Cysteines (predefined hard_to_fix, High) in CDR3 must yield CDR3
-    aa risk = High. Predefined counterpart to the hard_to_fix custom-liability
-    cases in test_custom_liability_per_region_risk_by_fixability."""
+    aa risk = High and Developability risk = Very High (hard_to_fix override —
+    the milder of the two structural-class overrides)."""
     df = run_main(tmp_path)
     r = row(df, "clone_extra_cys")
     assert "Extra Cysteines" in r["CDR3 aa liabilities"]
     assert r["CDR3 aa risk"] == "High"
-    # Structural liabilities column still flags Present.
     assert r["Structural liabilities"] == "Present"
-    # Structural override: Developability risk reports Non-Developable.
-    assert r["Developability risk"] == "Non-Developable"
+    assert r["Developability risk"] == "Very High"
 
 
 def test_missing_cys_raises_fr1_per_region_risk(tmp_path):
     """Missing Cysteines (predefined structural, High) in FR1 must yield FR1
-    aa risk = High. Covers the 'structural' fixability class — symmetric to
-    test_extra_cys_raises_per_region_risk which covers 'hard_to_fix'."""
+    aa risk = High and Developability risk = Non-Developable (structural
+    override — the harshest bucket). Symmetric to
+    test_extra_cys_raises_per_region_risk which covers 'hard_to_fix' → Very High."""
     df = run_main(tmp_path)
     r = row(df, "clone_missing_cys")
     assert "Missing Cysteines" in r["FR1 aa liabilities"]
     assert r["FR1 aa risk"] == "High"
     assert r["Structural liabilities"] == "Present"
-    # Structural override: Developability risk reports Non-Developable.
     assert r["Developability risk"] == "Non-Developable"
 
 
@@ -602,3 +601,39 @@ def test_stop_codon_does_not_raise_per_region_risk(tmp_path):
     assert "Contains stop codon" in r["CDR1 aa liabilities"]
     assert r["CDR1 aa risk"] == "None"
     assert r["Is Productive"] == "Fail"
+
+
+def test_structural_supersedes_hard_to_fix_in_developability_risk(tmp_path):
+    """When a row carries BOTH a structural and a hard_to_fix liability,
+    Developability risk reports Non-Developable. The harsher override wins.
+
+    Setup: clone_extra_cys already has predefined Extra Cysteines (hard_to_fix)
+    in CDR3 — alone that yields Developability risk = Very High. Adding a custom
+    'structural' liability matching CDR1 must override to Non-Developable.
+
+    Note: the UI restricts custom fixability to {easily_fixable, fixable,
+    hard_to_fix}. 'structural' is used here via direct JSON to exercise the
+    override-precedence rule; production users reach this state only through
+    the predefined Missing Cysteines liability.
+    """
+    custom = tmp_path / "custom.json"
+    custom.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "Custom structural",
+                    "pattern": "[A-Z]",
+                    "riskLevel": "High",
+                    "fixability": "structural",
+                    "regions": ["CDR1"],
+                }
+            ]
+        )
+    )
+    df = run_main(tmp_path, ["--custom-liabilities", str(custom)])
+    r = row(df, "clone_extra_cys")
+    assert "Extra Cysteines" in r["CDR3 aa liabilities"]
+    assert "Custom structural" in r["CDR1 aa liabilities"]
+    # hard_to_fix alone → Very High; structural wins → Non-Developable.
+    assert r["Developability risk"] == "Non-Developable"
+    assert r["Structural liabilities"] == "Present"
