@@ -101,7 +101,7 @@ self.body(func(args) {
 				valueType: "String",
 				annotations: {
 					"pl7.app/label": "Developability risk",
-					"pl7.app/description": "Highest risk level across fixable liabilities (deamidation, oxidation, fragmentation, glycosylation). Returns 'Very High' when any hard_to_fix liability is present (e.g. Extra Cysteines) and 'Non-Developable' when any structural liability is present (e.g. Missing Cysteines). A single column carries both engineering severity and structural disqualification. Lead Selection excludes High, Very High, and Non-Developable by default.",
+					"pl7.app/description": "Engineering risk severity for fixable liabilities: None / Low / Medium / High. Very High when a Hard to fix liability is present (e.g. Extra Cysteines). Non-Developable when a Structural liability is present (e.g. Missing Cysteines). Lead Selection keeps None / Low / Medium by default.",
 					"pl7.app/isScore": "true",
 					"pl7.app/isDiscreteFilter": "true",
 					"pl7.app/discreteValues": string(json.encode(["None", "Low", "Medium", "High", "Very High", "Non-Developable"])),
