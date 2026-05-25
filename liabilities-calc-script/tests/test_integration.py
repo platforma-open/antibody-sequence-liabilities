@@ -320,13 +320,19 @@ def test_custom_liability_restricted_to_fr1(tmp_path):
     """A custom liability targeting FR1 only is detected there but not in CDRs."""
     custom = tmp_path / "custom.json"
     # FR1 for all test clones contains 'P' (e.g. QVQLVQSGAEVKKPGASVKVSCKAS)
-    custom.write_text(json.dumps([{
-        "name": "FR1 Proline",
-        "pattern": "P",
-        "riskLevel": "Low",
-        "fixability": "fixable",
-        "regions": ["FR1"],
-    }]))
+    custom.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "FR1 Proline",
+                    "pattern": "P",
+                    "riskLevel": "Low",
+                    "fixability": "fixable",
+                    "regions": ["FR1"],
+                }
+            ]
+        )
+    )
     df = run_main(tmp_path, ["--custom-liabilities", str(custom)])
     r = row(df, "clone_clean")
     assert "FR1 Proline" in r["FR1 aa liabilities"]
@@ -438,76 +444,47 @@ def test_sc_both_chains_liabilities(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Custom liability per-region risk
+# Per-region risk by liability class
 #
-# Custom fixable/easily_fixable liabilities must appear in per-region risk
-# columns, not only in global developability columns.
+# The spec at :126 (Open Questions) named two options for per-region risk:
+# (A) fixable + easily_fixable only, or (B) all liabilities except disqualifying.
+# The v4.0.0 implementor picked A and encoded it across R8 :71, Step 2 :252-253,
+# Defaults :304, M1 :346, and Risks :395. User feedback (Slack 2026-05-24)
+# revealed Option A's predicted counter-argument materialized — per-region
+# Liabilities and Risk visibly disagree. These tests lock in the switch to
+# Option B: per-region risk is the max riskLevel of any non-disqualifying
+# liability in the region, regardless of fixability class.
 # ---------------------------------------------------------------------------
 
 
-def test_custom_fixable_liability_raises_per_region_risk(tmp_path):
-    """A High-risk fixable custom liability in CDR3 must produce High per-region risk for CDR3.
-
-    Regression: classify_risk() previously ignored custom liabilities, leaving
-    CDR3 aa risk at None even when a custom fixable liability was detected there.
+@pytest.mark.parametrize(
+    "fixability, pattern, region, clone, expected_risk, expected_structural",
+    [
+        ("easily_fixable", "GR", "CDR2", "clone_clean", "Medium", "None"),
+        ("fixable", "WW", "CDR3", "clone_custom_ww", "High", "None"),
+        ("hard_to_fix", "WW", "CDR3", "clone_custom_ww", "High", "Present"),
+    ],
+    ids=["easily_fixable-cdr2-medium", "fixable-cdr3-high", "hard_to_fix-cdr3-high"],
+)
+def test_custom_liability_per_region_risk_by_fixability(
+    tmp_path, fixability, pattern, region, clone, expected_risk, expected_structural
+):
+    """A custom liability's riskLevel surfaces in {region} aa risk regardless of
+    fixability class (Option B at spec :126). The Structural liabilities column
+    additionally flags Present for hard_to_fix/structural matches; engineering-
+    only fixabilities (fixable, easily_fixable) leave it None.
     """
-    custom = tmp_path / "custom.json"
-    custom.write_text(json.dumps([{
-        "name": "WW motif",
-        "pattern": "WW",
-        "riskLevel": "High",
-        "fixability": "fixable",
-        "regions": ["CDR3"],
-    }]))
-    df = run_main(
-        tmp_path,
-        ["--use-predefined-liabilities", "false", "--custom-liabilities", str(custom)],
-    )
-    r = row(df, "clone_custom_ww")
-    # WW is present in CDR3 — per-region risk must reflect it
-    assert r["CDR3 aa risk"] == "High"
-    # CDR2 has no WW — must remain None
-    assert r["CDR2 aa risk"] == "None"
-
-
-def test_custom_easily_fixable_liability_raises_per_region_risk(tmp_path):
-    """A Medium easily_fixable custom liability in CDR2 must raise CDR2 aa risk to Medium."""
-    custom = tmp_path / "custom.json"
-    custom.write_text(json.dumps([{
-        "name": "GR motif",
-        "pattern": "GR",
-        "riskLevel": "Medium",
-        "fixability": "easily_fixable",
-        "regions": ["CDR2"],
-    }]))
-    df = run_main(
-        tmp_path,
-        ["--use-predefined-liabilities", "false", "--custom-liabilities", str(custom)],
-    )
-    # clone_clean CDR2 = ISPGRGIT — contains GR
-    r = row(df, "clone_clean")
-    assert r["CDR2 aa risk"] == "Medium"
-    # CDR3 has no GR — must stay None
-    assert r["CDR3 aa risk"] == "None"
-
-
-def test_custom_hard_to_fix_raises_per_region_risk_and_structural_present(tmp_path):
-    """A hard_to_fix custom liability flags BOTH the per-region risk AND
-    Structural liabilities. Previously, per the original Option-A choice (see
-    spec :126 Open Questions), only Structural was flagged; per-region risk
-    was suppressed. User feedback (Slack 2026-05-24) reversed the call —
-    per-region risk now includes hard_to_fix matches.
-    """
+    liability_name = f"Custom {fixability}"
     custom = tmp_path / "custom.json"
     custom.write_text(
         json.dumps(
             [
                 {
-                    "name": "WW hard",
-                    "pattern": "WW",
-                    "riskLevel": "High",
-                    "fixability": "hard_to_fix",
-                    "regions": ["CDR3"],
+                    "name": liability_name,
+                    "pattern": pattern,
+                    "riskLevel": expected_risk,
+                    "fixability": fixability,
+                    "regions": [region],
                 }
             ]
         )
@@ -516,45 +493,63 @@ def test_custom_hard_to_fix_raises_per_region_risk_and_structural_present(tmp_pa
         tmp_path,
         ["--use-predefined-liabilities", "false", "--custom-liabilities", str(custom)],
     )
-    r = row(df, "clone_custom_ww")
-    assert r["Structural liabilities"] == "Present"
-    assert r["CDR3 aa risk"] == "High"
+    r = row(df, clone)
+    assert liability_name in r[f"{region} aa liabilities"]
+    assert r[f"{region} aa risk"] == expected_risk
+    # Custom liability is scoped to one region — other CDRs stay None.
+    for other_region in ("CDR1", "CDR2", "CDR3"):
+        if other_region != region:
+            assert r[f"{other_region} aa risk"] == "None"
+    assert r["Structural liabilities"] == expected_structural
 
 
-def test_custom_and_predefined_combine_in_per_region_risk(tmp_path):
-    """Custom and predefined fixable liabilities in the same region take the higher risk level.
+@pytest.mark.parametrize(
+    "custom_name, pattern, custom_fixability",
+    [
+        ("MG motif", "MG", "fixable"),
+        ("Custom hard M", "M", "hard_to_fix"),
+    ],
+    ids=["custom-fixable-high", "custom-hard_to_fix-high"],
+)
+def test_custom_high_overrides_predefined_easily_fixable_medium_in_same_region(
+    tmp_path, custom_name, pattern, custom_fixability
+):
+    """Per-region risk takes the max across all non-disqualifying liabilities in
+    the region. clone_met_cdr3 CDR3 has predefined Methionine Oxidation
+    (Medium/easily_fixable); adding a custom High in the same region must raise
+    CDR3 risk to High.
 
-    clone_met_cdr3 CDR3 has Met (predefined Medium/easily_fixable).
-    Adding a custom High/fixable motif that also matches CDR3 must raise it to High.
+    Cases:
+    - custom-fixable-high: Option A already produced High here (both items
+      counted toward engineering risk). Confirms behavior is unchanged.
+    - custom-hard_to_fix-high: under Option A the custom was excluded so CDR3
+      risk stayed at Medium. Under Option B it now contributes; CDR3 → High.
     """
     custom = tmp_path / "custom.json"
-    custom.write_text(json.dumps([{
-        "name": "MG motif",
-        "pattern": "MG",
-        "riskLevel": "High",
-        "fixability": "fixable",
-        "regions": ["CDR3"],
-    }]))
+    custom.write_text(
+        json.dumps(
+            [
+                {
+                    "name": custom_name,
+                    "pattern": pattern,
+                    "riskLevel": "High",
+                    "fixability": custom_fixability,
+                    "regions": ["CDR3"],
+                }
+            ]
+        )
+    )
     df = run_main(tmp_path, ["--custom-liabilities", str(custom)])
     r = row(df, "clone_met_cdr3")
-    # Custom MG (High) beats predefined Met (Medium) — CDR3 risk must be High
+    assert "Methionine Oxidation (M)" in r["CDR3 aa liabilities"]
+    assert custom_name in r["CDR3 aa liabilities"]
     assert r["CDR3 aa risk"] == "High"
-
-
-# ---------------------------------------------------------------------------
-# Per-region risk: hard_to_fix / structural liabilities surface in {region} aa risk
-#
-# The original fixability-aware design (spec :126 Open Questions named both
-# options; R8 :71 / Step 2 :252-253 / Defaults :304 / M1 :346 / Risks :395
-# encoded Option A: fixable + easily_fixable only). User feedback (Slack
-# 2026-05-24) revealed Option A's counter-argument from spec :126 had
-# materialized — per-region Liabilities and Risk visibly disagree. These
-# tests lock in the switch to Option B (all liabilities except disqualifying).
-# ---------------------------------------------------------------------------
 
 
 def test_extra_cys_raises_per_region_risk(tmp_path):
-    """Extra Cysteines (predefined hard_to_fix, High) in CDR3 must yield CDR3 aa risk = High."""
+    """Extra Cysteines (predefined hard_to_fix, High) in CDR3 must yield CDR3
+    aa risk = High. Predefined counterpart to the hard_to_fix custom-liability
+    cases in test_custom_liability_per_region_risk_by_fixability."""
     df = run_main(tmp_path)
     r = row(df, "clone_extra_cys")
     assert "Extra Cysteines" in r["CDR3 aa liabilities"]
@@ -565,61 +560,29 @@ def test_extra_cys_raises_per_region_risk(tmp_path):
     assert r["Developability risk"] == "None"
 
 
-def test_custom_hard_to_fix_raises_per_region_risk(tmp_path):
-    """A hard_to_fix custom liability with riskLevel=High must flag CDR3 aa risk = High.
-
-    Regression for the 2026-05-24 bug: setting fixability=Hard to fix on a
-    custom liability previously left per-region risk at None even when the
-    pattern matched. The user-facing expectation is that riskLevel is honored
-    in the per-region risk column regardless of fixability class.
-    """
-    custom = tmp_path / "custom.json"
-    custom.write_text(
-        json.dumps(
-            [
-                {
-                    "name": "WW hard",
-                    "pattern": "WW",
-                    "riskLevel": "High",
-                    "fixability": "hard_to_fix",
-                    "regions": ["CDR3"],
-                }
-            ]
-        )
-    )
-    df = run_main(
-        tmp_path,
-        ["--use-predefined-liabilities", "false", "--custom-liabilities", str(custom)],
-    )
-    r = row(df, "clone_custom_ww")
-    assert "WW hard" in r["CDR3 aa liabilities"]
-    assert r["CDR3 aa risk"] == "High"
-    # Other regions stay None (no match there).
-    assert r["CDR1 aa risk"] == "None"
-    assert r["CDR2 aa risk"] == "None"
-    # Structural liabilities still flags it (hard_to_fix routes there too).
+def test_missing_cys_raises_fr1_per_region_risk(tmp_path):
+    """Missing Cysteines (predefined structural, High) in FR1 must yield FR1
+    aa risk = High. Covers the 'structural' fixability class — symmetric to
+    test_extra_cys_raises_per_region_risk which covers 'hard_to_fix'."""
+    df = run_main(tmp_path)
+    r = row(df, "clone_missing_cys")
+    assert "Missing Cysteines" in r["FR1 aa liabilities"]
+    assert r["FR1 aa risk"] == "High"
     assert r["Structural liabilities"] == "Present"
+    # Developability risk stays None (engineering-only column).
+    assert r["Developability risk"] == "None"
 
 
-def test_custom_hard_to_fix_high_overrides_easily_fixable_medium_in_same_region(tmp_path):
-    """When both an easily_fixable Medium (predefined Met) and a hard_to_fix High
-    (custom) match the same region, per-region risk takes the max → High."""
-    custom = tmp_path / "custom.json"
-    # clone_met_cdr3 CDR3 contains 'M' (predefined Met oxidation, Medium/easily_fixable).
-    # Add a hard_to_fix High custom that also matches CDR3 'M'.
-    custom.write_text(
-        json.dumps(
-            [
-                {
-                    "name": "Custom hard M",
-                    "pattern": "M",
-                    "riskLevel": "High",
-                    "fixability": "hard_to_fix",
-                    "regions": ["CDR3"],
-                }
-            ]
-        )
-    )
-    df = run_main(tmp_path, ["--custom-liabilities", str(custom)])
-    r = row(df, "clone_met_cdr3")
-    assert r["CDR3 aa risk"] == "High"
+def test_stop_codon_does_not_raise_per_region_risk(tmp_path):
+    """A disqualifying liability (stop codon) in a region's liabilities string
+    must NOT contribute to per-region risk for that region. clone_stop has the
+    stop codon in CDR1; CDR1 aa risk must stay None even though
+    "Contains stop codon" is listed in CDR1 aa liabilities. The disqualifying
+    signal surfaces via Is Productive = Fail.
+
+    Guards the 'disqualifying' skip in classify_risk()."""
+    df = run_main(tmp_path)
+    r = row(df, "clone_stop")
+    assert "Contains stop codon" in r["CDR1 aa liabilities"]
+    assert r["CDR1 aa risk"] == "None"
+    assert r["Is Productive"] == "Fail"
