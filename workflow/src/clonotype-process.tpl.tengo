@@ -81,7 +81,7 @@ self.body(func(args) {
 				valueType: "String",
 				annotations: {
 					"pl7.app/label": "Structural liabilities",
-					"pl7.app/description": "Present when a Structural or Hard to fix liability is found. Duplicates Developability risk's Non-Developable / Very High overrides — hidden by default.",
+					"pl7.app/description": "Present when a Structural or Hard to fix liability is found.",
 					"pl7.app/isScore": "true",
 					"pl7.app/isDiscreteFilter": "true",
 					"pl7.app/discreteValues": string(json.encode(["None", "Present"])),
