@@ -1,6 +1,6 @@
 import re
 
-from definitions import ORIG_REGEX_LIABILITIES, ORIG_CYS_LIABILITIES, _ENGINEERING_FIXABILITIES
+from definitions import ORIG_REGEX_LIABILITIES, ORIG_CYS_LIABILITIES
 
 
 # Cysteine position helpers
@@ -108,7 +108,23 @@ def classify_risk(
     fixability_map: dict[str, str],
     risk_level_map: dict[str, str] | None = None,
 ) -> str:
-    """Per-region engineering risk — counts fixable and easily_fixable liabilities only."""
+    """Per-region risk: worst riskLevel across all non-disqualifying liabilities
+    detected in the region's liabilities column.
+
+    The spec (docs/text/work/projects/sequence-liability-fixability-scoring/README.md)
+    flagged this at line :126 (Open Questions) as a coin-flip with two defensible
+    options: (A) per-region risk reflects fixable + easily_fixable only, or (B)
+    per-region risk reflects all liabilities except disqualifying. The implementor
+    picked A; R8 (:71), Step 2 (:252-253), Defaults (:304), M1 (:346), and Risks
+    (:395) then encoded that choice as binding. User feedback (Slack 2026-05-24)
+    showed A's predicted counter-argument materialized — per-region Liabilities
+    and Risk columns visibly disagree when a region's only liabilities are
+    hard_to_fix / structural. This function now implements Option B.
+
+    Engineering-only severity is still available in the global "Developability
+    risk" column (see scoring.classify_developability_risk), which keeps
+    Option-A semantics per R6 (:66).
+    """
     if not liabilities_str or liabilities_str == "None" or not isinstance(liabilities_str, str):
         return "None"
     items = [item.strip() for item in liabilities_str.split(",")]
@@ -116,16 +132,20 @@ def classify_risk(
     level_to_risk = {v: k for k, v in risk_num.items()}
     current_max = 0
     for item in items:
-        if fixability_map.get(item) not in _ENGINEERING_FIXABILITIES:
-            continue  # Disqualifying, structural, and hard_to_fix excluded from per-region risk
+        if fixability_map.get(item) == "disqualifying":
+            continue
         if item in active_cys_defs:
             item_risk = active_cys_defs[item][0]  # (risk_level, fixability)
         elif item in active_cdr_defs:
             item_risk = active_cdr_defs[item][1]  # (pattern, risk_level, fixability)
         elif item in active_extra_pattern_names:
+            # All current active_extra_pattern_names entries are disqualifying
+            # (stop codon, OOF) so the disqualifying skip above filters them out.
+            # Branch retained so the function stays correct if a future
+            # non-disqualifying "extra" liability is added.
             item_risk = "High"
         elif risk_level_map and item in risk_level_map:
-            item_risk = risk_level_map[item]  # custom liability
+            item_risk = risk_level_map[item]  # custom liability or predefined cys/cdr fallback
         else:
             continue
         level = risk_num.get(item_risk, 0)
