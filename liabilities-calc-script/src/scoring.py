@@ -33,33 +33,40 @@ def classify_developability_risk(
     fixability_map: dict[str, str],
     risk_level_map: dict[str, str],
 ) -> str:
-    """Developability risk with a structural override.
+    """Developability risk with two structural overrides.
 
-    Returns 'Non-Developable' when any structural or hard_to_fix liability is
-    present in any region — these candidates cannot be engineered to safety
-    without scaffold redesign, so the column surfaces that fact directly
-    instead of forcing the reader to cross-reference Structural liabilities.
+    Precedence (worst wins):
+      1. structural   → 'Non-Developable' (requires scaffold redesign;
+                       canonical example: Missing Cysteines)
+      2. hard_to_fix  → 'Very High'       (harder than routine engineering
+                       but not non-developable; e.g. Extra Cysteines)
+      3. fixable / easily_fixable → max risk level across those liabilities
+                       only: None / Low / Medium / High
 
-    Otherwise returns the max risk level across fixable + easily_fixable
-    liabilities only (engineering-tractable severity): None / Low / Medium / High.
+    The two overrides fold the Structural liabilities signal into this column
+    so a single column carries both engineering severity and structural
+    disqualification — readers don't need to cross-reference Structural
+    liabilities to see why a candidate is excluded.
 
     Spec deviation: R6 (docs/text/work/projects/sequence-liability-fixability-scoring/README.md:66)
     defined this column as engineering-only with values None/Low/Medium/High.
     Per 2026-05-25 feedback (continuation of the 2026-05-24 Slack thread),
-    the Non-Developable value extends that scale at the top so the column is
-    'wholistic' — one column tells you both whether the candidate is engineerable
-    and how severe the engineering work would be.
+    the scale now extends to {Very High, Non-Developable} at the top.
     """
     risk_order = {"None": 0, "Low": 1, "Medium": 2, "High": 3}
     level_to_risk = {v: k for k, v in risk_order.items()}
+    has_hard_to_fix = False
     current_max = 0
     for liabs_str in region_to_liabs.values():
         for name in _parse_liability_names(str(liabs_str) if liabs_str else "None"):
             fix = fixability_map.get(name)
-            # Structural override short-circuits the function — Non-Developable
-            # is the worst rank, so no later region can change the answer.
-            if fix in {"structural", "hard_to_fix"}:
+            # Structural is the harshest override — short-circuit immediately
+            # because no later region can change the answer.
+            if fix == "structural":
                 return "Non-Developable"
+            if fix == "hard_to_fix":
+                has_hard_to_fix = True
+                continue  # keep scanning in case a later region has structural
             if fix not in _ENGINEERING_FIXABILITIES:
                 continue
             risk = risk_level_map.get(name)
@@ -67,6 +74,8 @@ def classify_developability_risk(
                 level = risk_order.get(risk, 0)
                 if level > current_max:
                     current_max = level
+    if has_hard_to_fix:
+        return "Very High"
     return level_to_risk[current_max]
 
 
