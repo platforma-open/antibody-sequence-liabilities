@@ -1,7 +1,5 @@
 import re
 
-from definitions import ORIG_REGEX_LIABILITIES, ORIG_CYS_LIABILITIES
-
 
 # Cysteine position helpers
 def _get_expected_cys_positions(region: str, expected_cys_map: dict):
