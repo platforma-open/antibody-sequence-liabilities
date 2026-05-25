@@ -100,14 +100,18 @@ def identify_liabilities(
 
 def classify_risk(
     liabilities_str: str,
-    active_cdr_defs: dict,
-    active_cys_defs: dict,
-    active_extra_pattern_names: set,
     fixability_map: dict[str, str],
-    risk_level_map: dict[str, str] | None = None,
+    risk_level_map: dict[str, str],
 ) -> str:
     """Per-region risk: worst riskLevel across all non-disqualifying liabilities
     detected in the region's liabilities column.
+
+    Looks up each liability's risk level in `risk_level_map`, which the caller
+    (main.py) builds by merging predefined CDR / Cys liability definitions
+    (via _build_risk_level_map) with any custom liabilities. Skips items whose
+    fixability is `disqualifying` — those are surfaced via Is Productive = Fail
+    and would otherwise force every region to High because identify_liabilities
+    appends them to every region's liabilities string.
 
     The spec (docs/text/work/projects/sequence-liability-fixability-scoring/README.md)
     flagged this at line :126 (Open Questions) as a coin-flip with two defensible
@@ -121,30 +125,19 @@ def classify_risk(
 
     Engineering-only severity is still available in the global "Developability
     risk" column (see scoring.classify_developability_risk), which keeps
-    Option-A semantics per R6 (:66).
+    Option-A semantics per R6 (:66) plus a Non-Developable override when
+    structural / hard_to_fix matches are present.
     """
     if not liabilities_str or liabilities_str == "None" or not isinstance(liabilities_str, str):
         return "None"
-    items = [item.strip() for item in liabilities_str.split(",")]
     risk_num = {"None": 0, "Low": 1, "Medium": 2, "High": 3}
     level_to_risk = {v: k for k, v in risk_num.items()}
     current_max = 0
-    for item in items:
+    for item in (n.strip() for n in liabilities_str.split(",")):
         if fixability_map.get(item) == "disqualifying":
             continue
-        if item in active_cys_defs:
-            item_risk = active_cys_defs[item][0]  # (risk_level, fixability)
-        elif item in active_cdr_defs:
-            item_risk = active_cdr_defs[item][1]  # (pattern, risk_level, fixability)
-        elif item in active_extra_pattern_names:
-            # All current active_extra_pattern_names entries are disqualifying
-            # (stop codon, OOF) so the disqualifying skip above filters them out.
-            # Branch retained so the function stays correct if a future
-            # non-disqualifying "extra" liability is added.
-            item_risk = "High"
-        elif risk_level_map and item in risk_level_map:
-            item_risk = risk_level_map[item]  # custom liability or predefined cys/cdr fallback
-        else:
+        item_risk = risk_level_map.get(item)
+        if not item_risk:
             continue
         level = risk_num.get(item_risk, 0)
         if level > current_max:

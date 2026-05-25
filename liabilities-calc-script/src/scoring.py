@@ -50,26 +50,23 @@ def classify_developability_risk(
     'wholistic' — one column tells you both whether the candidate is engineerable
     and how severe the engineering work would be.
     """
-    # Structural override takes precedence over engineering-risk levels.
-    for liabs_str in region_to_liabs.values():
-        for name in _parse_liability_names(str(liabs_str) if liabs_str else "None"):
-            if fixability_map.get(name) in {"structural", "hard_to_fix"}:
-                return "Non-Developable"
-
     risk_order = {"None": 0, "Low": 1, "Medium": 2, "High": 3}
     level_to_risk = {v: k for k, v in risk_order.items()}
     current_max = 0
     for liabs_str in region_to_liabs.values():
         for name in _parse_liability_names(str(liabs_str) if liabs_str else "None"):
-            if fixability_map.get(name) not in _ENGINEERING_FIXABILITIES:
+            fix = fixability_map.get(name)
+            # Structural override short-circuits the function — Non-Developable
+            # is the worst rank, so no later region can change the answer.
+            if fix in {"structural", "hard_to_fix"}:
+                return "Non-Developable"
+            if fix not in _ENGINEERING_FIXABILITIES:
                 continue
             risk = risk_level_map.get(name)
             if risk:
                 level = risk_order.get(risk, 0)
                 if level > current_max:
                     current_max = level
-                if current_max == 3:
-                    return "High"
     return level_to_risk[current_max]
 
 
