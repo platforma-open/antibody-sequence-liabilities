@@ -1,6 +1,6 @@
 import re
 
-from definitions import FIXABILITY_WEIGHTS, REGION_WEIGHTS, _ENGINEERING_FIXABILITIES
+from definitions import _ENGINEERING_FIXABILITIES, FIXABILITY_WEIGHTS, REGION_WEIGHTS
 
 
 def _parse_liability_names(liabs_str: str) -> list[str]:
@@ -33,7 +33,29 @@ def classify_developability_risk(
     fixability_map: dict[str, str],
     risk_level_map: dict[str, str],
 ) -> str:
-    """Max risk level across fixable and easily_fixable liabilities only."""
+    """Developability risk with a structural override.
+
+    Returns 'Non-Developable' when any structural or hard_to_fix liability is
+    present in any region — these candidates cannot be engineered to safety
+    without scaffold redesign, so the column surfaces that fact directly
+    instead of forcing the reader to cross-reference Structural liabilities.
+
+    Otherwise returns the max risk level across fixable + easily_fixable
+    liabilities only (engineering-tractable severity): None / Low / Medium / High.
+
+    Spec deviation: R6 (docs/text/work/projects/sequence-liability-fixability-scoring/README.md:66)
+    defined this column as engineering-only with values None/Low/Medium/High.
+    Per 2026-05-25 feedback (continuation of the 2026-05-24 Slack thread),
+    the Non-Developable value extends that scale at the top so the column is
+    'wholistic' — one column tells you both whether the candidate is engineerable
+    and how severe the engineering work would be.
+    """
+    # Structural override takes precedence over engineering-risk levels.
+    for liabs_str in region_to_liabs.values():
+        for name in _parse_liability_names(str(liabs_str) if liabs_str else "None"):
+            if fixability_map.get(name) in {"structural", "hard_to_fix"}:
+                return "Non-Developable"
+
     risk_order = {"None": 0, "Low": 1, "Medium": 2, "High": 3}
     level_to_risk = {v: k for k, v in risk_order.items()}
     current_max = 0

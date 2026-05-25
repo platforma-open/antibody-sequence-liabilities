@@ -87,7 +87,8 @@ def test_missing_cys_is_structural(tmp_path):
     r = row(df, "clone_missing_cys")
     assert r["Is Productive"] == "Pass"
     assert r["Structural liabilities"] == "Present"
-    assert r["Developability risk"] == "None"
+    # Structural override: any structural / hard_to_fix → Developability risk = Non-Developable.
+    assert r["Developability risk"] == "Non-Developable"
     # FR1 weight=1.0, structural fixability_weight=20.0
     assert r["Developability cost"] == pytest.approx(20.0)
 
@@ -97,7 +98,8 @@ def test_extra_cys_is_structural(tmp_path):
     r = row(df, "clone_extra_cys")
     assert r["Is Productive"] == "Pass"
     assert r["Structural liabilities"] == "Present"
-    assert r["Developability risk"] == "None"
+    # Structural override: any structural / hard_to_fix → Developability risk = Non-Developable.
+    assert r["Developability risk"] == "Non-Developable"
     # CDR3 weight=1.5, hard_to_fix fixability_weight=8.0
     assert r["Developability cost"] == pytest.approx(12.0)
 
@@ -458,21 +460,30 @@ def test_sc_both_chains_liabilities(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "fixability, pattern, region, clone, expected_risk, expected_structural",
+    "fixability, pattern, region, clone, expected_risk, expected_structural, expected_devel_risk",
     [
-        ("easily_fixable", "GR", "CDR2", "clone_clean", "Medium", "None"),
-        ("fixable", "WW", "CDR3", "clone_custom_ww", "High", "None"),
-        ("hard_to_fix", "WW", "CDR3", "clone_custom_ww", "High", "Present"),
+        ("easily_fixable", "GR", "CDR2", "clone_clean", "Medium", "None", "Medium"),
+        ("fixable", "WW", "CDR3", "clone_custom_ww", "High", "None", "High"),
+        ("hard_to_fix", "WW", "CDR3", "clone_custom_ww", "High", "Present", "Non-Developable"),
     ],
     ids=["easily_fixable-cdr2-medium", "fixable-cdr3-high", "hard_to_fix-cdr3-high"],
 )
 def test_custom_liability_per_region_risk_by_fixability(
-    tmp_path, fixability, pattern, region, clone, expected_risk, expected_structural
+    tmp_path,
+    fixability,
+    pattern,
+    region,
+    clone,
+    expected_risk,
+    expected_structural,
+    expected_devel_risk,
 ):
     """A custom liability's riskLevel surfaces in {region} aa risk regardless of
     fixability class (Option B at spec :126). The Structural liabilities column
     additionally flags Present for hard_to_fix/structural matches; engineering-
-    only fixabilities (fixable, easily_fixable) leave it None.
+    only fixabilities (fixable, easily_fixable) leave it None. Developability
+    risk reflects the engineering severity (None/Low/Medium/High) for engineering-
+    only fixabilities, and switches to Non-Developable when Structural = Present.
     """
     liability_name = f"Custom {fixability}"
     custom = tmp_path / "custom.json"
@@ -501,29 +512,33 @@ def test_custom_liability_per_region_risk_by_fixability(
         if other_region != region:
             assert r[f"{other_region} aa risk"] == "None"
     assert r["Structural liabilities"] == expected_structural
+    assert r["Developability risk"] == expected_devel_risk
 
 
 @pytest.mark.parametrize(
-    "custom_name, pattern, custom_fixability",
+    "custom_name, pattern, custom_fixability, expected_devel_risk",
     [
-        ("MG motif", "MG", "fixable"),
-        ("Custom hard M", "M", "hard_to_fix"),
+        ("MG motif", "MG", "fixable", "High"),
+        ("Custom hard M", "M", "hard_to_fix", "Non-Developable"),
     ],
     ids=["custom-fixable-high", "custom-hard_to_fix-high"],
 )
 def test_custom_high_overrides_predefined_easily_fixable_medium_in_same_region(
-    tmp_path, custom_name, pattern, custom_fixability
+    tmp_path, custom_name, pattern, custom_fixability, expected_devel_risk
 ):
     """Per-region risk takes the max across all non-disqualifying liabilities in
     the region. clone_met_cdr3 CDR3 has predefined Methionine Oxidation
     (Medium/easily_fixable); adding a custom High in the same region must raise
-    CDR3 risk to High.
+    CDR3 risk to High. Developability risk also depends on the custom's class:
+    fixable contributes to engineering severity (High); hard_to_fix triggers the
+    structural override (Non-Developable).
 
     Cases:
     - custom-fixable-high: Option A already produced High here (both items
       counted toward engineering risk). Confirms behavior is unchanged.
     - custom-hard_to_fix-high: under Option A the custom was excluded so CDR3
       risk stayed at Medium. Under Option B it now contributes; CDR3 → High.
+      The hard_to_fix class also flips Developability risk to Non-Developable.
     """
     custom = tmp_path / "custom.json"
     custom.write_text(
@@ -544,6 +559,7 @@ def test_custom_high_overrides_predefined_easily_fixable_medium_in_same_region(
     assert "Methionine Oxidation (M)" in r["CDR3 aa liabilities"]
     assert custom_name in r["CDR3 aa liabilities"]
     assert r["CDR3 aa risk"] == "High"
+    assert r["Developability risk"] == expected_devel_risk
 
 
 def test_extra_cys_raises_per_region_risk(tmp_path):
@@ -554,10 +570,10 @@ def test_extra_cys_raises_per_region_risk(tmp_path):
     r = row(df, "clone_extra_cys")
     assert "Extra Cysteines" in r["CDR3 aa liabilities"]
     assert r["CDR3 aa risk"] == "High"
-    # Structural liabilities column still flags Present (unchanged).
+    # Structural liabilities column still flags Present.
     assert r["Structural liabilities"] == "Present"
-    # Developability risk stays None (engineering-only column, unchanged).
-    assert r["Developability risk"] == "None"
+    # Structural override: Developability risk reports Non-Developable.
+    assert r["Developability risk"] == "Non-Developable"
 
 
 def test_missing_cys_raises_fr1_per_region_risk(tmp_path):
@@ -569,8 +585,8 @@ def test_missing_cys_raises_fr1_per_region_risk(tmp_path):
     assert "Missing Cysteines" in r["FR1 aa liabilities"]
     assert r["FR1 aa risk"] == "High"
     assert r["Structural liabilities"] == "Present"
-    # Developability risk stays None (engineering-only column).
-    assert r["Developability risk"] == "None"
+    # Structural override: Developability risk reports Non-Developable.
+    assert r["Developability risk"] == "Non-Developable"
 
 
 def test_stop_codon_does_not_raise_per_region_risk(tmp_path):
