@@ -16,4 +16,4 @@ The spec at `docs/text/work/projects/sequence-liability-fixability-scoring/READM
 
 The discrete scale becomes `[None, Low, Medium, High, Very High, Non-Developable]`. Default cutoff stays `[None, Low, Medium]`, so High, Very High, and Non-Developable are all filtered out by default — readers no longer need to cross-reference `Structural liabilities` to spot disqualified candidates.
 
-`Structural liabilities` itself is unchanged.
+`Structural liabilities` is hidden by default — Developability risk's `Very High` and `Non-Developable` values now carry its signal at higher resolution. The column stays available via the column picker for users who want the raw boolean.
