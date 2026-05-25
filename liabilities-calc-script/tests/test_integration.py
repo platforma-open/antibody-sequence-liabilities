@@ -491,8 +491,13 @@ def test_custom_easily_fixable_liability_raises_per_region_risk(tmp_path):
     assert r["CDR3 aa risk"] == "None"
 
 
-def test_custom_hard_to_fix_does_not_raise_per_region_risk(tmp_path):
-    """A hard_to_fix custom liability routes to Structural liabilities, not per-region risk."""
+def test_custom_hard_to_fix_raises_per_region_risk_and_structural_present(tmp_path):
+    """A hard_to_fix custom liability flags BOTH the per-region risk AND
+    Structural liabilities. Previously, per the original Option-A choice (see
+    spec :126 Open Questions), only Structural was flagged; per-region risk
+    was suppressed. User feedback (Slack 2026-05-24) reversed the call —
+    per-region risk now includes hard_to_fix matches.
+    """
     custom = tmp_path / "custom.json"
     custom.write_text(json.dumps([{
         "name": "WW hard",
@@ -507,7 +512,7 @@ def test_custom_hard_to_fix_does_not_raise_per_region_risk(tmp_path):
     )
     r = row(df, "clone_custom_ww")
     assert r["Structural liabilities"] == "Present"
-    assert r["CDR3 aa risk"] == "None"
+    assert r["CDR3 aa risk"] == "High"
 
 
 def test_custom_and_predefined_combine_in_per_region_risk(tmp_path):
