@@ -1,16 +1,26 @@
 import re
+from typing import Literal
 
-from definitions import _ENGINEERING_FIXABILITIES, FIXABILITY_WEIGHTS, REGION_WEIGHTS
+from definitions import (
+    _ENGINEERING_FIXABILITIES,
+    FIXABILITY_WEIGHTS,
+    REGION_WEIGHTS,
+    DevelopabilityRisk,
+    Fixability,
+    RiskLevel,
+)
 
 
-def _parse_liability_names(liabs_str: str) -> list[str]:
+def _parse_liability_names(liabs_str: str | None) -> list[str]:
     """Parse comma-separated liability string to a list of names, excluding None/Unknown."""
     if not liabs_str or liabs_str in ("None", "Unknown"):
         return []
     return [name.strip() for name in liabs_str.split(",") if name.strip() not in ("", "None", "Unknown")]
 
 
-def classify_is_productive(region_to_liabs: dict[str, str], fixability_map: dict[str, str]) -> str:
+def classify_is_productive(
+    region_to_liabs: dict[str, str | None], fixability_map: dict[str, Fixability]
+) -> Literal["Pass", "Fail"]:
     """Fail if any disqualifying liability is found in any region."""
     for liabs_str in region_to_liabs.values():
         for name in _parse_liability_names(str(liabs_str) if liabs_str else "None"):
@@ -19,7 +29,9 @@ def classify_is_productive(region_to_liabs: dict[str, str], fixability_map: dict
     return "Pass"
 
 
-def classify_structural_risk(region_to_liabs: dict[str, str], fixability_map: dict[str, str]) -> str:
+def classify_structural_risk(
+    region_to_liabs: dict[str, str | None], fixability_map: dict[str, Fixability]
+) -> Literal["None", "Present"]:
     """Present if any structural or hard_to_fix liability is found in any region."""
     for liabs_str in region_to_liabs.values():
         for name in _parse_liability_names(str(liabs_str) if liabs_str else "None"):
@@ -29,10 +41,10 @@ def classify_structural_risk(region_to_liabs: dict[str, str], fixability_map: di
 
 
 def classify_developability_risk(
-    region_to_liabs: dict[str, str],
-    fixability_map: dict[str, str],
-    risk_level_map: dict[str, str],
-) -> str:
+    region_to_liabs: dict[str, str | None],
+    fixability_map: dict[str, Fixability],
+    risk_level_map: dict[str, RiskLevel],
+) -> DevelopabilityRisk:
     """Developability risk with two structural overrides.
 
     Precedence (worst wins):
@@ -80,8 +92,8 @@ def classify_developability_risk(
 
 
 def compute_developability_score(
-    col_to_liabs: dict[str, str],
-    fixability_map: dict[str, str],
+    col_to_liabs: dict[str, str | None],
+    fixability_map: dict[str, Fixability],
 ) -> float:
     """Engineering burden: sum of fixability_weight × region_weight for all non-disqualifying liabilities.
 

@@ -1,5 +1,7 @@
 import re
 
+from definitions import Fixability, PerRegionRisk, RiskLevel
+
 
 # Cysteine position helpers
 def _get_expected_cys_positions(region: str, expected_cys_map: dict):
@@ -26,7 +28,7 @@ def _evaluate_cys_liabilities(seq: str, expected_positions: list, expected_count
 
 # Liability & Risk Functions
 def identify_liabilities(
-    seq: str,
+    seq: str | None,
     region: str,
     active_cdr_defs: dict,
     active_extra_defs: dict,
@@ -99,10 +101,10 @@ def identify_liabilities(
 
 
 def classify_risk(
-    liabilities_str: str,
-    fixability_map: dict[str, str],
-    risk_level_map: dict[str, str],
-) -> str:
+    liabilities_str: str | None,
+    fixability_map: dict[str, Fixability],
+    risk_level_map: dict[str, RiskLevel],
+) -> PerRegionRisk:
     """Per-region risk: worst riskLevel across all non-disqualifying liabilities
     detected in the region's liabilities column.
 
@@ -147,9 +149,9 @@ def classify_risk(
     return level_to_risk[current_max]
 
 
-def _build_risk_level_map(active_cdr_defs: dict, active_cys_defs: dict) -> dict[str, str]:
+def _build_risk_level_map(active_cdr_defs: dict, active_cys_defs: dict) -> dict[str, RiskLevel]:
     """Build a liability_name → risk_level lookup from active predefined definitions."""
-    risk_map = {}
+    risk_map: dict[str, RiskLevel] = {}
     for name, (_pat, risk, *_rest) in active_cdr_defs.items():
         risk_map[name] = risk
     for name, (risk, _fix) in active_cys_defs.items():
