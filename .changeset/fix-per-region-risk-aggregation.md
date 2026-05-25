@@ -8,4 +8,6 @@ Previously, when a region matched a `hard_to_fix` or `structural` liability (e.g
 
 The spec at `docs/text/work/projects/sequence-liability-fixability-scoring/README.md:126` listed both behaviors as defensible and deferred the call to the implementor. The original v4.0.0 implementation picked Option A (engineering-only); this release switches to Option B (all non-disqualifying).
 
-Global behavior is unchanged: `Developability risk` still aggregates only `fixable` + `easily_fixable` liabilities, and `Structural liabilities` still flags `Present` for `hard_to_fix` / `structural` matches.
+`Developability risk` gains a new top-level value `Non-Developable`, returned whenever any `structural` or `hard_to_fix` liability is present (mirrors `Structural liabilities = Present`). The discrete scale becomes `[None, Low, Medium, High, Non-Developable]`. Lead Selection's default cutoff stays `[None, Low, Medium]`, so structurally compromised candidates are filtered out by this column too — readers no longer need to cross-reference `Structural liabilities` to spot them.
+
+`Structural liabilities` is unchanged.
