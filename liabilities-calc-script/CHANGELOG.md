@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 6.0.1
+
+### Patch Changes
+
+- f58bc23: Republish calc-script to ship the per-region risk aggregation fix.
+
 ## 6.0.0
 
 ### Major Changes

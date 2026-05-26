@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities",
-  "version": "5.0.4",
+  "version": "5.0.5",
   "scripts": {
     "build": "shx rm -rf ./block-pack && block-tools pack",
     "do-pack": "shx rm -f *.tgz && pnpm pack && shx mv *.tgz package.tgz",
