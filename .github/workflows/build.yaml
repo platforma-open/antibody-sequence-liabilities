@@ -20,7 +20,7 @@ jobs:
   run:
     needs:
       - init
-    uses: milaboratory/github-ci/.github/workflows/node-simple-pnpm.yaml@paulnewling/changeset-coverage-diagnostic-job
+    uses: milaboratory/github-ci/.github/workflows/node-simple-pnpm.yaml@v4-beta
     with:
       app-name: 'Block: Antibody Sequence Liabilities'
       app-name-slug: 'block-antibody-sequence-liabilities'
