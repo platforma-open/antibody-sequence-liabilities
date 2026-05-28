@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# canary (DO NOT MERGE): touch software package without a changeset — coverage-gap test
 import argparse
 import json
 import os
