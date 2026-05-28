@@ -1,7 +1,7 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.model",
   "version": "6.0.2",
-  "description": "Block model",
+  "description": "Block model (canary edit — should trigger check-coverage)",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
