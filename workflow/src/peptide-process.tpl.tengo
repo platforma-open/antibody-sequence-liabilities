@@ -15,8 +15,6 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 
 self.body(func(args) {
 
-    // Content-addressed namespacing token used in place of the per-instance
-    // blockId, so identical configs dedupe downstream instead of breaking caches.
     contentHash := liabilityConfig.hash(
         args.customLiabilities,
         args.usePredefinedLiabilities,
@@ -125,9 +123,6 @@ self.body(func(args) {
         }
     ]
 
-    // Pick export columns (score / summary), namespacing by the content hash.
-    // The pl7.app/contentHash domain slot carries a hash of the liability config
-    // instead of the block instance id, so identical configs dedupe downstream.
     exportColumns := []
     for col in columns {
         if (col.spec.annotations && col.spec.annotations["pl7.app/isScore"] == "true") ||
@@ -153,12 +148,6 @@ self.body(func(args) {
         storageFormat: "Parquet",
         partitionKeyLength: 0
     }
-
-    // Inputs to the Parquet conversion (ptabler). If these differ across runs,
-    // that is what breaks dedup of the import.
-    liabilityConfig.traceJson("process:peptide:import", "outputSpecs", outputSpecs)
-    liabilityConfig.traceJson("process:peptide:import", "exportSpecs", exportSpecs)
-    liabilityConfig.trace("process:peptide:import", "convMemGiB=" + convMemGiB)
 
     outputLiabilities := xsv.importFile(
         liabilitiesTable,

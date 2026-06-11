@@ -6,6 +6,7 @@ xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
 pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
 liabilityConfig := import(":liability-config")          // Liability-config normalize + content hash
+canonical := import("@platforma-sdk/workflow-tengo:canonical") // Deterministic, key-sorted JSON encoding
 text := import("text")                                   // Text manipulation utilities
 json := import("json")
 math := import("math")
@@ -15,8 +16,6 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 
 self.body(func(args) {
 
-    // Content-addressed namespacing token used in place of the per-instance
-    // blockId, so identical configs dedupe downstream instead of breaking caches.
     contentHash := liabilityConfig.hash(
         args.customLiabilities,
         args.usePredefinedLiabilities,
@@ -38,10 +37,8 @@ self.body(func(args) {
     isSingleCell := params.isSingleCell
     coveredFeatures := params.coveredFeatures
     hasAnnotations := params.hasAnnotations
-    newMapping := json.encode(args.newMapping.getDataAsJson())
+    newMapping := canonical.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
-
-    liabilityConfig.trace("process:clonotype", "contentHash=" + contentHash + " isSingleCell=" + string(isSingleCell) + " regionsFound=" + json.encode(regionsFound))
 
     clonotypeKeySpec := datasetSpec.axesSpec[1]
 
@@ -314,10 +311,6 @@ self.body(func(args) {
 
 
 
-	// Pick export columns and namespace them by the content hash.
-	// The pl7.app/contentHash domain slot carries a hash of the liability
-	// configuration instead of the block instance id, so identical configs
-	// across blocks/projects produce the same column identity.
 	exportColumns := []
 	for col in columns {
 		if col.spec.name == "pl7.app/vdj/sequence/annotation" ||
@@ -349,14 +342,6 @@ self.body(func(args) {
 		partitionKeyLength: 0
 		}
 
-	// Inputs to the Parquet conversion (ptabler). If these differ across runs,
-	// that is what breaks dedup of the import. newMapping is part of the export
-	// column specs, so it is logged too.
-	liabilityConfig.traceJson("process:clonotype:import", "outputSpecs", outputSpecs)
-	liabilityConfig.traceJson("process:clonotype:import", "exportSpecs", exportSpecs)
-	liabilityConfig.trace("process:clonotype:import", "newMapping=" + newMapping + " convMemGiB=" + convMemGiB)
-
-	// Import the results into a data frame
 	outputLiabilities := xsv.importFile(
 		liabilitiesTable,
 		"tsv",
