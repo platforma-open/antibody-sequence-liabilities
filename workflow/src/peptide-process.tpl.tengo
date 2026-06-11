@@ -4,11 +4,9 @@
 
 self := import("@platforma-sdk/workflow-tengo:tpl")
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
-ll := import("@platforma-sdk/workflow-tengo:ll")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
-objects := import("@platforma-sdk/workflow-tengo:objects")
-canonical := import("@platforma-sdk/workflow-tengo:canonical")
+contentHashLib := import(":content-hash")
 json := import("json")
 math := import("math")
 
@@ -17,28 +15,13 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 
 self.body(func(args) {
 
-    // Content-addressed namespacing token, derived in-place from the liability
-    // configuration. Replaces the per-instance blockId: identical configs dedupe
-    // downstream instead of breaking caches. Pure function of the arguments, so
-    // it is computed here rather than passed in as a parameter.
-    //
-    // Only configuration that actually changes the result feeds the hash:
-    //   - usePredefinedLiabilities defaults to true, so undefined is normalized
-    //     to true (an explicit `true` and an omitted value must hash the same).
-    //   - disabledPredefinedLiabilities is ignored by the calc when predefined
-    //     liabilities are off (the predefined set is empty regardless, see
-    //     model/src/label.ts), so it only enters the hash when they are on.
-    // canonical.encode is required: json.encode emits map keys in random order,
-    // which would make the hash unstable across runs.
-    usePredefined := is_undefined(args.usePredefinedLiabilities) ? true : args.usePredefinedLiabilities
-    hashInput := {
-        customLiabilities: args.customLiabilities,
-        usePredefinedLiabilities: usePredefined
-    }
-    if usePredefined {
-        hashInput.disabledPredefinedLiabilities = args.disabledPredefinedLiabilities
-    }
-    contentHash := ll.base32Encode(ll.sha256Encode(canonical.encode(objects.deleteUndefined(hashInput)))[0:16])
+    // Content-addressed namespacing token used in place of the per-instance
+    // blockId, so identical configs dedupe downstream instead of breaking caches.
+    contentHash := contentHashLib.liabilityConfigHash(
+        args.customLiabilities,
+        args.usePredefinedLiabilities,
+        args.disabledPredefinedLiabilities
+    )
 
     customBlockLabel := args.customBlockLabel
     defaultBlockLabel := args.defaultBlockLabel

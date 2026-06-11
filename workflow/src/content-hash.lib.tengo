@@ -1,0 +1,34 @@
+ll := import("@platforma-sdk/workflow-tengo:ll")
+objects := import("@platforma-sdk/workflow-tengo:objects")
+canonical := import("@platforma-sdk/workflow-tengo:canonical") // Deterministic, key-sorted JSON encoding
+
+// Content-addressed namespacing token derived from the liability configuration.
+// Used in place of the per-instance blockId so identical configs across blocks
+// and projects produce the same column/trace identity and dedupe downstream
+// instead of breaking caches.
+//
+// Only configuration that actually changes the result feeds the hash:
+//   - usePredefinedLiabilities defaults to true, so undefined is normalized to
+//     true (an explicit `true` and an omitted value must hash the same).
+//   - disabledPredefinedLiabilities is ignored by the calc when predefined
+//     liabilities are off (the predefined set is empty regardless, see
+//     model/src/label.ts), so it only enters the hash when they are on.
+// canonical.encode is required: json.encode emits map keys in random order,
+// which would make the hash unstable across runs.
+liabilityConfigHash := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities) {
+	usePredefined := is_undefined(usePredefinedLiabilities) ? true : usePredefinedLiabilities
+
+	hashInput := {
+		customLiabilities: customLiabilities,
+		usePredefinedLiabilities: usePredefined
+	}
+	if usePredefined {
+		hashInput.disabledPredefinedLiabilities = disabledPredefinedLiabilities
+	}
+
+	return ll.base32Encode(ll.sha256Encode(canonical.encode(objects.deleteUndefined(hashInput)))[0:16])
+}
+
+export ll.toStrict({
+	liabilityConfigHash: liabilityConfigHash
+})
