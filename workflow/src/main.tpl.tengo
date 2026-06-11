@@ -8,6 +8,7 @@ xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 pFrames := import("@platforma-sdk/workflow-tengo:pframes")
+liabilityConfig := import(":liability-config")
 text := import("text")
 json := import("json")
 math := import("math")
@@ -104,11 +105,15 @@ wf.body(func(args) {
 		seqTableBuilder.cpu(1)
 		seqTable := seqTableBuilder.build()
 
+		// Effective liability config: inert inputs are dropped so the heavy
+		// computation dedupes across blocks/projects (see :liability-config).
+		liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
+
 		liabilitiesResultCalc := render.create(peptideLiabilitiesTpl, {
 			table: seqTable,
-			customLiabilities: args.customLiabilities,
-			usePredefinedLiabilities: args.usePredefinedLiabilities,
-			disabledPredefinedLiabilities: args.disabledPredefinedLiabilities
+			customLiabilities: liabCfg.customLiabilities,
+			usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
+			disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities
 		}, {
 			metaInputs: { mem: args.mem }
 		})
@@ -116,9 +121,9 @@ wf.body(func(args) {
 
 		peptideProcess := render.create(peptideProcessTpl, {
 			liabilitiesTable: liabilitiesResult,
-			customLiabilities: args.customLiabilities,
-			usePredefinedLiabilities: args.usePredefinedLiabilities,
-			disabledPredefinedLiabilities: args.disabledPredefinedLiabilities,
+			customLiabilities: liabCfg.customLiabilities,
+			usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
+			disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities,
 			customBlockLabel: args.customBlockLabel,
 			defaultBlockLabel: args.defaultBlockLabel,
 			datasetSpec: datasetSpec,
@@ -255,13 +260,17 @@ wf.body(func(args) {
 	seqTableBuilder.cpu(1)
 	seqTable := seqTableBuilder.build()
 
+	// Effective liability config: inert inputs are dropped so the heavy
+	// computation dedupes across blocks/projects (see :liability-config).
+	liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
+
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
 		table: seqTable,
 		mapping: hasAnnotations ? annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"] : undefined,
 		numberingSchema: numberingSchema,
-		customLiabilities: args.customLiabilities,
-		usePredefinedLiabilities: args.usePredefinedLiabilities,
-		disabledPredefinedLiabilities: args.disabledPredefinedLiabilities
+		customLiabilities: liabCfg.customLiabilities,
+		usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
+		disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities
 	}, {
 		metaInputs: { mem: args.mem }
 	})
@@ -274,9 +283,9 @@ wf.body(func(args) {
 		liabilitiesTable: liabilitiesResult,
 		newMapping: newMapping,
 		regionsFound: regionsFound,
-		customLiabilities: args.customLiabilities,
-		usePredefinedLiabilities: args.usePredefinedLiabilities,
-		disabledPredefinedLiabilities: args.disabledPredefinedLiabilities,
+		customLiabilities: liabCfg.customLiabilities,
+		usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
+		disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities,
 		customBlockLabel: args.customBlockLabel,
 		defaultBlockLabel: args.defaultBlockLabel,
 		mem: args.mem,
