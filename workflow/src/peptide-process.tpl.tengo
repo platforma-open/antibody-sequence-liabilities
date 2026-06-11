@@ -6,7 +6,7 @@ self := import("@platforma-sdk/workflow-tengo:tpl")
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
-contentHashLib := import(":content-hash")
+liabilityConfig := import(":liability-config")
 json := import("json")
 math := import("math")
 
@@ -17,7 +17,7 @@ self.body(func(args) {
 
     // Content-addressed namespacing token used in place of the per-instance
     // blockId, so identical configs dedupe downstream instead of breaking caches.
-    contentHash := contentHashLib.liabilityConfigHash(
+    contentHash := liabilityConfig.hash(
         args.customLiabilities,
         args.usePredefinedLiabilities,
         args.disabledPredefinedLiabilities

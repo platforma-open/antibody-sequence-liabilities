@@ -1,0 +1,62 @@
+ll := import("@platforma-sdk/workflow-tengo:ll")
+objects := import("@platforma-sdk/workflow-tengo:objects")
+canonical := import("@platforma-sdk/workflow-tengo:canonical") // Deterministic, key-sorted JSON encoding
+
+// Normalize the liability configuration to its effective form, dropping inputs
+// that do not change the result. This is the single source of truth fed both to
+// the liabilities-calc render (so identical effective configs dedupe the heavy
+// computation) and to the content-hash below (so column/trace identity matches).
+//
+// Rules (see model/src/label.ts):
+//   - usePredefinedLiabilities defaults to true, so undefined is normalized to
+//     true (an explicit `true` and an omitted value are the same config).
+//   - empty/absent customLiabilities is normalized to undefined (no custom set).
+//   - disabledPredefinedLiabilities is ignored by the calc when predefined
+//     liabilities are off (the predefined set is empty regardless), so it is
+//     dropped to undefined unless predefined liabilities are on and non-empty.
+//
+// Fields left undefined are skipped by render.create (not part of its content
+// key) and dropped by objects.deleteUndefined before hashing, so two configs
+// that differ only in inert fields produce identical renders and hashes.
+normalize := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities) {
+	usePredefined := is_undefined(usePredefinedLiabilities) ? true : usePredefinedLiabilities
+
+	custom := undefined
+	if customLiabilities && len(customLiabilities) > 0 {
+		custom = customLiabilities
+	}
+
+	disabled := undefined
+	if usePredefined && disabledPredefinedLiabilities && len(disabledPredefinedLiabilities) > 0 {
+		disabled = disabledPredefinedLiabilities
+	}
+
+	return {
+		customLiabilities: custom,
+		usePredefinedLiabilities: usePredefined,
+		disabledPredefinedLiabilities: disabled
+	}
+}
+
+// Content-addressed namespacing token used in place of the per-instance blockId,
+// so identical effective configs across blocks/projects produce the same
+// column/trace identity and dedupe downstream instead of breaking caches.
+// canonical.encode is required: json.encode emits map keys in random order,
+// which would make the hash unstable across runs.
+hash := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities) {
+	cfg := normalize(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities)
+
+	encoded := canonical.encode(objects.deleteUndefined(cfg))
+	h := ll.base32Encode(ll.sha256Encode(encoded)[0:16])
+
+	// Logged so dedup can be verified: identical effective configs must print an
+	// identical payload and hash; any difference explains a downstream cache miss.
+	ll.print("[liability-config] hash payload=" + encoded + " hash=" + h)
+
+	return h
+}
+
+export ll.toStrict({
+	normalize: normalize,
+	hash: hash
+})

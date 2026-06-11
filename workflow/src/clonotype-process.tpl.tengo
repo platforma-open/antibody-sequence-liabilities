@@ -5,7 +5,7 @@ assets:= import("@platforma-sdk/workflow-tengo:assets") // Asset management
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
 pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
-contentHashLib := import(":content-hash")               // Liability-config content hash
+liabilityConfig := import(":liability-config")          // Liability-config normalize + content hash
 text := import("text")                                   // Text manipulation utilities
 json := import("json")
 math := import("math")
@@ -17,7 +17,7 @@ self.body(func(args) {
 
     // Content-addressed namespacing token used in place of the per-instance
     // blockId, so identical configs dedupe downstream instead of breaking caches.
-    contentHash := contentHashLib.liabilityConfigHash(
+    contentHash := liabilityConfig.hash(
         args.customLiabilities,
         args.usePredefinedLiabilities,
         args.disabledPredefinedLiabilities
