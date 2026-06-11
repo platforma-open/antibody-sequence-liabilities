@@ -6,6 +6,7 @@ self := import("@platforma-sdk/workflow-tengo:tpl")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
+liabilityConfig := import(":liability-config")
 json := import("json")
 math := import("math")
 
@@ -25,6 +26,11 @@ self.body(func(args) {
 	if !is_undefined(args.mem) {
 		baseMemGiB = args.mem
 	}
+
+	// This body only runs when the render is NOT served from cache, so this line
+	// firing means the heavy python run is (re)executing for this config. If a
+	// second identical block does not print it, the computation deduped.
+	liabilityConfig.trace("calc:peptide", "config=" + liabilityConfig.canonicalConfig(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities))
 
 	// Run the peptide-only liability scanner.
 	cmd := exec.builder().

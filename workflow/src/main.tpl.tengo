@@ -109,6 +109,8 @@ wf.body(func(args) {
 		// computation dedupes across blocks/projects (see :liability-config).
 		liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
 
+		liabilityConfig.trace("main:peptide", "config=" + liabilityConfig.canonicalConfig(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities))
+
 		liabilitiesResultCalc := render.create(peptideLiabilitiesTpl, {
 			table: seqTable,
 			customLiabilities: liabCfg.customLiabilities,
@@ -126,8 +128,9 @@ wf.body(func(args) {
 			disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities,
 			customBlockLabel: args.customBlockLabel,
 			defaultBlockLabel: args.defaultBlockLabel,
-			datasetSpec: datasetSpec,
-			mem: args.mem
+			datasetSpec: datasetSpec
+		}, {
+			metaInputs: { mem: args.mem }
 		})
 
 		return {
@@ -264,6 +267,8 @@ wf.body(func(args) {
 	// computation dedupes across blocks/projects (see :liability-config).
 	liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
 
+	liabilityConfig.trace("main:antibody", "isSingleCell=" + string(isSingleCell) + " numberingSchema=" + (numberingSchema != "" ? numberingSchema : "<none>") + " config=" + liabilityConfig.canonicalConfig(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities))
+
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
 		table: seqTable,
 		mapping: hasAnnotations ? annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"] : undefined,
@@ -288,13 +293,14 @@ wf.body(func(args) {
 		disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities,
 		customBlockLabel: args.customBlockLabel,
 		defaultBlockLabel: args.defaultBlockLabel,
-		mem: args.mem,
 		params: smart.createJsonResource({
 			datasetSpec: datasetSpec,
 			isSingleCell: isSingleCell,
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations
 		})
+	}, {
+		metaInputs: { mem: args.mem }
 	})
 
 	outputLiabilities := processResult.output("outputLiabilities", 24 * 60 * 60 * 1000)

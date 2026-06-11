@@ -38,25 +38,35 @@ normalize := func(customLiabilities, usePredefinedLiabilities, disabledPredefine
 	}
 }
 
+// Deterministic, key-sorted JSON of the effective config — the exact payload
+// that determines the content hash. Use it in trace logs so the same effective
+// config always prints the same string (json.encode would reorder keys).
+canonicalConfig := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities) {
+	return canonical.encode(objects.deleteUndefined(normalize(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities)))
+}
+
+// Single greppable trace marker for the whole pipeline. Grep "[liab-trace]" in
+// the backend WORKFLOW logs to follow a block across all levels (orchestration,
+// heavy calc, post-process) and confirm dedup.
+trace := func(stage, message) {
+	ll.print("[liab-trace] " + stage + " | " + message)
+}
+
 // Content-addressed namespacing token used in place of the per-instance blockId,
 // so identical effective configs across blocks/projects produce the same
 // column/trace identity and dedupe downstream instead of breaking caches.
-// canonical.encode is required: json.encode emits map keys in random order,
-// which would make the hash unstable across runs.
 hash := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities) {
-	cfg := normalize(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities)
-
-	encoded := canonical.encode(objects.deleteUndefined(cfg))
+	encoded := canonicalConfig(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities)
 	h := ll.base32Encode(ll.sha256Encode(encoded)[0:16])
 
-	// Logged so dedup can be verified: identical effective configs must print an
-	// identical payload and hash; any difference explains a downstream cache miss.
-	ll.print("[liability-config] hash payload=" + encoded + " hash=" + h)
+	trace("process:hash", "payload=" + encoded + " hash=" + h)
 
 	return h
 }
 
 export ll.toStrict({
 	normalize: normalize,
+	canonicalConfig: canonicalConfig,
+	trace: trace,
 	hash: hash
 })
