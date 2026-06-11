@@ -22,13 +22,24 @@ self.body(func(args) {
     // blocks/projects yield the same column identity and dedupe downstream
     // instead of breaking caches. It is a pure function of the arguments, so it
     // is computed here rather than passed in as a parameter.
+    //
+    // Only configuration that actually changes the result feeds the hash:
+    //   - usePredefinedLiabilities defaults to true, so undefined is normalized
+    //     to true (an explicit `true` and an omitted value must hash the same).
+    //   - disabledPredefinedLiabilities is ignored by the calc when predefined
+    //     liabilities are off (the predefined set is empty regardless, see
+    //     model/src/label.ts), so it only enters the hash when they are on.
     // canonical.encode is required: json.encode emits map keys in random order,
     // which would make the hash unstable across runs.
-    contentHash := ll.base32Encode(ll.sha256Encode(canonical.encode(objects.deleteUndefined({
+    usePredefined := is_undefined(args.usePredefinedLiabilities) ? true : args.usePredefinedLiabilities
+    hashInput := {
         customLiabilities: args.customLiabilities,
-        usePredefinedLiabilities: args.usePredefinedLiabilities,
-        disabledPredefinedLiabilities: args.disabledPredefinedLiabilities
-    })))[0:16])
+        usePredefinedLiabilities: usePredefined
+    }
+    if usePredefined {
+        hashInput.disabledPredefinedLiabilities = args.disabledPredefinedLiabilities
+    }
+    contentHash := ll.base32Encode(ll.sha256Encode(canonical.encode(objects.deleteUndefined(hashInput)))[0:16])
 
     customBlockLabel := args.customBlockLabel
     defaultBlockLabel := args.defaultBlockLabel
