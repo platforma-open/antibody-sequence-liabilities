@@ -52,6 +52,13 @@ trace := func(stage, message) {
 	ll.print("[liab-trace] " + stage + " | " + message)
 }
 
+// Trace an arbitrary object deterministically (key-sorted), for comparing the
+// inputs that feed a render across runs — if two runs print different JSON here,
+// that difference is what breaks dedup of the render keyed on it.
+traceJson := func(stage, label, obj) {
+	trace(stage, label + "=" + canonical.encode(obj))
+}
+
 // Content-addressed namespacing token used in place of the per-instance blockId,
 // so identical effective configs across blocks/projects produce the same
 // column/trace identity and dedupe downstream instead of breaking caches.
@@ -68,5 +75,6 @@ export ll.toStrict({
 	normalize: normalize,
 	canonicalConfig: canonicalConfig,
 	trace: trace,
+	traceJson: traceJson,
 	hash: hash
 })
