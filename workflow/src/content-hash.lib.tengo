@@ -26,7 +26,16 @@ liabilityConfigHash := func(customLiabilities, usePredefinedLiabilities, disable
 		hashInput.disabledPredefinedLiabilities = disabledPredefinedLiabilities
 	}
 
-	return ll.base32Encode(ll.sha256Encode(canonical.encode(objects.deleteUndefined(hashInput)))[0:16])
+	// Canonical payload that fully determines the hash. Logged so dedup can be
+	// verified from run logs: identical configs must print an identical payload
+	// and hash (so downstream column identity is stable and computations dedupe);
+	// any difference in payload explains a cache miss.
+	encoded := canonical.encode(objects.deleteUndefined(hashInput))
+	hash := ll.base32Encode(ll.sha256Encode(encoded)[0:16])
+
+	ll.print("[content-hash] liabilityConfigHash payload=" + encoded + " hash=" + hash)
+
+	return hash
 }
 
 export ll.toStrict({
