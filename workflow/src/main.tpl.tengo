@@ -79,8 +79,6 @@ wf.prepare(func(args) {
 
 wf.body(func(args) {
 
-	blockId := wf.blockId().getDataAsJson()
-
 	columnsWithSequences := args.columns
 	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
 
@@ -110,14 +108,17 @@ wf.body(func(args) {
 			table: seqTable,
 			customLiabilities: args.customLiabilities,
 			usePredefinedLiabilities: args.usePredefinedLiabilities,
-			disabledPredefinedLiabilities: args.disabledPredefinedLiabilities,
-			mem: args.mem
+			disabledPredefinedLiabilities: args.disabledPredefinedLiabilities
+		}, {
+			metaInputs: { mem: args.mem }
 		})
 		liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
 
 		peptideProcess := render.create(peptideProcessTpl, {
 			liabilitiesTable: liabilitiesResult,
-			blockId: blockId,
+			customLiabilities: args.customLiabilities,
+			usePredefinedLiabilities: args.usePredefinedLiabilities,
+			disabledPredefinedLiabilities: args.disabledPredefinedLiabilities,
 			customBlockLabel: args.customBlockLabel,
 			defaultBlockLabel: args.defaultBlockLabel,
 			datasetSpec: datasetSpec,
@@ -260,8 +261,9 @@ wf.body(func(args) {
 		numberingSchema: numberingSchema,
 		customLiabilities: args.customLiabilities,
 		usePredefinedLiabilities: args.usePredefinedLiabilities,
-		disabledPredefinedLiabilities: args.disabledPredefinedLiabilities,
-		mem: args.mem
+		disabledPredefinedLiabilities: args.disabledPredefinedLiabilities
+	}, {
+		metaInputs: { mem: args.mem }
 	})
 
 	liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
@@ -272,7 +274,9 @@ wf.body(func(args) {
 		liabilitiesTable: liabilitiesResult,
 		newMapping: newMapping,
 		regionsFound: regionsFound,
-		blockId: blockId,
+		customLiabilities: args.customLiabilities,
+		usePredefinedLiabilities: args.usePredefinedLiabilities,
+		disabledPredefinedLiabilities: args.disabledPredefinedLiabilities,
 		customBlockLabel: args.customBlockLabel,
 		defaultBlockLabel: args.defaultBlockLabel,
 		mem: args.mem,

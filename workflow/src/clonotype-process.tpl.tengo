@@ -6,6 +6,7 @@ xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
 ll := import("@platforma-sdk/workflow-tengo:ll")        // Logging utilities
 pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
+objects := import("@platforma-sdk/workflow-tengo:objects")
 text := import("text")                                   // Text manipulation utilities
 json := import("json")
 math := import("math")
@@ -15,7 +16,17 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 
 self.body(func(args) {
 
-    blockId := args.blockId
+    // Content-addressed namespacing token, derived in-place from the liability
+    // configuration. Replaces the per-instance blockId: identical configs across
+    // blocks/projects yield the same column identity and dedupe downstream
+    // instead of breaking caches. It is a pure function of the arguments, so it
+    // is computed here rather than passed in as a parameter.
+    contentHash := ll.base32Encode(ll.sha256Encode(json.encode(objects.deleteUndefined({
+        customLiabilities: args.customLiabilities,
+        usePredefinedLiabilities: args.usePredefinedLiabilities,
+        disabledPredefinedLiabilities: args.disabledPredefinedLiabilities
+    })))[0:16])
+
     customBlockLabel := args.customBlockLabel
     defaultBlockLabel := args.defaultBlockLabel
 
@@ -305,7 +316,10 @@ self.body(func(args) {
 
 
 
-	// Pick export columns and add blockId to the domain
+	// Pick export columns and namespace them by the content hash.
+	// The pl7.app/contentHash domain slot carries a hash of the liability
+	// configuration instead of the block instance id, so identical configs
+	// across blocks/projects produce the same column identity.
 	exportColumns := []
 	for col in columns {
 		if col.spec.name == "pl7.app/vdj/sequence/annotation" ||
@@ -315,7 +329,7 @@ self.body(func(args) {
 			if !col.spec.domain {
 				col.spec.domain = {}
 			}
-			col.spec.domain["pl7.app/blockId"] = blockId
+			col.spec.domain["pl7.app/contentHash"] = contentHash
 			
 			exportColumns += [col]
 		}
@@ -360,7 +374,7 @@ self.body(func(args) {
 		type: "milaboratories.sequence-liabilities",
 		importance: 30,
 		label: blockLabel,
-		id: blockId
+		id: contentHash
 	}]
 
 	// Create the trace with all steps. Spread operator is used to pass the trace steps as individual arguments.

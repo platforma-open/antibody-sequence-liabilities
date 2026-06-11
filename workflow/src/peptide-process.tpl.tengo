@@ -7,6 +7,7 @@ xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
+objects := import("@platforma-sdk/workflow-tengo:objects")
 json := import("json")
 math := import("math")
 
@@ -15,7 +16,16 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 
 self.body(func(args) {
 
-    blockId := args.blockId
+    // Content-addressed namespacing token, derived in-place from the liability
+    // configuration. Replaces the per-instance blockId: identical configs dedupe
+    // downstream instead of breaking caches. Pure function of the arguments, so
+    // it is computed here rather than passed in as a parameter.
+    contentHash := ll.base32Encode(ll.sha256Encode(json.encode(objects.deleteUndefined({
+        customLiabilities: args.customLiabilities,
+        usePredefinedLiabilities: args.usePredefinedLiabilities,
+        disabledPredefinedLiabilities: args.disabledPredefinedLiabilities
+    })))[0:16])
+
     customBlockLabel := args.customBlockLabel
     defaultBlockLabel := args.defaultBlockLabel
     liabilitiesTable := args.liabilitiesTable
@@ -118,7 +128,9 @@ self.body(func(args) {
         }
     ]
 
-    // Pick export columns (score / summary), tagging blockId in domain.
+    // Pick export columns (score / summary), namespacing by the content hash.
+    // The pl7.app/contentHash domain slot carries a hash of the liability config
+    // instead of the block instance id, so identical configs dedupe downstream.
     exportColumns := []
     for col in columns {
         if (col.spec.annotations && col.spec.annotations["pl7.app/isScore"] == "true") ||
@@ -126,7 +138,7 @@ self.body(func(args) {
             if !col.spec.domain {
                 col.spec.domain = {}
             }
-            col.spec.domain["pl7.app/blockId"] = blockId
+            col.spec.domain["pl7.app/contentHash"] = contentHash
             exportColumns += [col]
         }
     }
@@ -167,7 +179,7 @@ self.body(func(args) {
         type: "milaboratories.sequence-liabilities",
         importance: 30,
         label: blockLabel,
-        id: blockId
+        id: contentHash
     }]
     liabilityTrace := pSpec.makeTrace(datasetSpec, traceSteps...)
 
