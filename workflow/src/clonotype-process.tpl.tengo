@@ -41,6 +41,8 @@ self.body(func(args) {
     newMapping := json.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
 
+    liabilityConfig.trace("process:clonotype", "contentHash=" + contentHash + " isSingleCell=" + string(isSingleCell) + " regionsFound=" + json.encode(regionsFound))
+
     clonotypeKeySpec := datasetSpec.axesSpec[1]
 
     // Set up the axes for the output data - using clonotype key
