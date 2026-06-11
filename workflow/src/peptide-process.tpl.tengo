@@ -154,6 +154,12 @@ self.body(func(args) {
         partitionKeyLength: 0
     }
 
+    // Inputs to the Parquet conversion (ptabler). If these differ across runs,
+    // that is what breaks dedup of the import.
+    liabilityConfig.traceJson("process:peptide:import", "outputSpecs", outputSpecs)
+    liabilityConfig.traceJson("process:peptide:import", "exportSpecs", exportSpecs)
+    liabilityConfig.trace("process:peptide:import", "convMemGiB=" + convMemGiB)
+
     outputLiabilities := xsv.importFile(
         liabilitiesTable,
         "tsv",

@@ -349,6 +349,13 @@ self.body(func(args) {
 		partitionKeyLength: 0
 		}
 
+	// Inputs to the Parquet conversion (ptabler). If these differ across runs,
+	// that is what breaks dedup of the import. newMapping is part of the export
+	// column specs, so it is logged too.
+	liabilityConfig.traceJson("process:clonotype:import", "outputSpecs", outputSpecs)
+	liabilityConfig.traceJson("process:clonotype:import", "exportSpecs", exportSpecs)
+	liabilityConfig.trace("process:clonotype:import", "newMapping=" + newMapping + " convMemGiB=" + convMemGiB)
+
 	// Import the results into a data frame
 	outputLiabilities := xsv.importFile(
 		liabilitiesTable,
