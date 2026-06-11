@@ -1,23 +1,7 @@
 ll := import("@platforma-sdk/workflow-tengo:ll")
 objects := import("@platforma-sdk/workflow-tengo:objects")
-canonical := import("@platforma-sdk/workflow-tengo:canonical") // Deterministic, key-sorted JSON encoding
+canonical := import("@platforma-sdk/workflow-tengo:canonical")
 
-// Normalize the liability configuration to its effective form, dropping inputs
-// that do not change the result. This is the single source of truth fed both to
-// the liabilities-calc render (so identical effective configs dedupe the heavy
-// computation) and to the content-hash below (so column/trace identity matches).
-//
-// Rules (see model/src/label.ts):
-//   - usePredefinedLiabilities defaults to true, so undefined is normalized to
-//     true (an explicit `true` and an omitted value are the same config).
-//   - empty/absent customLiabilities is normalized to undefined (no custom set).
-//   - disabledPredefinedLiabilities is ignored by the calc when predefined
-//     liabilities are off (the predefined set is empty regardless), so it is
-//     dropped to undefined unless predefined liabilities are on and non-empty.
-//
-// Fields left undefined are skipped by render.create (not part of its content
-// key) and dropped by objects.deleteUndefined before hashing, so two configs
-// that differ only in inert fields produce identical renders and hashes.
 normalize := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities) {
 	usePredefined := is_undefined(usePredefinedLiabilities) ? true : usePredefinedLiabilities
 
@@ -38,43 +22,12 @@ normalize := func(customLiabilities, usePredefinedLiabilities, disabledPredefine
 	}
 }
 
-// Deterministic, key-sorted JSON of the effective config — the exact payload
-// that determines the content hash. Use it in trace logs so the same effective
-// config always prints the same string (json.encode would reorder keys).
-canonicalConfig := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities) {
-	return canonical.encode(objects.deleteUndefined(normalize(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities)))
-}
-
-// Single greppable trace marker for the whole pipeline. Grep "[liab-trace]" in
-// the backend WORKFLOW logs to follow a block across all levels (orchestration,
-// heavy calc, post-process) and confirm dedup.
-trace := func(stage, message) {
-	ll.print("[liab-trace] " + stage + " | " + message)
-}
-
-// Trace an arbitrary object deterministically (key-sorted), for comparing the
-// inputs that feed a render across runs — if two runs print different JSON here,
-// that difference is what breaks dedup of the render keyed on it.
-traceJson := func(stage, label, obj) {
-	trace(stage, label + "=" + canonical.encode(obj))
-}
-
-// Content-addressed namespacing token used in place of the per-instance blockId,
-// so identical effective configs across blocks/projects produce the same
-// column/trace identity and dedupe downstream instead of breaking caches.
 hash := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities) {
-	encoded := canonicalConfig(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities)
-	h := ll.base32Encode(ll.sha256Encode(encoded)[0:16])
-
-	trace("process:hash", "payload=" + encoded + " hash=" + h)
-
-	return h
+	encoded := canonical.encode(objects.deleteUndefined(normalize(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities)))
+	return ll.base32Encode(ll.sha256Encode(encoded)[0:16])
 }
 
 export ll.toStrict({
 	normalize: normalize,
-	canonicalConfig: canonicalConfig,
-	trace: trace,
-	traceJson: traceJson,
 	hash: hash
 })

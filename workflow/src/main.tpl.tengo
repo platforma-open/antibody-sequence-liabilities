@@ -8,9 +8,9 @@ xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 pFrames := import("@platforma-sdk/workflow-tengo:pframes")
+maps := import("@platforma-sdk/workflow-tengo:maps")
 liabilityConfig := import(":liability-config")
 text := import("text")
-json := import("json")
 math := import("math")
 
 calculateLiabilitiesTpl := assets.importTemplate(":clonotype-liabilities")
@@ -105,11 +105,7 @@ wf.body(func(args) {
 		seqTableBuilder.cpu(1)
 		seqTable := seqTableBuilder.build()
 
-		// Effective liability config: inert inputs are dropped so the heavy
-		// computation dedupes across blocks/projects (see :liability-config).
 		liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
-
-		liabilityConfig.trace("main:peptide", "config=" + liabilityConfig.canonicalConfig(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities))
 
 		liabilitiesResultCalc := render.create(peptideLiabilitiesTpl, {
 			table: seqTable,
@@ -254,20 +250,13 @@ wf.body(func(args) {
 		}
 	}
 
-	features := []
-	for k, v in coveredFeatures {
-		features += [k]
-	}
+	features := maps.getKeys(coveredFeatures)
 
 	seqTableBuilder.mem(string(int(math.max(16, baseMemGiB / 4))) + "GiB")
 	seqTableBuilder.cpu(1)
 	seqTable := seqTableBuilder.build()
 
-	// Effective liability config: inert inputs are dropped so the heavy
-	// computation dedupes across blocks/projects (see :liability-config).
 	liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
-
-	liabilityConfig.trace("main:antibody", "isSingleCell=" + string(isSingleCell) + " numberingSchema=" + (numberingSchema != "" ? numberingSchema : "<none>") + " config=" + liabilityConfig.canonicalConfig(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities))
 
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
 		table: seqTable,
