@@ -7,6 +7,7 @@ ll := import("@platforma-sdk/workflow-tengo:ll")        // Logging utilities
 pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
 objects := import("@platforma-sdk/workflow-tengo:objects")
+canonical := import("@platforma-sdk/workflow-tengo:canonical") // Deterministic, key-sorted JSON encoding
 text := import("text")                                   // Text manipulation utilities
 json := import("json")
 math := import("math")
@@ -21,7 +22,9 @@ self.body(func(args) {
     // blocks/projects yield the same column identity and dedupe downstream
     // instead of breaking caches. It is a pure function of the arguments, so it
     // is computed here rather than passed in as a parameter.
-    contentHash := ll.base32Encode(ll.sha256Encode(json.encode(objects.deleteUndefined({
+    // canonical.encode is required: json.encode emits map keys in random order,
+    // which would make the hash unstable across runs.
+    contentHash := ll.base32Encode(ll.sha256Encode(canonical.encode(objects.deleteUndefined({
         customLiabilities: args.customLiabilities,
         usePredefinedLiabilities: args.usePredefinedLiabilities,
         disabledPredefinedLiabilities: args.disabledPredefinedLiabilities
