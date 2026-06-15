@@ -157,13 +157,6 @@ export const platforma = BlockModelV3.create(dataModel)
       ],
       annotations: { 'pl7.app/isAnchor': 'true' },
     }, {
-      // Per-cluster centroid dataset (clonotype-clustering). A clonotype-shaped
-      // 2-axis dataset where the row entity is a cluster: axis[0] = sampleId (real
-      // per-sample abundance anchor), axis[1] = "pl7.app/clustering/centroidId"
-      // (values = real clusterId) carrying the per-cluster centroid VDJ sequence.
-      // centroidId != variantKey, so `modality` resolves to 'antibody' and the
-      // workflow's antibody-bulk branch consumes the retained isAssemblingFeature
-      // aminoacid sequences exactly as it would a real bulk dataset.
       axes: [
         { name: 'pl7.app/sampleId' },
         { name: 'pl7.app/clustering/centroidId' },
