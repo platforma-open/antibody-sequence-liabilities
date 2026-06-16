@@ -120,8 +120,9 @@ wf.body(func(args) {
 			blockId: blockId,
 			customBlockLabel: args.customBlockLabel,
 			defaultBlockLabel: args.defaultBlockLabel,
-			datasetSpec: datasetSpec,
-			mem: args.mem
+			datasetSpec: datasetSpec
+		}, {
+			metaInputs: { mem: args.mem }
 		})
 
 		return {
@@ -275,13 +276,14 @@ wf.body(func(args) {
 		blockId: blockId,
 		customBlockLabel: args.customBlockLabel,
 		defaultBlockLabel: args.defaultBlockLabel,
-		mem: args.mem,
 		params: smart.createJsonResource({
 			datasetSpec: datasetSpec,
 			isSingleCell: isSingleCell,
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations
 		})
+	}, {
+		metaInputs: { mem: args.mem }
 	})
 
 	outputLiabilities := processResult.output("outputLiabilities", 24 * 60 * 60 * 1000)
