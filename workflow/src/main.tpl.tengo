@@ -92,10 +92,14 @@ wf.body(func(args) {
 	// ───────────────────────────────────────────────────────────────────────
 	// Peptide branch
 	// ───────────────────────────────────────────────────────────────────────
-	if datasetSpec.axesSpec[1].name == "pl7.app/variantKey" {
+	// Peptide axis (native variantKey) or the peptide-only per-cluster centroid dataset
+	// from clonotype-clustering (pl7.app/clustering/centroidId) — both carry a peptide
+	// aminoacid sequence column and are processed identically here.
+	keyAxisName := datasetSpec.axesSpec[1].name
+	if keyAxisName == "pl7.app/variantKey" || keyAxisName == "pl7.app/clustering/centroidId" {
 		peptideSeqs := columnsWithSequences.getColumns("peptideSequences")
 		if len(peptideSeqs) == 0 {
-			ll.panic("No peptide aa sequence found on variantKey axis. Expected pl7.app/sequence with domain.pl7.app/feature: peptide and pl7.app/alphabet: aminoacid.")
+			ll.panic("No peptide aa sequence found on the key axis. Expected pl7.app/sequence with domain.pl7.app/feature: peptide and pl7.app/alphabet: aminoacid, annotation pl7.app/isAssemblingFeature: true.")
 		}
 		peptideSeq := peptideSeqs[0]
 

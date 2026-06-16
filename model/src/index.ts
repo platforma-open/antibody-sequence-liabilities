@@ -170,7 +170,12 @@ export const platforma = BlockModelV3.create(dataModel)
     if (ref === undefined) return undefined;
     const spec = ctx.resultPool.getPColumnSpecByRef(ref);
     if (!spec) return undefined;
-    return spec.axesSpec[1]?.name === 'pl7.app/variantKey' ? 'peptide' : 'antibody';
+    // The clonotype-clustering centroid dataset (axis pl7.app/clustering/centroidId) is
+    // peptide-only, so treat it as peptide alongside the native peptide axis.
+    const axis1 = spec.axesSpec[1]?.name;
+    return (axis1 === 'pl7.app/variantKey' || axis1 === 'pl7.app/clustering/centroidId')
+      ? 'peptide'
+      : 'antibody';
   }, { retentive: true })
 
   .outputWithStatus('pt', (ctx) => {
