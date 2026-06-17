@@ -1,0 +1,39 @@
+ll := import("@platforma-sdk/workflow-tengo:ll")
+objects := import("@platforma-sdk/workflow-tengo:objects")
+canonical := import("@platforma-sdk/workflow-tengo:canonical")
+slices := import("@platforma-sdk/workflow-tengo:slices")
+
+normalize := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities) {
+	usePredefined := is_undefined(usePredefinedLiabilities) ? true : usePredefinedLiabilities
+
+	custom := undefined
+	if customLiabilities && len(customLiabilities) > 0 {
+		custom = customLiabilities
+	}
+
+	disabled := undefined
+	if usePredefined && disabledPredefinedLiabilities && len(disabledPredefinedLiabilities) > 0 {
+		// Sort to a canonical order: this list is a set, but it reaches the calc
+		// (writeFile + render.create input) and the content hash as a raw array.
+		// The backend canonicalizes map keys on the CID but NOT array element order,
+		// so an unsorted list makes semantically-identical configs hash differently
+		// and re-run the calc across blocks/projects.
+		disabled = slices.sortUnique(disabledPredefinedLiabilities)
+	}
+
+	return {
+		customLiabilities: custom,
+		usePredefinedLiabilities: usePredefined,
+		disabledPredefinedLiabilities: disabled
+	}
+}
+
+hash := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities) {
+	encoded := canonical.encode(objects.deleteUndefined(normalize(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities)))
+	return ll.base32Encode(ll.sha256Encode(encoded)[0:16])
+}
+
+export ll.toStrict({
+	normalize: normalize,
+	hash: hash
+})

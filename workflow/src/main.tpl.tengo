@@ -8,8 +8,9 @@ xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 pFrames := import("@platforma-sdk/workflow-tengo:pframes")
+maps := import("@platforma-sdk/workflow-tengo:maps")
+liabilityConfig := import(":liability-config")
 text := import("text")
-json := import("json")
 math := import("math")
 
 calculateLiabilitiesTpl := assets.importTemplate(":clonotype-liabilities")
@@ -79,8 +80,6 @@ wf.prepare(func(args) {
 
 wf.body(func(args) {
 
-	blockId := wf.blockId().getDataAsJson()
-
 	columnsWithSequences := args.columns
 	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
 
@@ -106,22 +105,28 @@ wf.body(func(args) {
 		seqTableBuilder.cpu(1)
 		seqTable := seqTableBuilder.build()
 
+		liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
+
 		liabilitiesResultCalc := render.create(peptideLiabilitiesTpl, {
 			table: seqTable,
-			customLiabilities: args.customLiabilities,
-			usePredefinedLiabilities: args.usePredefinedLiabilities,
-			disabledPredefinedLiabilities: args.disabledPredefinedLiabilities,
-			mem: args.mem
+			customLiabilities: liabCfg.customLiabilities,
+			usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
+			disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities
+		}, {
+			metaInputs: { mem: args.mem }
 		})
 		liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
 
 		peptideProcess := render.create(peptideProcessTpl, {
 			liabilitiesTable: liabilitiesResult,
-			blockId: blockId,
+			customLiabilities: liabCfg.customLiabilities,
+			usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
+			disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities,
 			customBlockLabel: args.customBlockLabel,
 			defaultBlockLabel: args.defaultBlockLabel,
-			datasetSpec: datasetSpec,
-			mem: args.mem
+			datasetSpec: datasetSpec
+		}, {
+			metaInputs: { mem: args.mem }
 		})
 
 		return {
@@ -245,23 +250,23 @@ wf.body(func(args) {
 		}
 	}
 
-	features := []
-	for k, v in coveredFeatures {
-		features += [k]
-	}
+	features := maps.getKeys(coveredFeatures)
 
 	seqTableBuilder.mem(string(int(math.max(16, baseMemGiB / 4))) + "GiB")
 	seqTableBuilder.cpu(1)
 	seqTable := seqTableBuilder.build()
 
+	liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
+
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
 		table: seqTable,
 		mapping: hasAnnotations ? annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"] : undefined,
 		numberingSchema: numberingSchema,
-		customLiabilities: args.customLiabilities,
-		usePredefinedLiabilities: args.usePredefinedLiabilities,
-		disabledPredefinedLiabilities: args.disabledPredefinedLiabilities,
-		mem: args.mem
+		customLiabilities: liabCfg.customLiabilities,
+		usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
+		disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities
+	}, {
+		metaInputs: { mem: args.mem }
 	})
 
 	liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
@@ -272,16 +277,19 @@ wf.body(func(args) {
 		liabilitiesTable: liabilitiesResult,
 		newMapping: newMapping,
 		regionsFound: regionsFound,
-		blockId: blockId,
+		customLiabilities: liabCfg.customLiabilities,
+		usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
+		disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities,
 		customBlockLabel: args.customBlockLabel,
 		defaultBlockLabel: args.defaultBlockLabel,
-		mem: args.mem,
 		params: smart.createJsonResource({
 			datasetSpec: datasetSpec,
 			isSingleCell: isSingleCell,
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations
 		})
+	}, {
+		metaInputs: { mem: args.mem }
 	})
 
 	outputLiabilities := processResult.output("outputLiabilities", 24 * 60 * 60 * 1000)

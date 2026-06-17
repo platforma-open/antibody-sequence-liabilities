@@ -4,9 +4,9 @@
 
 self := import("@platforma-sdk/workflow-tengo:tpl")
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
-ll := import("@platforma-sdk/workflow-tengo:ll")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
+liabilityConfig := import(":liability-config")
 json := import("json")
 math := import("math")
 
@@ -15,7 +15,12 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 
 self.body(func(args) {
 
-    blockId := args.blockId
+    contentHash := liabilityConfig.hash(
+        args.customLiabilities,
+        args.usePredefinedLiabilities,
+        args.disabledPredefinedLiabilities
+    )
+
     customBlockLabel := args.customBlockLabel
     defaultBlockLabel := args.defaultBlockLabel
     liabilitiesTable := args.liabilitiesTable
@@ -118,7 +123,6 @@ self.body(func(args) {
         }
     ]
 
-    // Pick export columns (score / summary), tagging blockId in domain.
     exportColumns := []
     for col in columns {
         if (col.spec.annotations && col.spec.annotations["pl7.app/isScore"] == "true") ||
@@ -126,7 +130,7 @@ self.body(func(args) {
             if !col.spec.domain {
                 col.spec.domain = {}
             }
-            col.spec.domain["pl7.app/blockId"] = blockId
+            col.spec.domain["pl7.app/contentHash"] = contentHash
             exportColumns += [col]
         }
     }
@@ -167,7 +171,7 @@ self.body(func(args) {
         type: "milaboratories.sequence-liabilities",
         importance: 30,
         label: blockLabel,
-        id: blockId
+        id: contentHash
     }]
     liabilityTrace := pSpec.makeTrace(datasetSpec, traceSteps...)
 
