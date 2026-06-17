@@ -3,10 +3,9 @@ file := import("@platforma-sdk/workflow-tengo:file")
 exec := import("@platforma-sdk/workflow-tengo:exec")    // Command execution utilities
 assets:= import("@platforma-sdk/workflow-tengo:assets") // Asset management
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
+ll := import("@platforma-sdk/workflow-tengo:ll")        // Logging utilities
 pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
-liabilityConfig := import(":liability-config")          // Liability-config normalize + content hash
-canonical := import("@platforma-sdk/workflow-tengo:canonical") // Deterministic, key-sorted JSON encoding
 text := import("text")                                   // Text manipulation utilities
 json := import("json")
 math := import("math")
@@ -16,12 +15,7 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 
 self.body(func(args) {
 
-    contentHash := liabilityConfig.hash(
-        args.customLiabilities,
-        args.usePredefinedLiabilities,
-        args.disabledPredefinedLiabilities
-    )
-
+    blockId := args.blockId
     customBlockLabel := args.customBlockLabel
     defaultBlockLabel := args.defaultBlockLabel
 
@@ -37,7 +31,7 @@ self.body(func(args) {
     isSingleCell := params.isSingleCell
     coveredFeatures := params.coveredFeatures
     hasAnnotations := params.hasAnnotations
-    newMapping := canonical.encode(args.newMapping.getDataAsJson())
+    newMapping := json.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
 
     clonotypeKeySpec := datasetSpec.axesSpec[1]
@@ -311,6 +305,7 @@ self.body(func(args) {
 
 
 
+	// Pick export columns and add blockId to the domain
 	exportColumns := []
 	for col in columns {
 		if col.spec.name == "pl7.app/vdj/sequence/annotation" ||
@@ -320,7 +315,7 @@ self.body(func(args) {
 			if !col.spec.domain {
 				col.spec.domain = {}
 			}
-			col.spec.domain["pl7.app/contentHash"] = contentHash
+			col.spec.domain["pl7.app/blockId"] = blockId
 			
 			exportColumns += [col]
 		}
@@ -342,6 +337,7 @@ self.body(func(args) {
 		partitionKeyLength: 0
 		}
 
+	// Import the results into a data frame
 	outputLiabilities := xsv.importFile(
 		liabilitiesTable,
 		"tsv",
@@ -364,7 +360,7 @@ self.body(func(args) {
 		type: "milaboratories.sequence-liabilities",
 		importance: 30,
 		label: blockLabel,
-		id: contentHash
+		id: blockId
 	}]
 
 	// Create the trace with all steps. Spread operator is used to pass the trace steps as individual arguments.
