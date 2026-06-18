@@ -80,6 +80,8 @@ wf.prepare(func(args) {
 
 wf.body(func(args) {
 
+	blockId := wf.blockId().getDataAsJson()
+
 	columnsWithSequences := args.columns
 	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
 
@@ -119,9 +121,7 @@ wf.body(func(args) {
 
 		peptideProcess := render.create(peptideProcessTpl, {
 			liabilitiesTable: liabilitiesResult,
-			customLiabilities: liabCfg.customLiabilities,
-			usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
-			disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities,
+			blockId: blockId,
 			customBlockLabel: args.customBlockLabel,
 			defaultBlockLabel: args.defaultBlockLabel,
 			datasetSpec: datasetSpec
@@ -277,9 +277,7 @@ wf.body(func(args) {
 		liabilitiesTable: liabilitiesResult,
 		newMapping: newMapping,
 		regionsFound: regionsFound,
-		customLiabilities: liabCfg.customLiabilities,
-		usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
-		disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities,
+		blockId: blockId,
 		customBlockLabel: args.customBlockLabel,
 		defaultBlockLabel: args.defaultBlockLabel,
 		params: smart.createJsonResource({
