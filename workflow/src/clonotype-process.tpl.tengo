@@ -5,7 +5,6 @@ assets:= import("@platforma-sdk/workflow-tengo:assets") // Asset management
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
 pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
-liabilityConfig := import(":liability-config")          // Liability-config normalize + content hash
 canonical := import("@platforma-sdk/workflow-tengo:canonical") // Deterministic, key-sorted JSON encoding
 text := import("text")                                   // Text manipulation utilities
 json := import("json")
@@ -16,12 +15,7 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 
 self.body(func(args) {
 
-    contentHash := liabilityConfig.hash(
-        args.customLiabilities,
-        args.usePredefinedLiabilities,
-        args.disabledPredefinedLiabilities
-    )
-
+    blockId := args.blockId
     customBlockLabel := args.customBlockLabel
     defaultBlockLabel := args.defaultBlockLabel
 
@@ -320,7 +314,7 @@ self.body(func(args) {
 			if !col.spec.domain {
 				col.spec.domain = {}
 			}
-			col.spec.domain["pl7.app/contentHash"] = contentHash
+			col.spec.domain["pl7.app/blockId"] = blockId
 			
 			exportColumns += [col]
 		}
@@ -364,7 +358,7 @@ self.body(func(args) {
 		type: "milaboratories.sequence-liabilities",
 		importance: 30,
 		label: blockLabel,
-		id: contentHash
+		id: blockId
 	}]
 
 	// Create the trace with all steps. Spread operator is used to pass the trace steps as individual arguments.
