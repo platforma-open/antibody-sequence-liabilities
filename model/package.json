@@ -3,27 +3,38 @@
   "version": "6.0.2",
   "description": "Block model",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "sources": "./src/index.ts",
+      "import": "./dist/index.js"
+    },
+    "./dist/*": "./dist/*"
+  },
   "scripts": {
     "build": "ts-builder build --target block-model && block-tools build-model",
     "watch": "ts-builder build --target block-model --watch",
     "type-check": "ts-builder type-check --target block-model",
     "test": "vitest",
-    "lint": "eslint .",
-    "do-pack": "shx rm -f *.tgz && pnpm pack && shx mv *.tgz package.tgz"
+    "do-pack": "shx rm -f *.tgz && pnpm pack && shx mv *.tgz package.tgz",
+    "fmt": "ts-builder format",
+    "check": "ts-builder check --target block-model"
   },
   "dependencies": {
-    "@platforma-sdk/model": "catalog:",
-    "@milaboratories/helpers": "catalog:"
+    "@milaboratories/helpers": "catalog:",
+    "@platforma-sdk/model": "catalog:"
   },
   "devDependencies": {
     "@milaboratories/ts-builder": "catalog:",
     "@milaboratories/ts-configs": "catalog:",
     "@platforma-sdk/block-tools": "catalog:",
-    "@platforma-sdk/eslint-config": "catalog:",
-    "eslint": "catalog:",
-    "vitest": "catalog:",
-    "typescript": "catalog:"
+    "eslint": "catalog:"
+  },
+  "peerDependencies": {
+    "@types/node": "*",
+    "typescript": "*"
   }
 }

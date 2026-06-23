@@ -1,18 +1,21 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.workflow",
   "version": "6.0.2",
-  "type": "module",
   "description": "Block Workflow",
+  "type": "module",
   "scripts": {
-    "build": "shx rm -rf dist && pl-tengo check && pl-tengo build",
-    "format": "/usr/bin/env emacs --script ./format.el",
-    "do-pack": "shx rm -f *.tgz && pnpm pack && shx mv *.tgz package.tgz"
+    "build": "shx rm -rf dist && pl-tengo build",
+    "format": "/usr/bin/env emacs --script ./format.el || echo 'No emacs.'",
+    "do-pack": "shx rm -f *.tgz && pnpm pack && shx mv *.tgz package.tgz",
+    "check": "pl-tengo check"
   },
   "dependencies": {
     "@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script": "workspace:*",
     "@platforma-sdk/workflow-tengo": "catalog:"
   },
   "devDependencies": {
-    "@platforma-sdk/tengo-builder": "catalog:"
+    "@platforma-sdk/tengo-builder": "catalog:",
+    "@platforma-sdk/test": "catalog:",
+    "shx": "catalog:"
   }
 }

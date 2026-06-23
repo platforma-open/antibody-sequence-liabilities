@@ -1,21 +1,26 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities",
   "version": "5.0.6",
-  "scripts": {
-    "build": "shx rm -rf ./block-pack && block-tools pack",
-    "do-pack": "shx rm -f *.tgz && pnpm pack && shx mv *.tgz package.tgz",
-    "mark-stable": "block-tools mark-stable -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
-    "prepublishOnly": "block-tools pack && block-tools publish --unstable -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'"
-  },
   "files": [
     "index.d.ts",
     "index.js"
   ],
-  "dependencies": {
-    "@platforma-open/milaboratories.antibody-sequence-liabilities.workflow": "workspace:*",
-    "@platforma-open/milaboratories.antibody-sequence-liabilities.model": "workspace:*",
-    "@platforma-open/milaboratories.antibody-sequence-liabilities.ui": "workspace:*"
+  "scripts": {
+    "build": "shx rm -rf ./block-pack && block-tools pack",
+    "do-pack": "shx rm -f *.tgz && block-tools pack && pnpm pack && shx mv *.tgz package.tgz",
+    "mark-stable": "block-tools mark-stable -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
+    "prepublishOnly": "block-tools pack && block-tools publish -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'"
   },
+  "dependencies": {
+    "@platforma-open/milaboratories.antibody-sequence-liabilities.model": "workspace:*",
+    "@platforma-open/milaboratories.antibody-sequence-liabilities.ui": "workspace:*",
+    "@platforma-open/milaboratories.antibody-sequence-liabilities.workflow": "workspace:*"
+  },
+  "devDependencies": {
+    "@platforma-sdk/block-tools": "catalog:",
+    "shx": "catalog:"
+  },
+  "packageManager": "pnpm@9.12.0",
   "block": {
     "components": {
       "workflow": "@platforma-open/milaboratories.antibody-sequence-liabilities.workflow/dist/tengo/tpl/main.plj.gz",
@@ -44,9 +49,5 @@
       },
       "marketplaceRanking": 15000
     }
-  },
-  "devDependencies": {
-    "@platforma-sdk/block-tools": "catalog:"
-  },
-  "packageManager": "pnpm@9.12.0"
+  }
 }
