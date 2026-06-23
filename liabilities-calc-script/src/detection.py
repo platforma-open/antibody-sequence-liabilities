@@ -39,6 +39,10 @@ def identify_liabilities(
     if not seq or not isinstance(seq, str) or not seq.strip():
         return "Unknown"
 
+    # MiXCR emits germline-imputed residues in lowercase; uppercase a local copy so
+    # case-sensitive motif/cysteine detection works (does not affect stored sequences).
+    seq = seq.upper()
+
     liabilities_found = []
 
     # Disqualifying patterns applied to all regions first
