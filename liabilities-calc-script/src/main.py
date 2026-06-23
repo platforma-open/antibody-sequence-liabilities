@@ -465,6 +465,10 @@ def main():
 
                 if CALCULATE_LIABILITIES:
                     for region_name, fragment_seq in extracted_frags.items():
+                        # Uppercase locally for case-sensitive detection (MiXCR lowercases
+                        # germline-imputed residues). Exported fragments below use the
+                        # original-case values, so this stays confined to scanning.
+                        fragment_seq = fragment_seq.upper()
                         start_coord, _ = frag_coords[region_name]
                         if active_cys_defs and region_name in {"FR1", "FR2", "FR3", "CDR1", "CDR2", "CDR3"}:
                             expected_positions, expected_count, should_check = _get_expected_cys_positions(
