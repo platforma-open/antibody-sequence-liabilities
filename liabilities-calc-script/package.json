@@ -1,20 +1,21 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script",
   "version": "6.0.1",
+  "files": [
+    "./dist/**/*"
+  ],
+  "type": "module",
   "scripts": {
     "build": "pl-pkg build",
     "prepublish": "pl-pkg prepublish",
     "do-pack": "shx rm -f *.tgz && pl-pkg build && pnpm pack && shx mv platforma-open*.tgz package.tgz",
     "changeset": "changeset",
-    "version-packages": "changeset version"
+    "version-packages": "changeset version",
+    "prepublishOnly": "pl-pkg prepublish"
   },
-  "files": [
-    "./dist/**/*"
-  ],
-  "dependencies": {
-    "@platforma-open/milaboratories.runenv-python-3": "catalog:"
-  },
+  "dependencies": {},
   "devDependencies": {
+    "@platforma-open/milaboratories.runenv-python-3": "catalog:",
     "@platforma-sdk/package-builder": "catalog:"
   },
   "block-software": {
