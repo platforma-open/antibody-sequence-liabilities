@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script
 
+## 6.0.2
+
+### Patch Changes
+
+- 0a047a7: Fix false "Missing Cysteines" on germline imputed sequences.
+
 ## 6.0.1
 
 ### Patch Changes
