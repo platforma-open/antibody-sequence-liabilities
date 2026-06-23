@@ -1,22 +1,21 @@
 packages:
-  - workflow
+  - block
+  - liabilities-calc-script
   - model
   - ui
-  - liabilities-calc-script
-  - block
+  - workflow
 
 catalog:
   # SDK packages - EXACT VERSIONS (no ^ or ~)
-  '@milaboratories/ts-builder': 1.5.0
+  '@milaboratories/ts-builder': 1.5.2
   '@milaboratories/ts-configs': 1.2.3
-  '@platforma-sdk/workflow-tengo': 6.5.1
-  '@platforma-sdk/model': 1.79.3
-  '@platforma-sdk/ui-vue': 1.79.3
-  '@platforma-sdk/tengo-builder': 4.0.8
+  '@platforma-sdk/workflow-tengo': 6.6.3
+  '@platforma-sdk/model': 1.79.15
+  '@platforma-sdk/ui-vue': 1.79.15
+  '@platforma-sdk/tengo-builder': 4.0.9
   '@platforma-sdk/package-builder': 3.13.0
-  '@platforma-sdk/block-tools': 2.10.15
-  '@platforma-sdk/eslint-config': 1.2.0
-  '@platforma-sdk/test': 1.79.4
+  '@platforma-sdk/block-tools': 2.11.1
+  '@platforma-sdk/test': 1.79.16
   '@milaboratories/helpers': 1.14.2
   '@milaboratories/strings': 0.1.2
 
