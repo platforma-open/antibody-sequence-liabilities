@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script",
-  "version": "6.0.2",
+  "version": "6.0.3",
   "scripts": {
     "build": "pl-pkg build",
     "prepublish": "pl-pkg prepublish",
