@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 5.0.9
+
+### Patch Changes
+
+- 43391db: Publish to the stable channel by default — remove the `--unstable` flag from the block's publish script.
+
 ## 5.0.8
 
 ### Patch Changes
