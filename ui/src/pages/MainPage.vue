@@ -55,16 +55,23 @@ const predefinedSectionOpen = ref(false);
 const advancedSectionOpen = ref(false);
 const resourceSectionOpen = ref(false);
 
-const isPeptide = computed(() => app.model.outputs.modality === 'peptide');
+// Whole-sequence modes scan the full sequence with no region/chain concept:
+// peptide (peptide-extraction) and amplicon (synthetic-repertoire-profiler).
+// Both hide the region selector and share the peptide rule set.
+const isWholeSeq = computed(() =>
+  app.model.outputs.modality === 'peptide' || app.model.outputs.modality === 'amplicon',
+);
 
 // Predefined liability list filtered by modality (per applicableTo). Defaults
-// to the full list when modality is undefined (during initial load).
+// to the full list when modality is undefined (during initial load). Amplicon
+// shares the peptide rule set, so map it to 'peptide' for applicability.
 const predefinedItems = computed(() =>
   liabilityTypes
     .filter((lt) => {
       const modality = app.model.outputs.modality;
       if (!modality) return true;
-      return lt.applicableTo.includes(modality as 'antibody' | 'peptide');
+      const effective = modality === 'amplicon' ? 'peptide' : modality;
+      return lt.applicableTo.includes(effective as 'antibody' | 'peptide');
     })
     .map((lt) => ({ ...lt })),
 );
@@ -128,8 +135,8 @@ function addCustomLiability(): void {
     pattern: '',
     riskLevel: 'Medium',
     fixability: 'fixable',
-    // Peptide mode: rule applies to the whole sequence
-    regions: isPeptide.value ? [] : ['CDR1', 'CDR2', 'CDR3'],
+    // Whole-sequence mode (peptide / amplicon): rule applies to the whole sequence
+    regions: isWholeSeq.value ? [] : ['CDR1', 'CDR2', 'CDR3'],
   };
   expandedIndices.value = new Set([...expandedIndices.value, current.length]);
   app.model.data.customLiabilities = [...current, newItem];
@@ -257,9 +264,9 @@ watch(
         app.model.data.importFileHandle = undefined;
         return;
       }
-      // Regions check applies only in antibody mode.
+      // Regions check applies only in antibody mode (whole-sequence modes ignore regions).
       const regions = item.regions ?? [];
-      if (!isPeptide.value && regions.length === 0) {
+      if (!isWholeSeq.value && regions.length === 0) {
         importError.value = `"${item.name}" must have at least one region`;
         app.model.data.importFileHandle = undefined;
         return;
@@ -421,7 +428,7 @@ watch(
             </template>
           </PlTooltip>
           <PlDropdownMulti
-            v-if="!isPeptide"
+            v-if="!isWholeSeq"
             v-model="customItems[index].regions"
             label="Regions"
             :options="regionOptions"

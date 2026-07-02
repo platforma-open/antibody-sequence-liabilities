@@ -12,7 +12,7 @@ import {
 import { getDefaultBlockLabel } from './label';
 export type * from '@milaboratories/helpers';
 
-export type Modality = 'antibody' | 'peptide';
+export type Modality = 'antibody' | 'peptide' | 'amplicon';
 
 export type CustomLiability = {
   name: string;
@@ -115,10 +115,12 @@ export const platforma = BlockModelV3.create(dataModel)
       } catch {
         throw new Error(`Invalid regex: "${c.pattern}"`);
       }
-      // Antibody mode: regions selection is required. Peptide mode: regions
-      // is unused (whole-sequence regex), so empty list is valid.
+      // Antibody mode: regions selection is required. Whole-sequence modes
+      // (peptide / amplicon): regions unused (whole-sequence regex), so empty
+      // list is valid.
       // data.modality defaults to undefined until synced; treat as antibody (conservative).
-      if (data.modality !== 'peptide' && (!c.regions || c.regions.length === 0))
+      const wholeSeq = data.modality === 'peptide' || data.modality === 'amplicon';
+      if (!wholeSeq && (!c.regions || c.regions.length === 0))
         throw new Error(`Custom liability "${c.name}" must have at least one region selected`);
     }
 
@@ -164,7 +166,11 @@ export const platforma = BlockModelV3.create(dataModel)
     if (ref === undefined) return undefined;
     const spec = ctx.resultPool.getPColumnSpecByRef(ref);
     if (!spec) return undefined;
-    return spec.axesSpec[1]?.name === 'pl7.app/variantKey' ? 'peptide' : 'antibody';
+    const axis1 = spec.axesSpec[1];
+    if (axis1?.name !== 'pl7.app/variantKey') return 'antibody';
+    return axis1.domain?.['pl7.app/repertoire/extractionRunId'] !== undefined
+      ? 'amplicon'
+      : 'peptide';
   }, { retentive: true })
 
   .outputWithStatus('pt', (ctx) => {
