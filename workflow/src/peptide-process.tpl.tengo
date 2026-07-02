@@ -20,6 +20,18 @@ self.body(func(args) {
     liabilitiesTable := args.liabilitiesTable
     datasetSpec := args.datasetSpec
 
+    // Feature domain + label for the echoed aa sequence column. Peptide inputs
+    // carry feature "peptide"; synthetic-repertoire-profiler amplicon inputs carry
+    // "amplicon-sequence". Defaults preserve the original peptide behavior.
+    seqFeature := "peptide"
+    if !is_undefined(args.seqFeature) {
+        seqFeature = args.seqFeature
+    }
+    seqLabel := "Peptide aa"
+    if !is_undefined(args.seqLabel) {
+        seqLabel = args.seqLabel
+    }
+
     baseMemGiB := 16
     if !is_undefined(args.mem) {
         baseMemGiB = args.mem
@@ -47,11 +59,11 @@ self.body(func(args) {
                 name: "pl7.app/sequence",
                 valueType: "String",
                 domain: {
-                    "pl7.app/feature": "peptide",
+                    "pl7.app/feature": seqFeature,
                     "pl7.app/alphabet": "aminoacid"
                 },
                 annotations: {
-                    "pl7.app/label": "Peptide aa",
+                    "pl7.app/label": seqLabel,
                     "pl7.app/isMainSequence": "true",
                     "pl7.app/table/fontFamily": "monospace",
                     "pl7.app/table/visibility": "default",
