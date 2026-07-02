@@ -72,6 +72,19 @@ wf.prepare(func(args) {
 		}
 	}, "peptideSequences")
 
+	// Amplicon whole-variant aa sequence (synthetic-repertoire-profiler). Keyed
+	// on the same variantKey axis, but carries feature "amplicon-sequence". Region
+	// subsequences carry their region name as feature and are intentionally
+	// excluded — whole-sequence mode scans the full variant.
+	bundleBuilder.addMulti({
+		axes: [{ anchor: "main", idx: 1 }],
+		name: "pl7.app/sequence",
+		domain: {
+			"pl7.app/feature": "amplicon-sequence",
+			"pl7.app/alphabet": "aminoacid"
+		}
+	}, "ampliconSequences")
+
 		return {
 			columns: bundleBuilder.build()
 		}
@@ -91,18 +104,38 @@ wf.body(func(args) {
 	}
 
 	// ───────────────────────────────────────────────────────────────────────
-	// Peptide branch
+	// Whole-sequence branch (peptide / amplicon)
 	// ───────────────────────────────────────────────────────────────────────
+	// Peptide-extraction and synthetic-repertoire-profiler both key variants on
+	// pl7.app/variantKey and both feed one aa sequence per variant into the same
+	// flat (whole-sequence) liability scanner. They differ only in the axis-domain
+	// stamp, which sequence-feature column to read, and how the echoed sequence
+	// column is labeled downstream.
 	if datasetSpec.axesSpec[1].name == "pl7.app/variantKey" {
-		peptideSeqs := columnsWithSequences.getColumns("peptideSequences")
-		if len(peptideSeqs) == 0 {
-			ll.panic("No peptide aa sequence found on variantKey axis. Expected pl7.app/sequence with domain.pl7.app/feature: peptide and pl7.app/alphabet: aminoacid.")
+		axis1 := datasetSpec.axesSpec[1]
+		isAmplicon := axis1.domain && axis1.domain["pl7.app/repertoire/extractionRunId"] != undefined
+
+		seqCols := undefined
+		seqFeature := "peptide"
+		seqLabel := "Peptide aa"
+		if isAmplicon {
+			seqCols = columnsWithSequences.getColumns("ampliconSequences")
+			seqFeature = "amplicon-sequence"
+			seqLabel = "Sequence aa"
+			if len(seqCols) == 0 {
+				ll.panic("No amplicon aa sequence found on variantKey axis. Expected pl7.app/sequence with domain.pl7.app/feature: amplicon-sequence and pl7.app/alphabet: aminoacid.")
+			}
+		} else {
+			seqCols = columnsWithSequences.getColumns("peptideSequences")
+			if len(seqCols) == 0 {
+				ll.panic("No peptide aa sequence found on variantKey axis. Expected pl7.app/sequence with domain.pl7.app/feature: peptide and pl7.app/alphabet: aminoacid.")
+			}
 		}
-		peptideSeq := peptideSeqs[0]
+		wholeSeqCol := seqCols[0]
 
 		seqTableBuilder := pFrames.tsvFileBuilder()
 		seqTableBuilder.setAxisHeader(datasetSpec.axesSpec[1].name, "variantKey")
-		seqTableBuilder.add(columnsWithSequences.getColumn(peptideSeq.key), {header: "sequence aa"})
+		seqTableBuilder.add(columnsWithSequences.getColumn(wholeSeqCol.key), {header: "sequence aa"})
 		seqTableBuilder.mem(string(int(math.max(8, baseMemGiB / 4))) + "GiB")
 		seqTableBuilder.cpu(1)
 		seqTable := seqTableBuilder.build()
@@ -124,7 +157,9 @@ wf.body(func(args) {
 			blockId: blockId,
 			customBlockLabel: args.customBlockLabel,
 			defaultBlockLabel: args.defaultBlockLabel,
-			datasetSpec: datasetSpec
+			datasetSpec: datasetSpec,
+			seqFeature: seqFeature,
+			seqLabel: seqLabel
 		}, {
 			metaInputs: { mem: args.mem }
 		})
