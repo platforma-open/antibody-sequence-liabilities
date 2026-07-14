@@ -212,16 +212,22 @@ wf.body(func(args) {
 	// Track which features are actually present in the data
 	coveredFeatures := {}
 
+	// Track which primary chains are actually present in single-cell input
+	primaryChainsSet := {}
+	isScFv := false
+
 	if isSingleCell {
 		// Single-cell data handling
 		// Add primary chain sequences
 		for seq_entry in sequences {
 			if seq_entry.spec.name == "pl7.app/vdj/scFv-sequence" {
+				isScFv = true
 				for additionalSeq in additionalSequences {
 					if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
 						for fr in ["CDR1", "CDR2", "CDR3", "FR1"] {
 							if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr {
 								chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
+								primaryChainsSet[chain] = true
 								chainLabel := (chain == "A" ? "Heavy" : "Light")
 								seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: chainLabel + " " + fr + " aa"})
 								if coveredFeatures[fr] {
@@ -235,6 +241,7 @@ wf.body(func(args) {
 				}
 			} else if seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
 				chain := seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
+				primaryChainsSet[chain] = true
 				chainLabel := (chain == "A" ? "Heavy" : "Light")
 				seqTableBuilder.add(columnsWithSequences.getColumn(seq_entry.key), {header: chainLabel + " " + " sequence aa"})
 			}
@@ -287,6 +294,19 @@ wf.body(func(args) {
 
 	features := maps.getKeys(coveredFeatures)
 
+	// Get the chain order list
+	primaryChains := []
+	if primaryChainsSet["A"] {
+		primaryChains += ["A"]
+	}
+	if primaryChainsSet["B"] {
+		primaryChains += ["B"]
+	}
+	cdr3SeqPrefixed := isScFv || len(primaryChains) > 1
+	if isSingleCell {
+		ll.assert(len(primaryChains) > 0, "single-cell input has no primary-chain sequences")
+	}
+
 	seqTableBuilder.mem(string(int(math.max(16, baseMemGiB / 4))) + "GiB")
 	seqTableBuilder.cpu(1)
 	seqTable := seqTableBuilder.build()
@@ -319,7 +339,9 @@ wf.body(func(args) {
 			datasetSpec: datasetSpec,
 			isSingleCell: isSingleCell,
 			coveredFeatures: features,
-			hasAnnotations: hasAnnotations
+			hasAnnotations: hasAnnotations,
+			primaryChains: primaryChains,
+			cdr3SeqPrefixed: cdr3SeqPrefixed
 		})
 	}, {
 		metaInputs: { mem: args.mem }
