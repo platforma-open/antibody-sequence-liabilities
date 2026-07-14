@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 5.0.11
+
+### Patch Changes
+
+- 386b7f5: Fix crash on heavy-only single-cell (VHH) input. The single-cell output now declares per-chain sequence/annotation columns only for the chains actually present, so heavy-only data no longer fails with `ColumnNotFoundError: unable to find column "Heavy CDR3 aa"`. Single-chain single-cell is fixed for the non-scFv (annotation-extraction) path; scFv single-chain input remains a separate known issue (its region-liability columns stay chain-prefixed).
+- Updated dependencies [386b7f5]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.workflow@6.0.6
+
 ## 5.0.10
 
 ### Patch Changes
