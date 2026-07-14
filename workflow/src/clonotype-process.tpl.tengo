@@ -31,6 +31,8 @@ self.body(func(args) {
     isSingleCell := params.isSingleCell
     coveredFeatures := params.coveredFeatures
     hasAnnotations := params.hasAnnotations
+    primaryChains := params.primaryChains
+    cdr3SeqPrefixed := params.cdr3SeqPrefixed
     newMapping := canonical.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
 
@@ -202,14 +204,21 @@ self.body(func(args) {
 
 	// Add sequence and annotation columns. Python script always outputs annotation columns.
 	if isSingleCell {
-		// For single cell: show both heavy and light chain sequences and their annotations
-		for chain_val in ["A", "B"] {
+		// For single cell: show each present chain's sequence and annotations. Iterate only
+		// the chains that actually exist (primaryChains) so heavy-only (VHH) input doesn't
+		// request a non-existent Light chain.
+		for chain_val in primaryChains {
 			chainLabel := (chain_val == "A" ? "Heavy" : "Light")
 			chainNamePart := (chain_val == "A" ? "Heavy" : "Light")
 
+			// main.py drops the chain prefix on the extracted CDR3 sequence for single-chain
+			// non-scFv data (bare "CDR3 aa"), but keeps it for scFv or multi-chain ("Heavy
+			// CDR3 aa").
+			cdr3SeqColumn := cdr3SeqPrefixed ? (chainLabel + " " + "CDR3 aa") : "CDR3 aa"
+
 			// Sequence column (Python script selects these based on input like "Heavy CDR3 aa")
 			sequenceColumns += [{
-				column: chainLabel + " " + "CDR3 aa",
+				column: cdr3SeqColumn,
 				id: "cdr3-aa-primary-" + text.to_lower(chainLabel),
 				spec: {
 					name: "pl7.app/vdj/sequence",
