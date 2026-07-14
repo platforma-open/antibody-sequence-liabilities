@@ -209,7 +209,6 @@ self.body(func(args) {
 		// request a non-existent Light chain.
 		for chain_val in primaryChains {
 			chainLabel := (chain_val == "A" ? "Heavy" : "Light")
-			chainNamePart := (chain_val == "A" ? "Heavy" : "Light")
 
 			// main.py drops the chain prefix on the extracted CDR3 sequence for single-chain
 			// non-scFv data (bare "CDR3 aa"), but keeps it for scFv or multi-chain ("Heavy
