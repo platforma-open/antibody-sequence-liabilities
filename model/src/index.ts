@@ -6,9 +6,10 @@ import type {
 } from '@platforma-sdk/model';
 import {
   BlockModelV3,
+  DataColumn,
   DataModelBuilder,
   createPlDataTableStateV2,
-  createPlDataTableV2,
+  createPlDataTableV3,
 } from '@platforma-sdk/model';
 import { getDefaultBlockLabel } from './label';
 export type * from '@milaboratories/helpers';
@@ -227,14 +228,14 @@ export const platforma = BlockModelV3.create(dataModel)
 
   .outputWithStatus('pt', (ctx) => {
     const pCols = ctx.outputs?.resolve('outputLiabilities')?.getPColumns();
-    if (pCols === undefined) {
+    if (pCols === undefined || pCols.length === 0) {
       return undefined;
     }
-    return createPlDataTableV2(
-      ctx,
-      pCols,
-      ctx.data.tableState,
-    );
+    return createPlDataTableV3(ctx, {
+      primaryColumns: [DataColumn.fromColumn(pCols[0])],
+      columns: pCols.slice(1).map((c) => DataColumn.fromColumn(c)),
+      tableState: ctx.data.tableState,
+    });
   })
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
@@ -256,7 +257,7 @@ export const platforma = BlockModelV3.create(dataModel)
 
   // Blob handle for the uploaded file, readable by ReactiveFileContent in the UI
   .retentiveOutput('importedFile', (ctx) =>
-    ctx.prerun?.resolveAny({ field: 'importedFile' })?.getFileHandle(),
+    ctx.prerun?.traverse({ field: 'importedFile' })?.getFileHandle(),
   )
 
   .title(() => 'Sequence Liabilities')

@@ -22,3 +22,5 @@ from both makes them undetectable; the UI warns when that combination is selecte
 
 Regions are now ordered biologically (FR1, CDR1, FR2, CDR2, FR3, CDR3, FR4), changing the
 per-region table column order and the segment order inside `Sequence liabilities summary`.
+
+The results table moved from createPlDataTableV2 to V3 to ensure stale sorts are dropped.
