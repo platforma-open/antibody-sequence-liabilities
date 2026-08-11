@@ -83,7 +83,7 @@ _ENGINEERING_FIXABILITIES = {"fixable", "easily_fixable"}
 # framing adds/removes N-terminal residues (e.g. germline-imputed FR1 shifting the cysteine).
 EXPECTED_CYS_BASE = {"FR1": [-4, -3], "FR2": [], "FR3": [], "CDR1": [], "CDR2": [], "CDR3": [0]}
 FR1_SPECIFIC_LIABILITIES = {"Missing Cysteines", "Extra Cysteines"}
-REGION_ORDER_MAP = {"FR1": 1, "CDR1": 2, "CDR2": 3, "CDR3": 4, "FR2": 5, "FR3": 6, "FR4": 7}  # For sorting summary
+REGION_ORDER_MAP = {"FR1": 1, "CDR1": 2, "FR2": 3, "CDR2": 4, "FR3": 5, "CDR3": 6, "FR4": 7}  # For sorting summary
 
 
 def get_active_liability_definitions(user_requested_set: set):

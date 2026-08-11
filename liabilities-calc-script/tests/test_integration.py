@@ -638,3 +638,122 @@ def test_structural_supersedes_hard_to_fix_in_developability_risk(tmp_path):
     # hard_to_fix alone → Very High; structural wins → Non-Developable.
     assert r["Developability risk"] == "Non-Developable"
     assert r["Structural liabilities"] == "Present"
+
+
+# ---------------------------------------------------------------------------
+# --regions (region scope)
+# ---------------------------------------------------------------------------
+
+# Parental-contamination fixture. FR1 and CDR1 carry liabilities the user considers
+# known-good (they came in with the parent scaffold); CDR3 is the region actually being
+# engineered. Without scoping, both candidates score identically High and cannot be told
+# apart — the exact problem region scope exists to solve.
+PARENTAL_HEADER = "clonotypeKey\tCDR1 aa\tCDR2 aa\tCDR3 aa\tFR1 aa\n"
+PARENTAL_ROWS = (
+    "cand_clean_cdr3\tGYTFTNGY\tISPGRGIT\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\n"
+    "cand_dirty_cdr3\tGYTFTNGY\tISPGRGIT\tCARYNGF\tQVQLVQSGAEVKKPDPSVKVSCKAS\n"
+)
+
+
+def _parental_data(tmp_path: Path) -> Path:
+    p = tmp_path / "parental.tsv"
+    p.write_text(PARENTAL_HEADER + PARENTAL_ROWS)
+    return p
+
+
+def test_regions_absent_scans_every_region(tmp_path):
+    """No --regions flag = pre-feature behaviour: every region present is scanned."""
+    df = run_main(tmp_path, data_path=_parental_data(tmp_path))
+    assert "CDR1 aa liabilities" in df.columns
+    assert "FR1 aa liabilities" in df.columns
+    assert "CDR3 aa liabilities" in df.columns
+
+
+def test_regions_drops_unselected_region_columns(tmp_path):
+    """Deselected regions disappear from the output rather than being emitted empty.
+
+    This is what shrinks the per-region PColumn set the workflow emits: the Tengo side
+    builds its output columns from --output-regions-found, which is derived from the same
+    filtered column list.
+    """
+    df = run_main(tmp_path, ["--regions", "CDR3"], data_path=_parental_data(tmp_path))
+    assert "CDR3 aa liabilities" in df.columns
+    assert "CDR3 aa risk" in df.columns
+    for absent in ("CDR1 aa liabilities", "CDR2 aa liabilities", "FR1 aa liabilities"):
+        assert absent not in df.columns
+
+
+def test_regions_found_output_reflects_scope(tmp_path):
+    out_regions = tmp_path / "regions.json"
+    run_main(
+        tmp_path,
+        ["--regions", "CDR3", "--output-regions-found", str(out_regions)],
+        data_path=_parental_data(tmp_path),
+    )
+    assert json.loads(out_regions.read_text()) == ["CDR3"]
+
+
+def test_regions_excludes_parental_liabilities_from_score(tmp_path):
+    """The point of the feature: scoping to CDR3 separates candidates that were tied.
+
+    Unscoped, both rows are High because of the shared FR1/CDR1 parental liabilities.
+    Scoped to CDR3, the candidate with a clean CDR3 drops to None and the one with a
+    real CDR3 liability stays High.
+    """
+    data = _parental_data(tmp_path)
+    unscoped_dir = tmp_path / "a"
+    unscoped_dir.mkdir()
+    scoped_dir = tmp_path / "b"
+    scoped_dir.mkdir()
+
+    unscoped = run_main(unscoped_dir, data_path=data)
+    assert row(unscoped, "cand_clean_cdr3")["Developability risk"] == "High"
+    assert row(unscoped, "cand_dirty_cdr3")["Developability risk"] == "High"
+
+    scoped = run_main(scoped_dir, ["--regions", "CDR3"], data_path=data)
+    clean = row(scoped, "cand_clean_cdr3")
+    dirty = row(scoped, "cand_dirty_cdr3")
+    assert clean["Developability risk"] == "None"
+    assert clean["Developability cost"] == pytest.approx(0.0)
+    assert dirty["Developability risk"] == "High"
+    # CDR3 weight 1.5 x fixable weight 3.0
+    assert dirty["Developability cost"] == pytest.approx(4.5)
+
+
+def test_regions_multi_select(tmp_path):
+    df = run_main(tmp_path, ["--regions", "CDR1,CDR3"], data_path=_parental_data(tmp_path))
+    assert "CDR1 aa liabilities" in df.columns
+    assert "CDR3 aa liabilities" in df.columns
+    assert "FR1 aa liabilities" not in df.columns
+
+
+def test_regions_is_case_and_whitespace_insensitive(tmp_path):
+    df = run_main(tmp_path, ["--regions", " cdr3 , Cdr1 "], data_path=_parental_data(tmp_path))
+    assert "CDR3 aa liabilities" in df.columns
+    assert "CDR1 aa liabilities" in df.columns
+    assert "FR1 aa liabilities" not in df.columns
+
+
+def test_regions_unknown_name_is_ignored_not_fatal(tmp_path):
+    """A stale region name degrades to 'scan what I recognise', never a failed run."""
+    df = run_main(tmp_path, ["--regions", "CDR3,NOTAREGION"], data_path=_parental_data(tmp_path))
+    assert "CDR3 aa liabilities" in df.columns
+    assert "FR1 aa liabilities" not in df.columns
+
+
+def test_regions_empty_value_falls_back_to_all(tmp_path):
+    """Empty scope must mean 'no restriction', not 'restricted to nothing'."""
+    df = run_main(tmp_path, ["--regions", ""], data_path=_parental_data(tmp_path))
+    assert "CDR1 aa liabilities" in df.columns
+    assert "FR1 aa liabilities" in df.columns
+
+
+def test_regions_does_not_affect_is_productive(tmp_path):
+    """Is Productive reads the whole-chain column, so region scope must not change it.
+
+    clone_stop carries a stop codon outside CDR3; scoping to CDR3 must still fail it.
+    """
+    scoped = run_main(tmp_path, ["--regions", "CDR3"])
+    assert row(scoped, "clone_stop")["Is Productive"] == "Fail"
+    assert row(scoped, "clone_out_of_frame")["Is Productive"] == "Fail"
+    assert row(scoped, "clone_clean")["Is Productive"] == "Pass"

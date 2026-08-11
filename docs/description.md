@@ -12,4 +12,8 @@ Two output columns are emitted for both modalities:
 Antibody/TCR inputs additionally produce:
 - **Is Productive** — `Pass`/`Fail`: fails on stop codons or out-of-frame sequences
 
+For antibody/TCR inputs you can restrict the scan to specific regions. Use this when the parental
+scaffold carries liabilities you already accept and only the engineered region should be scored.
+`Is Productive` still covers the whole molecule.
+
 You can extend the predefined liability set with custom motifs defined in the block settings or imported from a JSON file.

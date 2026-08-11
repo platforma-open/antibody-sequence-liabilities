@@ -20,6 +20,7 @@ self.body(func(args) {
 	customLiabilities := args.customLiabilities
 	usePredefinedLiabilities := args.usePredefinedLiabilities
 	disabledPredefinedLiabilities := args.disabledPredefinedLiabilities
+	regions := args.regions
 
 	baseMemGiB := 16
 	if !is_undefined(args.mem) {
@@ -60,6 +61,12 @@ self.body(func(args) {
 	if disabledPredefinedLiabilities && len(disabledPredefinedLiabilities) > 0 {
 		liabilitiesCalcCmd.writeFile("disabled-predefined-liabilities.json", json.encode(disabledPredefinedLiabilities))
 		liabilitiesCalcCmd.arg("--disabled-predefined-liabilities").arg("disabled-predefined-liabilities.json")
+	}
+
+	// Omitted rather than passed as an all-regions list when unscoped: keeps the command line
+	// byte-identical to cached runs, so existing projects still recover their results.
+	if regions && len(regions) > 0 {
+		liabilitiesCalcCmd.arg("--regions").arg(text.join(regions, ","))
 	}
 
 	liabilitiesResult := liabilitiesCalcCmd.run()
