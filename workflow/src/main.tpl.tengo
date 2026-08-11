@@ -140,7 +140,8 @@ wf.body(func(args) {
 		seqTableBuilder.cpu(1)
 		seqTable := seqTableBuilder.build()
 
-		liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
+		// Whole-sequence modes have no regions; region scope is not forwarded.
+		liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities, undefined)
 
 		liabilitiesResultCalc := render.create(peptideLiabilitiesTpl, {
 			table: seqTable,
@@ -311,7 +312,7 @@ wf.body(func(args) {
 	seqTableBuilder.cpu(1)
 	seqTable := seqTableBuilder.build()
 
-	liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
+	liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities, args.regions)
 
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
 		table: seqTable,
@@ -319,7 +320,8 @@ wf.body(func(args) {
 		numberingSchema: numberingSchema,
 		customLiabilities: liabCfg.customLiabilities,
 		usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
-		disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities
+		disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities,
+		regions: liabCfg.regions
 	}, {
 		metaInputs: { mem: args.mem }
 	})

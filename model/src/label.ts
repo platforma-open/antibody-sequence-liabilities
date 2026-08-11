@@ -35,7 +35,32 @@ const developabilityTypes = new Set([
   'Integrin binding',
 ]);
 
+// Distinguishes two liabilities blocks on the same dataset differing only in scope. Omitted
+// when the scan covers everything, so the common case keeps its short label.
+function regionScopeSuffix(regions: string[] | undefined, allRegionNames: readonly string[]): string {
+  if (!regions || regions.length === 0) return '';
+  const scoped = allRegionNames.filter((r) => regions.includes(r));
+  if (scoped.length === 0 || scoped.length === allRegionNames.length) return '';
+  // The expected common scope; named rather than listed to keep the label short.
+  const isAllCDRs = scoped.length === 3 && scoped.every((r) => r.startsWith('CDR'));
+  return isAllCDRs ? ' @CDRs' : ` @${scoped.join('/')}`;
+}
+
 export function getDefaultBlockLabel(data: {
+  usePredefinedLiabilities: boolean;
+  disabledPredefinedLiabilities: string[];
+  allLiabilityTypes: string[];
+  customLiabilities: { name: string }[];
+  regions?: string[];
+  allRegions?: readonly string[];
+}) {
+  const base = getLiabilitySetLabel(data);
+  // Nothing scanned at all — a scope suffix on an empty base would describe nothing.
+  if (base === '') return '';
+  return `${base}${regionScopeSuffix(data.regions, data.allRegions ?? [])}`;
+}
+
+function getLiabilitySetLabel(data: {
   usePredefinedLiabilities: boolean;
   disabledPredefinedLiabilities: string[];
   allLiabilityTypes: string[];

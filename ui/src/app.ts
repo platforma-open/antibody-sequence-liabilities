@@ -1,4 +1,4 @@
-import { allLiabilityTypeValues, getDefaultBlockLabel, platforma } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
+import { allLiabilityTypeValues, allRegions, getDefaultBlockLabel, platforma } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
 import { defineAppV3 } from '@platforma-sdk/ui-vue';
 import { watchEffect } from 'vue';
 import MainPage from './pages/MainPage.vue';
@@ -36,6 +36,12 @@ function syncDefaultBlockLabel(model: AppModel) {
       disabledPredefinedLiabilities: model.data.disabledPredefinedLiabilities ?? [],
       allLiabilityTypes: allLiabilityTypeValues,
       customLiabilities: model.data.customLiabilities ?? [],
+      // Whole-sequence modes have no regions; a scope here would linger from a previous input.
+      regions:
+        model.data.modality === 'peptide' || model.data.modality === 'amplicon'
+          ? undefined
+          : model.data.regions,
+      allRegions,
     });
   });
 }

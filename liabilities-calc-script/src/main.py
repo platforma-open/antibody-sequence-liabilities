@@ -30,15 +30,40 @@ from scoring import (
     compute_developability_score,
 )
 
+# Canonical region names. _column_region uses whole-word matching.
+CANONICAL_REGIONS = ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"]
 
-def _is_productive_expr(liab_cols: list[str], fixability_map: dict[str, str]) -> pl.Expr:
+
+def _column_region(col_name: str) -> str | None:
+    """Map a sequence/fragment column name to its canonical region, or None.
+
+    Region scope is chain-agnostic: "Heavy CDR3 aa" and "CDR3 aa" both return "CDR3".
+    """
+    for region in CANONICAL_REGIONS:
+        if re.search(r"\b" + re.escape(region) + r"\b", col_name, re.IGNORECASE):
+            return region
+    return None
+
+
+def _is_productive_expr(
+    liab_cols: list[str],
+    fixability_map: dict[str, str],
+    extra_seq_cols: list[str] | None = None,
+) -> pl.Expr:
     """Return a Polars expression that evaluates to 'Fail'/'Pass' for each row.
 
     'Fail' when any liability column contains the name of a disqualifying liability.
     Uses vectorised str.contains + any_horizontal instead of per-row map_elements.
+
+    `extra_seq_cols` are scanned for stop codons (*) and out-of-frame markers (_): productivity
+    is whole-molecule, so a stop codon in a region the user deselected must still fail the row.
     """
     disqualifying = {name for name, fix in fixability_map.items() if fix == "disqualifying"}
     conditions = [pl.col(c).str.contains(name, literal=True) for c in liab_cols for name in disqualifying]
+    for c in extra_seq_cols or []:
+        _col = pl.col(c).cast(pl.Utf8)
+        conditions.append(_col.str.contains(r"\*", literal=False).fill_null(False))
+        conditions.append(_col.str.contains(r"_", literal=False).fill_null(False))
     if not conditions:
         return pl.lit("Pass")
     return pl.when(pl.any_horizontal(conditions)).then(pl.lit("Fail")).otherwise(pl.lit("Pass"))
@@ -250,6 +275,15 @@ def main():
         "--output-regions-found", type=str, help="Path to output a JSON list of found regions (CDR1, CDR2, CDR3, FR1)."
     )
     p.add_argument(
+        "--regions",
+        type=str,
+        help=(
+            "Comma-delimited list of regions to scan (e.g. 'CDR3' or 'CDR1,CDR2,CDR3')."
+            " Restricts liability detection to these regions only; regions outside the list are"
+            " neither scanned nor reported. Omit to scan every region present in the input."
+        ),
+    )
+    p.add_argument(
         "--numbering-schema",
         type=str,
         help="Optional numbering schema name (e.g., imgt, kabat, chothia) to adjust conserved cysteine coordinates.",
@@ -273,6 +307,19 @@ def main():
     args = p.parse_args()
 
     use_predefined = str(args.use_predefined_liabilities).strip().lower() not in ("false", "0", "no")
+
+    # None = scan every region present. Unknown names warn rather than raise, so a stale name
+    # from an older block version degrades to "scan what I recognise" instead of failing the run.
+    REQUESTED_REGIONS: set[str] | None = None
+    if args.regions is not None:
+        requested_raw = {name.strip().upper() for name in args.regions.split(",") if name.strip()}
+        unknown = requested_raw - set(CANONICAL_REGIONS)
+        if unknown:
+            print(f"Warning: ignoring unknown region name(s) {sorted(unknown)}.", file=sys.stderr)
+        REQUESTED_REGIONS = requested_raw & set(CANONICAL_REGIONS)
+        if not REQUESTED_REGIONS:
+            print("Warning: --regions resolved to an empty set; scanning all regions.", file=sys.stderr)
+            REQUESTED_REGIONS = None
 
     # When --include-liabilities is absent, default to all predefined names.
     # The exclude-list (--disabled-predefined-liabilities) then trims specific entries.
@@ -581,6 +628,23 @@ def main():
         cols_for_liability_analysis.extend(candidate_seq_cols_for_path_b)
         cols_for_liability_analysis = sorted(list(set(cols_for_liability_analysis)))
 
+    # Filtered here, where all three input paths have converged, so every shape is scoped
+    # identically. full_input_sequence_cols is deliberately left unscoped (whole-chain).
+    scope_dropped_cols: list[str] = []
+    if REQUESTED_REGIONS is not None:
+        before_scope = list(cols_for_liability_analysis)
+        cols_for_liability_analysis = [c for c in cols_for_liability_analysis if _column_region(c) in REQUESTED_REGIONS]
+        scope_dropped_cols = [c for c in before_scope if c not in cols_for_liability_analysis]
+        dropped = scope_dropped_cols
+        print(f"Region scope {sorted(REQUESTED_REGIONS)}: analyzing {cols_for_liability_analysis}; excluded {dropped}")
+        if not cols_for_liability_analysis and before_scope:
+            print(
+                "Warning: region scope excluded every candidate column."
+                f" Requested {sorted(REQUESTED_REGIONS)} but input only offers"
+                f" {sorted({r for c in before_scope if (r := _column_region(c))})}.",
+                file=sys.stderr,
+            )
+
     if not cols_for_liability_analysis and CALCULATE_LIABILITIES:
         print(
             "Warning: No columns identified for liability analysis, but liabilities were requested."
@@ -700,12 +764,21 @@ def main():
 
         # Global classification columns: replace the old "Liabilities risk" with four new columns
         liab_cols_for_global = [c for c in generated_liability_summary_col_names if c in df_processed.columns]
+
+        # Pre-fragmented input often lacks a whole-chain column, so scoping away a region would
+        # hide a real stop codon. MiXCR-origin reads stop/OOF whole-chain already — nothing to add.
+        productivity_extra_cols = (
+            [c for c in scope_dropped_cols if c in df_processed.columns] if not has_input_ann_cols else []
+        )
+        if productivity_extra_cols:
+            print(f"Is Productive additionally scans scope-excluded columns: {productivity_extra_cols}")
+
         if liab_cols_for_global:
             cfm = combined_fixability_map
             rlm = combined_risk_level_map
             df_processed = df_processed.with_columns(
                 [
-                    _is_productive_expr(liab_cols_for_global, cfm).alias("Is Productive"),
+                    _is_productive_expr(liab_cols_for_global, cfm, productivity_extra_cols).alias("Is Productive"),
                     _structural_risk_expr(liab_cols_for_global, cfm).alias("Structural liabilities"),
                     pl.struct(liab_cols_for_global)
                     .map_elements(
@@ -962,14 +1035,11 @@ def main():
 
     if args.output_regions_found:
         found_regions_set = set()
-        CANONICAL_REGIONS = ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"]  # Expanded
         if cols_for_liability_analysis:  # Based on what was analyzed
             for col_name in cols_for_liability_analysis:
-                for region_canonical_name in CANONICAL_REGIONS:
-                    # Use regex to match whole word region name to avoid FR1 matching in e.g. "MYFR10Sequence"
-                    if re.search(r"\b" + re.escape(region_canonical_name) + r"\b", col_name, re.IGNORECASE):
-                        found_regions_set.add(region_canonical_name)
-                        break  # Found one canonical region in this col_name
+                region_canonical_name = _column_region(col_name)
+                if region_canonical_name:
+                    found_regions_set.add(region_canonical_name)
             list_of_found_regions = sorted(list(found_regions_set), key=lambda x: REGION_ORDER_MAP.get(x, 99))
         else:
             list_of_found_regions = []
