@@ -20,6 +20,7 @@ import polars as pl
 import pytest
 
 import main as m
+from annotations import parse_annotations
 
 DATA = Path(__file__).parent / "data" / "sequences.tsv"
 DATA_ANNOTATED = Path(__file__).parent / "data" / "sequences_annotated.tsv"
@@ -746,6 +747,107 @@ def test_regions_empty_value_falls_back_to_all(tmp_path):
     df = run_main(tmp_path, ["--regions", ""], data_path=_parental_data(tmp_path))
     assert "CDR1 aa liabilities" in df.columns
     assert "FR1 aa liabilities" in df.columns
+
+
+def test_regions_all_absent_from_input_falls_back_to_all(tmp_path):
+    """FR2 is canonical, so it survives the unknown-name filter — but no FR2 column exists here.
+
+    Reachable by keeping a selection while switching to a dataset that lacks those regions.
+    """
+    df = run_main(tmp_path, ["--regions", "FR2"], data_path=_parental_data(tmp_path))
+    assert row(df, "cand_clean_cdr3")["Is Productive"] == "Pass"
+    assert row(df, "cand_dirty_cdr3")["Developability risk"] == "High"
+    for present in ("CDR1 aa liabilities", "CDR2 aa liabilities", "CDR3 aa liabilities", "FR1 aa liabilities"):
+        assert present in df.columns
+
+
+def test_regions_all_absent_reports_every_found_region(tmp_path):
+    """The fallback must be visible to the Tengo side, which builds columns from this list."""
+    out_regions = tmp_path / "regions.json"
+    run_main(
+        tmp_path,
+        ["--regions", "FR2", "--output-regions-found", str(out_regions)],
+        data_path=_parental_data(tmp_path),
+    )
+    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "CDR2", "CDR3"]
+
+
+def test_regions_partially_absent_still_narrows(tmp_path):
+    """One satisfiable region keeps the restriction — the fallback is only for a fully dead scope."""
+    df = run_main(tmp_path, ["--regions", "CDR3,FR2"], data_path=_parental_data(tmp_path))
+    assert "CDR3 aa liabilities" in df.columns
+    for absent in ("CDR1 aa liabilities", "CDR2 aa liabilities", "FR1 aa liabilities"):
+        assert absent not in df.columns
+
+
+# Path A fixture for the exported annotation track: one liability in CDR1 and a different one in
+# CDR3, so scope has something to exclude and something to keep. Offsets match DATA_ANNOTATED.
+ANN_SCOPE_SEQ = (
+    "QVQLVQSGAEVKKPGASVKVSCKAS"  # FR1 (synthesized, 0+25)
+    "GYTFDGY"  # CDR1 (25+7) — DG at 29
+    "WVRQAPGK"  # not extracted (no segment)
+    "ISPGRGIT"  # CDR2 (40+8) — clean
+    "ARNTSKPT"  # not extracted (no segment)
+    "CARYNGF"  # CDR3 (56+7) — NG at 60
+)
+ANN_SCOPE_KEY = "ann_two_regions"
+CDR1_HIT = ("Isomerization (D[DGHST])", 29)
+CDR3_HIT = ("Deamidation (N[GS])", 60)
+
+
+def _annotated_scope_data(tmp_path: Path) -> Path:
+    p = tmp_path / "annotated_scope.tsv"
+    p.write_text(
+        "clonotypeKey\tsequence aa\tannotations\n" + f"{ANN_SCOPE_KEY}\t{ANN_SCOPE_SEQ}\t1:P+7|2:14+8|3:1K+7\n"
+    )
+    return p
+
+
+def _annotation_liability_hits(tmp_path: Path, extra_args: list[str]) -> tuple[list[tuple[str, int]], dict]:
+    """Run Path A and decode the exported annotation into (liability name, start) pairs.
+
+    Region segments (codes from the input label map) are filtered out; the rest is what the
+    sequence viewer highlights.
+    """
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    out_map = tmp_path / "out_map.json"
+    df = run_main(
+        tmp_path,
+        ["-m", str(label_map_file), "-o", str(out_map), *extra_args],
+        data_path=_annotated_scope_data(tmp_path),
+    )
+    final_map = json.loads(out_map.read_text())
+    hits = [
+        (final_map.get(lab), start)
+        for lab, start, _length in parse_annotations(row(df, ANN_SCOPE_KEY)["annotations"])
+        if lab not in LABEL_MAP
+    ]
+    return sorted(hits, key=lambda h: h[1]), final_map
+
+
+def test_annotation_track_unscoped_carries_every_region(tmp_path):
+    """Baseline: with no scope both regions' liabilities are highlighted."""
+    hits, _ = _annotation_liability_hits(tmp_path, [])
+    assert hits == [CDR1_HIT, CDR3_HIT]
+
+
+def test_regions_scopes_exported_annotation_track(tmp_path):
+    """Scoping away the parental scaffold must not leave its liabilities painted on the sequence,
+    here or in any downstream block consuming the annotation.
+    """
+    hits, final_map = _annotation_liability_hits(tmp_path, ["--regions", "CDR3"])
+    assert hits == [CDR3_HIT]
+    # A liability whose only occurrence was scoped away leaves no legend entry either.
+    assert CDR1_HIT[0] not in final_map.values()
+
+
+def test_regions_annotation_track_follows_scope_fallback(tmp_path):
+    """An unsatisfiable scope widens to 'scan everything' — the annotation track widens with it,
+    which is why the write-back happens after the scope decision rather than during extraction.
+    """
+    hits, _ = _annotation_liability_hits(tmp_path, ["--regions", "FR2"])
+    assert hits == [CDR1_HIT, CDR3_HIT]
 
 
 def test_regions_does_not_affect_is_productive(tmp_path):

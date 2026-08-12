@@ -13,8 +13,19 @@ Developability risk, leaving no way to rank them by the region actually being en
 Selecting regions (e.g. CDR3, or the CDRs) now scans only those: their per-region columns are
 the only ones emitted, and Developability risk and cost are computed from them alone.
 
+The scope reaches the exported sequence annotation too: liabilities found in regions left out
+are no longer highlighted in the sequence viewer or passed to downstream blocks, so the
+highlighted positions always match what the results table reports.
+
 Leaving the selector empty scans every region, which is the previous behaviour — existing
 projects are unaffected and their cached results still match.
+
+A selection left in place while switching to a dataset that has none of those regions also
+falls back to scanning everything, rather than being honoured as "restricted to nothing" —
+that would exclude every analysis column, disabling liability calculation and leaving
+Is Productive, Structural liabilities and Developability risk/cost empty. The UI warns when
+the selection cannot be applied. A selection that is only partly present still narrows the
+scan to the regions that are there.
 
 Is Productive remains whole-molecule: stop-codon and out-of-frame detection still covers
 regions left out of the scope. The cysteine checks anchor on FR1 and FR3, so scoping away

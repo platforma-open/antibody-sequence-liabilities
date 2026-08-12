@@ -462,6 +462,10 @@ def main():
                 cols_for_liability_analysis = sorted(list(set(cols_for_liability_analysis)))
                 print(f"Pre-existing CDR/FR columns found. Skipping extraction. Using: {cols_for_liability_analysis}")
 
+    # Deferred so the region scope, final only once every input path has converged, can be
+    # applied to the exported annotation track too.
+    pending_annotation_updates: dict[str, list] = {}
+
     if skip_extraction_due_to_preexisting_regions:
         print(f"Proceeding with pre-existing columns: {cols_for_liability_analysis}")
     elif has_input_ann_cols:  # Path A: Annotation-based extraction
@@ -498,17 +502,20 @@ def main():
                 continue
 
             seq_col_name = matched_seq_cols[0]
-            updated_annotations_for_col, fragment_rows_for_col = [], []
+            pending_ann_rows_for_col, fragment_rows_for_col = [], []
 
             for seq_data, ann_data in zip(df_processed[seq_col_name].to_list(), df_processed[ann_col_name].to_list()):
                 if seq_data is None or ann_data is None:
-                    updated_annotations_for_col.append(ann_data)
+                    pending_ann_rows_for_col.append((None, ann_data, {}))
                     fragment_rows_for_col.append({})
                     continue
 
                 parsed_segments = parse_annotations(ann_data)
                 extracted_frags, frag_coords = extract_cdrs_fr1(seq_data, parsed_segments, str_key_initial_region_map)
                 current_ann_parts = [p for p in (ann_data.split("|") if ann_data and ann_data.strip() else []) if p]
+                # region -> [(liability name, start, length)]. Codes are assigned at write-back,
+                # so an out-of-scope region leaves neither an annotation nor a legend entry.
+                region_hits: dict[str, list] = {}
 
                 if CALCULATE_LIABILITIES:
                     for region_name, fragment_seq in extracted_frags.items():
@@ -532,12 +539,8 @@ def main():
                                     cys_liability_name = "Extra Cysteines"
 
                                 if cys_liability_name and cys_liability_name in active_cys_defs:
-                                    if cys_liability_name not in liability_codes:
-                                        liability_codes[cys_liability_name] = str(next_code)
-                                        next_code += 1
-                                    code = liability_codes[cys_liability_name]
-                                    current_ann_parts.append(
-                                        f"{code}:{base36_encode(start_coord)}+{base36_encode(0)}"
+                                    region_hits.setdefault(region_name, []).append(
+                                        (cys_liability_name, start_coord, 0)
                                     )  # Length 0 for point annotation
                         if region_name != "FR1":  # For CDRs and other non-FR1 regions from extraction
                             for liability_name, pattern in active_liability_regex.items():
@@ -546,15 +549,11 @@ def main():
                                         start_coord + match.start(),
                                         match.end() - match.start(),
                                     )
-                                    if liability_name not in liability_codes:
-                                        liability_codes[liability_name] = str(next_code)
-                                        next_code += 1
-                                    code = liability_codes[liability_name]
-                                    current_ann_parts.append(
-                                        f"{code}:{base36_encode(global_start)}+{base36_encode(global_length)}"
+                                    region_hits.setdefault(region_name, []).append(
+                                        (liability_name, global_start, global_length)
                                     )
 
-                updated_annotations_for_col.append("|".join(sorted(list(set(current_ann_parts)))))
+                pending_ann_rows_for_col.append((current_ann_parts, ann_data, region_hits))
                 row_dict = {}
                 prefix_for_frag_col = (
                     f"{current_prefix_raw.capitalize()} " if current_prefix_raw and multiple_chains_present else ""
@@ -563,7 +562,7 @@ def main():
                     row_dict[f"{prefix_for_frag_col}{r_name} aa"] = r_seq
                 fragment_rows_for_col.append(row_dict)
 
-            df_processed = df_processed.with_columns(pl.Series(name=ann_col_name, values=updated_annotations_for_col))
+            pending_annotation_updates[ann_col_name] = pending_ann_rows_for_col
             if fragment_rows_for_col:
                 schema_for_frag_df = None
                 first_valid_row = next((item for item in fragment_rows_for_col if item), None)
@@ -633,17 +632,44 @@ def main():
     scope_dropped_cols: list[str] = []
     if REQUESTED_REGIONS is not None:
         before_scope = list(cols_for_liability_analysis)
-        cols_for_liability_analysis = [c for c in cols_for_liability_analysis if _column_region(c) in REQUESTED_REGIONS]
-        scope_dropped_cols = [c for c in before_scope if c not in cols_for_liability_analysis]
-        dropped = scope_dropped_cols
-        print(f"Region scope {sorted(REQUESTED_REGIONS)}: analyzing {cols_for_liability_analysis}; excluded {dropped}")
-        if not cols_for_liability_analysis and before_scope:
+        scoped = [c for c in cols_for_liability_analysis if _column_region(c) in REQUESTED_REGIONS]
+        if not scoped and before_scope:
+            # Restricted-to-nothing would exclude every analysis column, disabling liability
+            # calculation and emptying the required global columns — so widen, as an empty scope does.
             print(
-                "Warning: region scope excluded every candidate column."
-                f" Requested {sorted(REQUESTED_REGIONS)} but input only offers"
-                f" {sorted({r for c in before_scope if (r := _column_region(c))})}.",
+                f"Warning: region scope {sorted(REQUESTED_REGIONS)} matches no column in this input"
+                f" (it offers {sorted({r for c in before_scope if (r := _column_region(c))})});"
+                " scanning all regions instead.",
                 file=sys.stderr,
             )
+            REQUESTED_REGIONS = None
+        else:
+            cols_for_liability_analysis = scoped
+            scope_dropped_cols = [c for c in before_scope if c not in scoped]
+            print(
+                f"Region scope {sorted(REQUESTED_REGIONS)}: analyzing {cols_for_liability_analysis};"
+                f" excluded {scope_dropped_cols}"
+            )
+
+    # Runs once the scope is final — the fallback above may have widened it. Out-of-scope hits are
+    # dropped so the annotation track highlights the same regions the results table reports on.
+    for ann_col_name, pending_rows in pending_annotation_updates.items():
+        annotation_values = []
+        for base_parts, original_ann, region_hits in pending_rows:
+            if base_parts is None:  # Row skipped during extraction — keep the input untouched
+                annotation_values.append(original_ann)
+                continue
+            parts = list(base_parts)
+            for region_name, hits in region_hits.items():
+                if REQUESTED_REGIONS is not None and region_name not in REQUESTED_REGIONS:
+                    continue
+                for liability_name, start, length in hits:
+                    if liability_name not in liability_codes:
+                        liability_codes[liability_name] = str(next_code)
+                        next_code += 1
+                    parts.append(f"{liability_codes[liability_name]}:{base36_encode(start)}+{base36_encode(length)}")
+            annotation_values.append("|".join(sorted(set(parts))))
+        df_processed = df_processed.with_columns(pl.Series(name=ann_col_name, values=annotation_values))
 
     if not cols_for_liability_analysis and CALCULATE_LIABILITIES:
         print(
