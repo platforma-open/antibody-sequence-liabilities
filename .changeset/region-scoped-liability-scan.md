@@ -28,8 +28,7 @@ the selection cannot be applied. A selection that is only partly present still n
 scan to the regions that are there.
 
 Is Productive remains whole-molecule: stop-codon and out-of-frame detection still covers
-regions left out of the scope. The cysteine checks anchor on FR1 and FR3, so scoping away
-from both makes them undetectable; the UI warns when that combination is selected.
+regions left out of the scope.
 
 Regions are now ordered biologically (FR1, CDR1, FR2, CDR2, FR3, CDR3, FR4), changing the
 per-region table column order and the segment order inside `Sequence liabilities summary`.
