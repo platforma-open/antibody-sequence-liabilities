@@ -94,21 +94,6 @@ const allSelectedRegionsStale = computed(() =>
   selectedRegions.value.length > 0 && staleRegions.value.length === selectedRegions.value.length,
 );
 
-// Cysteine rules anchor on FR1 and FR3 (build_expected_cys_map in definitions.py). Scoped away
-// from both they cannot fire, so a clean cysteine result would mean "not checked" — hence warn.
-const cysteineRulesEnabled = computed(() => {
-  const disabled = app.model.data.disabledPredefinedLiabilities ?? [];
-  if (!(app.model.data.usePredefinedLiabilities ?? true)) return false;
-  return !disabled.includes('Missing Cysteines') || !disabled.includes('Extra Cysteines');
-});
-
-const cysteineAnchorsDropped = computed(() => {
-  if (isWholeSeq.value || !cysteineRulesEnabled.value) return false;
-  const selected = selectedRegions.value;
-  if (selected.length === 0) return false;
-  return !selected.includes('FR1') && !selected.includes('FR3');
-});
-
 // Predefined liability list filtered by modality (per applicableTo). Defaults
 // to the full list when modality is undefined (during initial load). Amplicon
 // shares the peptide rule set, so map it to 'peptide' for applicability.
@@ -384,12 +369,6 @@ watch(
           so {{ staleRegions.length === 1 ? 'it is' : 'they are' }} silently narrowing the scan.
         </template>
         <PlBtnGhost @click="dropStaleRegions">Remove them</PlBtnGhost>
-      </PlAlert>
-
-      <PlAlert v-if="cysteineAnchorsDropped" type="warn">
-        FR1 and FR3 are not in scope, so the conserved cysteines of the canonical disulfide
-        aren't checked. A clean Missing Cysteines result here doesn't confirm the disulfide
-        is intact.
       </PlAlert>
     </template>
 
