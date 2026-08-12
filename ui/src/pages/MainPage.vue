@@ -88,6 +88,12 @@ function dropStaleRegions(): void {
   app.model.data.regions = kept.length > 0 ? kept : undefined;
 }
 
+// main.py widens an unsatisfiable scope to "scan everything" rather than "scan nothing", so
+// this case needs the opposite warning to a partly-stale one.
+const allSelectedRegionsStale = computed(() =>
+  selectedRegions.value.length > 0 && staleRegions.value.length === selectedRegions.value.length,
+);
+
 // Cysteine rules anchor on FR1 and FR3 (build_expected_cys_map in definitions.py). Scoped away
 // from both they cannot fire, so a clean cysteine result would mean "not checked" — hence warn.
 const cysteineRulesEnabled = computed(() => {
@@ -368,9 +374,15 @@ watch(
       </PlDropdownMulti>
 
       <PlAlert v-if="staleRegions.length > 0" type="warn">
-        {{ staleRegions.join(', ') }}
-        {{ staleRegions.length === 1 ? 'is' : 'are' }} selected but not present in this dataset,
-        so {{ staleRegions.length === 1 ? 'it is' : 'they are' }} silently narrowing the scan.
+        <template v-if="allSelectedRegionsStale">
+          None of the selected regions ({{ staleRegions.join(', ') }}) are present in this
+          dataset, so the scope cannot be applied and every region will be scanned.
+        </template>
+        <template v-else>
+          {{ staleRegions.join(', ') }}
+          {{ staleRegions.length === 1 ? 'is' : 'are' }} selected but not present in this dataset,
+          so {{ staleRegions.length === 1 ? 'it is' : 'they are' }} silently narrowing the scan.
+        </template>
         <PlBtnGhost @click="dropStaleRegions">Remove them</PlBtnGhost>
       </PlAlert>
 
