@@ -199,7 +199,7 @@ wf.body(func(args) {
 	hasAnnotations := len(annotations) > 0
 
 	numberingSchema := ""
-	for seq_entry in sequences {
+	for seq_entry in additionalSequences {
 		if seq_entry.spec.annotations && seq_entry.spec.annotations["pl7.app/vdj/numberingSchema"] {
 			currentSchema := seq_entry.spec.annotations["pl7.app/vdj/numberingSchema"]
 			if numberingSchema == "" {
@@ -225,7 +225,7 @@ wf.body(func(args) {
 				isScFv = true
 				for additionalSeq in additionalSequences {
 					if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
-						for fr in ["CDR1", "CDR2", "CDR3", "FR1"] {
+						for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"] {
 							if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr {
 								chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
 								primaryChainsSet[chain] = true
