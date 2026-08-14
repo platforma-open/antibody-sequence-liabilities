@@ -95,40 +95,30 @@ def _combine_heavy_light_prefixed_columns(
                     if base_name:
                         prefixed_cols_map[prefix_val][base_name] = col_name
                     break
-    common_bases = set()
-    if prefixed_cols_map[prefixes[0]]:
-        common_bases = set(prefixed_cols_map[prefixes[0]].keys())
-        for i in range(1, len(prefixes)):
-            if prefixed_cols_map[prefixes[i]]:
-                common_bases &= set(prefixed_cols_map[prefixes[i]].keys())
-            else:
-                common_bases = set()
-                break
-    else:
-        common_bases = set()
+    all_bases = set()
+    for prefix_val in prefixes:
+        all_bases |= set(prefixed_cols_map[prefix_val].keys())
+    # The chain label distinguishes two chains' values inside one cell, so it is only written when
+    # the frame actually holds more than one chain.
+    label_chains = len([prefix_val for prefix_val in prefixes if prefixed_cols_map[prefix_val]]) > 1
     cols_to_drop = []
-    for base_name in common_bases:
+    for base_name in sorted(all_bases):
         if not base_name:
             continue
         combined_col_name = f"{base_name} {suffix}"
         concat_expressions = []
-        all_chains_present_for_base = True
         temp_cols_to_drop_for_base = []
-        for i, prefix_val in enumerate(prefixes):
-            if base_name not in prefixed_cols_map[prefix_val]:
-                all_chains_present_for_base = False
-                break
-            col_to_include = prefixed_cols_map[prefix_val][base_name]
-            if i > 0:
+        for prefix_val in prefixes:
+            col_to_include = prefixed_cols_map[prefix_val].get(base_name)
+            if col_to_include is None or col_to_include not in current_df_columns:
+                continue
+            if concat_expressions:
                 concat_expressions.append(pl.lit(" | "))
-            concat_expressions.append(pl.lit(f"{prefix_val}: "))
-            if col_to_include in current_df_columns:
-                concat_expressions.append(pl.col(col_to_include).cast(pl.Utf8).fill_null("N/A"))
-                temp_cols_to_drop_for_base.append(col_to_include)
-            else:
-                all_chains_present_for_base = False
-                break
-        if all_chains_present_for_base and concat_expressions:
+            if label_chains:
+                concat_expressions.append(pl.lit(f"{prefix_val}: "))
+            concat_expressions.append(pl.col(col_to_include).cast(pl.Utf8).fill_null("N/A"))
+            temp_cols_to_drop_for_base.append(col_to_include)
+        if concat_expressions:
             if combined_col_name not in df.columns:
                 df = df.with_columns(pl.concat_str(concat_expressions).alias(combined_col_name))
                 cols_to_drop.extend(temp_cols_to_drop_for_base)
@@ -421,7 +411,7 @@ def main():
     # Path B: no annotation columns (pre-fragmented user data — CDR/FR columns already present).
     has_input_ann_cols = bool(ann_cols)
     all_seq_cols = [c for c in df_processed.columns if c.lower().endswith("aa")]  # All potential sequence columns
-    TARGET_REGION_KEYS = ["cdr1 aa", "cdr2 aa", "cdr3 aa", "fr1 aa", "fr2 aa", "fr3 aa"]  # For Path B
+    TARGET_REGION_KEYS = ["cdr1 aa", "cdr2 aa", "cdr3 aa", "fr1 aa", "fr2 aa", "fr3 aa", "fr4 aa"]  # For Path B
     cols_for_liability_analysis = []
     skip_extraction_due_to_preexisting_regions = False
 
@@ -456,6 +446,9 @@ def main():
                 if not current_prefix_all_regions_found:
                     all_prefix_sets_found_preexisting = False
                     break
+                fr4_col_name = " ".join(f"{prefix_for_col_lookup}FR4 aa".split())
+                if fr4_col_name in df_processed.columns:
+                    temp_cols_for_liability_if_skipping.append(fr4_col_name)
             if all_prefix_sets_found_preexisting:
                 skip_extraction_due_to_preexisting_regions = True
                 cols_for_liability_analysis.extend(temp_cols_for_liability_if_skipping)
@@ -608,7 +601,7 @@ def main():
             c
             for c in df_processed.columns
             if c.lower().endswith(" aa")
-            and any(k in c.lower() for k in ["cdr1", "cdr2", "cdr3", "fr1", "fr2", "fr3"])
+            and any(k in c.lower() for k in ["cdr1", "cdr2", "cdr3", "fr1", "fr2", "fr3", "fr4"])
             and not c.lower().endswith("sequence aa")
         ]
         cols_for_liability_analysis.extend(path_a_frag_cols)

@@ -207,7 +207,8 @@ export const platforma = BlockModelV3.create(dataModel)
 
     const found = new Set<string>();
     for (const col of cols ?? []) {
-      const feature = col.spec.domain?.['pl7.app/vdj/feature'];
+      const rawFeature = col.spec.domain?.['pl7.app/vdj/feature'];
+      const feature = rawFeature === 'FR4InFrame' ? 'FR4' : rawFeature;
       if (feature !== undefined && (allRegions as readonly string[]).includes(feature)) {
         found.add(feature);
       }

@@ -859,3 +859,123 @@ def test_regions_does_not_affect_is_productive(tmp_path):
     assert row(scoped, "clone_stop")["Is Productive"] == "Fail"
     assert row(scoped, "clone_out_of_frame")["Is Productive"] == "Fail"
     assert row(scoped, "clone_clean")["Is Productive"] == "Pass"
+
+
+# ---------------------------------------------------------------------------
+# FR4
+# ---------------------------------------------------------------------------
+
+FR4_HEADER = "clonotypeKey\tCDR1 aa\tCDR2 aa\tCDR3 aa\tFR1 aa\tFR4 aa\n"
+FR4_ROWS = (
+    "fr4_germline\tGYTFAGY\tISPGRGIT\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\tWGQGTMVTVSS\n"
+    "fr4_extra_cys\tGYTFAGY\tISPGRGIT\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\tWGQGTCVTVSS\n"
+)
+
+
+def _fr4_data(tmp_path: Path) -> Path:
+    p = tmp_path / "fr4.tsv"
+    p.write_text(FR4_HEADER + FR4_ROWS)
+    return p
+
+
+def test_fr4_gets_cysteine_rules_only(tmp_path):
+    """Germline FR4 carries a Trp and a Met: motif rules are CDR-only, as for FR1-FR3.
+    A cysteine is reported, as it already is for FR2/FR3, and reaches the global columns.
+    """
+    df = run_main(tmp_path, data_path=_fr4_data(tmp_path))
+    clean = row(df, "fr4_germline")
+    dirty = row(df, "fr4_extra_cys")
+    assert clean["FR4 aa liabilities"] == "None"
+    assert clean["Developability risk"] == "None"
+    assert dirty["FR4 aa liabilities"] == "Extra Cysteines"
+    assert dirty["FR4 aa risk"] == "High"
+    assert dirty["Developability risk"] == "Very High"
+    # FR4 weight 0.3 x hard_to_fix weight 8.0
+    assert dirty["Developability cost"] == pytest.approx(2.4)
+
+
+def test_fr4_scope_is_honoured_not_widened(tmp_path):
+    """A dataset offering FR4 must accept FR4 as a scope instead of falling back to all regions."""
+    out_regions = tmp_path / "regions.json"
+    df = run_main(
+        tmp_path,
+        ["--regions", "FR4", "--output-regions-found", str(out_regions)],
+        data_path=_fr4_data(tmp_path),
+    )
+    assert json.loads(out_regions.read_text()) == ["FR4"]
+    assert "FR4 aa liabilities" in df.columns
+    for absent in ("CDR1 aa liabilities", "CDR2 aa liabilities", "CDR3 aa liabilities", "FR1 aa liabilities"):
+        assert absent not in df.columns
+
+
+# The pre-existing-regions check is an all-must-be-present gate, not a filter. FR4 has no
+# extraction fallback (the CDRs annotation maps only CDR1-3, from which FR1 is derived), so
+# gating on it sends annotated inputs lacking FR4 down the extraction path, where the extracted
+# fragments collide with the input's own columns of the same name.
+
+
+def test_annotated_input_without_fr4_uses_preexisting_columns(tmp_path):
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    header = "clonotypeKey\tsequence aa\tannotations\tCDR1 aa\tCDR2 aa\tCDR3 aa\tFR1 aa\tFR2 aa\tFR3 aa\n"
+    seq = "QVQLVQSGAEVKKPDPSVKVSCKASGYTFAGYWVRQAPGKISPGRGITARNTSKPTLYLQCARYALD"
+    data = tmp_path / "annotated_bulk.tsv"
+    data.write_text(
+        header
+        + "\t".join(
+            [
+                "k1",
+                seq,
+                "1:P+7|2:14+8|3:1O+7",
+                "GYTFAGY",
+                "ISPGRGIT",
+                "CARYALD",
+                "QVQLVQSGAEVKKPDPSVKVSCKAS",
+                "WVRQAPGK",
+                "ARNTSKPTLYLQ",
+            ]
+        )
+        + "\n"
+    )
+    df = run_main(tmp_path, ["-m", str(label_map_file)], data_path=data)
+    assert "CDR3 aa liabilities" in df.columns
+    assert row(df, "k1")["Is Productive"] == "Pass"
+
+
+# ---------------------------------------------------------------------------
+# Chain-asymmetric regions
+# ---------------------------------------------------------------------------
+
+
+def test_single_chain_values_carry_no_chain_label(tmp_path):
+    """One chain in the input means the chain label carries no information, and a labelled value
+    would not match the discreteValues the risk PColumns declare.
+    """
+    data = tmp_path / "single_chain.tsv"
+    data.write_text(
+        "clonotypeKey\tHeavy CDR3 aa\tHeavy FR1 aa\tHeavy FR4 aa\n"
+        "one\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\tWGQGTCVTVSS\n"
+    )
+    r = row(run_main(tmp_path, data_path=data), "one")
+    assert r["CDR3 aa liabilities"] == "None"
+    assert r["CDR3 aa risk"] == "None"
+    assert r["FR4 aa liabilities"] == "Extra Cysteines"
+    assert r["FR4 aa risk"] == "High"
+
+
+def test_region_on_one_chain_still_emits_combined_column(tmp_path):
+    """The Tengo side declares "<region> aa liabilities" for every region in --output-regions-found,
+    never chain-prefixed, so a one-sided region must still produce that name.
+    """
+    out_regions = tmp_path / "regions.json"
+    data = tmp_path / "asym.tsv"
+    data.write_text(
+        "clonotypeKey\tHeavy CDR3 aa\tHeavy FR1 aa\tHeavy FR4 aa\tLight CDR3 aa\tLight FR1 aa\n"
+        "asym\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\tWGQGTCVTVSS\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\n"
+    )
+    df = run_main(tmp_path, ["--output-regions-found", str(out_regions)], data_path=data)
+    assert row(df, "asym")["FR4 aa liabilities"] == "Heavy: Extra Cysteines"
+    assert "Heavy FR4 aa liabilities" not in df.columns
+    for region in json.loads(out_regions.read_text()):
+        assert f"{region} aa liabilities" in df.columns
+        assert f"{region} aa risk" in df.columns
