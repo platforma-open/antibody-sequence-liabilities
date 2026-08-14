@@ -495,6 +495,21 @@ def main():
                 continue
 
             seq_col_name = matched_seq_cols[0]
+            # Regions this chain already carries as their own column are matched by region, not by
+            # column name: the extracted copy drops the chain prefix on single-chain input while the
+            # input's column keeps it, so the two names differ and the name check below cannot see
+            # them. Both copies would then be scanned, and the extracted one would win the
+            # unprefixed output column the Tengo side declares.
+            fed_col_prefix = f"{current_prefix_raw} " if current_prefix_raw else ""
+            existing_cols_lower = {c.lower() for c in df_processed.columns}
+            already_fed_regions = {
+                region for region in CANONICAL_REGIONS if f"{fed_col_prefix}{region} aa".lower() in existing_cols_lower
+            }
+            if already_fed_regions:
+                print(
+                    f"Path A: {sorted(already_fed_regions)} already present as columns"
+                    f" for prefix '{current_prefix_raw}'; keeping those, not the extracted copies."
+                )
             pending_ann_rows_for_col, fragment_rows_for_col = [], []
 
             for seq_data, ann_data in zip(df_processed[seq_col_name].to_list(), df_processed[ann_col_name].to_list()):
@@ -552,6 +567,8 @@ def main():
                     f"{current_prefix_raw.capitalize()} " if current_prefix_raw and multiple_chains_present else ""
                 )
                 for r_name, r_seq in extracted_frags.items():
+                    if r_name in already_fed_regions:
+                        continue
                     row_dict[f"{prefix_for_frag_col}{r_name} aa"] = r_seq
                 fragment_rows_for_col.append(row_dict)
 
@@ -560,7 +577,11 @@ def main():
                 schema_for_frag_df = None
                 first_valid_row = next((item for item in fragment_rows_for_col if item), None)
                 if first_valid_row:
-                    schema_for_frag_df = {col_name: pl.Utf8 for col_name in first_valid_row.keys()}
+                    # Backstop for the horizontal concat below, which aborts the run on a duplicate
+                    # name. The region check above is what normally keeps the input's own column.
+                    schema_for_frag_df = {
+                        col_name: pl.Utf8 for col_name in first_valid_row.keys() if col_name not in df_processed.columns
+                    }
                 if schema_for_frag_df:
                     filled_rows = [
                         {key: row.get(key) for key in schema_for_frag_df} for row in fragment_rows_for_col

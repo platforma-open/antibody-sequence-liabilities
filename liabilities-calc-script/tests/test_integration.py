@@ -979,3 +979,104 @@ def test_region_on_one_chain_still_emits_combined_column(tmp_path):
     for region in json.loads(out_regions.read_text()):
         assert f"{region} aa liabilities" in df.columns
         assert f"{region} aa risk" in df.columns
+
+
+# ---------------------------------------------------------------------------
+# Single-cell region columns
+# ---------------------------------------------------------------------------
+
+SC_CHAIN_SEQ = "QVQLVQSGAEVKKPDPSVKVSCKASGYTFAGYWVRQAPGKISPGRGITARNTSKPTLYLQCARYALD"
+SC_ANN = "1:P+7|2:14+8|3:1O+7"
+SC_REGIONS = {
+    "CDR1 aa": "GYTFAGY",
+    "CDR2 aa": "ISPGRGIT",
+    "CDR3 aa": "CARYALD",
+    "FR1 aa": "QVQLVQSGAEVKKPDPSVKVSCKAS",
+    "FR2 aa": "WVRQAPGK",
+    "FR3 aa": "ARNTSKPTLYLQ",
+    "FR4 aa": "WGQGTMVTVSS",
+}
+
+
+def _sc_table(tmp_path: Path, regions: dict, name: str = "sc_regions.tsv") -> Path:
+    """Mirrors the single-cell table the workflow builds: per-chain whole sequence, CDRs
+    annotation, and the per-chain region columns.
+    """
+    header, values = ["clonotypeKey"], ["k1"]
+    for chain in ("Heavy", "Light"):
+        header += [f"{chain}  sequence aa", f"{chain} annotations"]
+        values += [SC_CHAIN_SEQ, SC_ANN]
+        header += [f"{chain} {region}" for region in regions]
+        values += list(regions.values())
+    p = tmp_path / name
+    p.write_text("\t".join(header) + "\n" + "\t".join(values) + "\n")
+    return p
+
+
+def test_sc_region_columns_cover_every_region(tmp_path):
+    """Single-cell input carries all seven regions as columns, as bulk does, so all seven are
+    scanned instead of only the four the CDRs annotation can yield.
+    """
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    out_regions = tmp_path / "regions.json"
+    df = run_main(
+        tmp_path,
+        ["-m", str(label_map_file), "--output-regions-found", str(out_regions)],
+        data_path=_sc_table(tmp_path, SC_REGIONS),
+    )
+    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "FR2", "CDR2", "FR3", "CDR3", "FR4"]
+    for region in ("FR1", "CDR1", "FR2", "CDR2", "FR3", "CDR3", "FR4"):
+        assert f"{region} aa liabilities" in df.columns
+        assert f"{region} aa risk" in df.columns
+    # cdr3SeqPrefixed: a fed CDR3 column keeps its chain prefix, and the Tengo side declares it so.
+    assert "Heavy CDR3 aa" in df.columns
+    assert "Light CDR3 aa" in df.columns
+
+
+def test_sc_partial_region_columns_do_not_collide_with_extraction(tmp_path):
+    """Regions the input lacks are still extracted from the annotation. The extracted copy of a
+    region the input does carry must not be added twice — the horizontal concat rejects it.
+    """
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    out_regions = tmp_path / "regions.json"
+    partial = {"CDR3 aa": "CARYALD", "FR4 aa": "WGQGTCVTVSS"}
+    df = run_main(
+        tmp_path,
+        ["-m", str(label_map_file), "--output-regions-found", str(out_regions)],
+        data_path=_sc_table(tmp_path, partial, name="sc_partial.tsv"),
+    )
+    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "CDR2", "CDR3", "FR4"]
+    assert row(df, "k1")["FR4 aa liabilities"] == "Heavy: Extra Cysteines | Light: Extra Cysteines"
+    assert row(df, "k1")["CDR1 aa liabilities"] == "Heavy: None | Light: None"
+
+
+def test_sc_single_chain_fed_region_is_not_extracted_again(tmp_path):
+    """On single-chain input the extracted copy is unprefixed while the input's own column is not,
+    so a name check cannot pair them. The region must still be scanned once, from the input's
+    column, under the unprefixed name the Tengo side declares.
+    """
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    out_regions = tmp_path / "regions.json"
+    data = tmp_path / "sc_one_chain.tsv"
+    data.write_text(
+        "clonotypeKey\tHeavy  sequence aa\tHeavy annotations\tHeavy CDR3 aa\tHeavy FR4 aa\n"
+        f"k1\t{SC_CHAIN_SEQ}\t{SC_ANN}\tCARYALD\tWGQGTCVTVSS\n"
+    )
+    df = run_main(
+        tmp_path,
+        ["-m", str(label_map_file), "--output-regions-found", str(out_regions)],
+        data_path=data,
+    )
+    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "CDR2", "CDR3", "FR4"]
+    # One CDR3 scan, from the fed column, and no second unprefixed copy of it.
+    assert "Heavy CDR3 aa liabilities" not in df.columns
+    assert "CDR3 aa" not in df.columns
+    assert "Heavy CDR3 aa" in df.columns
+    r = row(df, "k1")
+    assert r["CDR3 aa liabilities"] == "None"
+    assert r["FR4 aa liabilities"] == "Extra Cysteines"
+    # The regions the input does not carry are still extracted from the annotation.
+    assert r["CDR1 aa liabilities"] == "None"

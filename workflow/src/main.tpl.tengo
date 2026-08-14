@@ -222,32 +222,37 @@ wf.body(func(args) {
 	primaryChainsSet := {}
 	isScFv := false
 
+	// Feeds the primary chains' per-region sequence columns into the analysis table, the way the
+	// bulk branch below does. Every single-cell input carries them, not just scFv.
+	addPrimaryRegionColumns := func() {
+		for additionalSeq in additionalSequences {
+			if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
+				for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"] {
+					if regionFeature(additionalSeq.spec.domain["pl7.app/vdj/feature"]) == fr {
+						chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
+						chainLabel := (chain == "A" ? "Heavy" : "Light")
+						if !coveredChainFeatures[chainLabel + " " + fr] {
+							coveredChainFeatures[chainLabel + " " + fr] = true
+							primaryChainsSet[chain] = true
+							seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: chainLabel + " " + fr + " aa"})
+							if coveredFeatures[fr] {
+								coveredFeatures[fr] += 1
+							} else {
+								coveredFeatures[fr] = 1
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	if isSingleCell {
 		// Single-cell data handling
 		// Add primary chain sequences
 		for seq_entry in sequences {
 			if seq_entry.spec.name == "pl7.app/vdj/scFv-sequence" {
 				isScFv = true
-				for additionalSeq in additionalSequences {
-					if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
-						for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"] {
-							if regionFeature(additionalSeq.spec.domain["pl7.app/vdj/feature"]) == fr {
-								chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
-								chainLabel := (chain == "A" ? "Heavy" : "Light")
-								if !coveredChainFeatures[chainLabel + " " + fr] {
-									coveredChainFeatures[chainLabel + " " + fr] = true
-									primaryChainsSet[chain] = true
-									seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: chainLabel + " " + fr + " aa"})
-									if coveredFeatures[fr] {
-										coveredFeatures[fr] += 1
-									} else {
-										coveredFeatures[fr] = 1
-									}
-								}
-							}
-						}
-					}
-				}
 			} else if seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
 				chain := seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
 				primaryChainsSet[chain] = true
@@ -255,6 +260,7 @@ wf.body(func(args) {
 				seqTableBuilder.add(columnsWithSequences.getColumn(seq_entry.key), {header: chainLabel + " " + " sequence aa"})
 			}
 		}
+		addPrimaryRegionColumns()
 		// Add primary chain annotations if they exist
 		if hasAnnotations {
 			for ann_entry in annotations {
@@ -311,7 +317,9 @@ wf.body(func(args) {
 	if primaryChainsSet["B"] {
 		primaryChains += ["B"]
 	}
-	cdr3SeqPrefixed := isScFv || len(primaryChains) > 1
+	// A fed CDR3 region column is always chain-prefixed; only the annotation-extracted one
+	// drops the prefix, and only when a single chain is present.
+	cdr3SeqPrefixed := isScFv || len(primaryChains) > 1 || (isSingleCell && !is_undefined(coveredFeatures["CDR3"]))
 	if isSingleCell {
 		ll.assert(len(primaryChains) > 0, "single-cell input has no primary-chain sequences")
 	}
