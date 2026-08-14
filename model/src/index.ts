@@ -214,9 +214,14 @@ export const platforma = BlockModelV3.create(dataModel)
       }
     }
 
+    // Regions are extracted only from CDRs annotations, which carry the CDR boundaries
     const annotationCols = ctx.resultPool.getAnchoredPColumns(
       { main: ref },
-      (spec: PColumnSpec) => spec.annotations?.['pl7.app/sequence/isAnnotation'] === 'true',
+      (spec: PColumnSpec) =>
+        spec.name === 'pl7.app/vdj/sequence/annotation'
+        && spec.annotations?.['pl7.app/sequence/isAnnotation'] === 'true'
+        && spec.domain?.['pl7.app/sequence/annotation/type'] === 'CDRs'
+        && spec.domain?.['pl7.app/alphabet'] === 'aminoacid',
     );
     if (annotationCols !== undefined && annotationCols.length > 0) {
       // Mirrors extract_cdrs_fr1 / expected_regions in main.py.
