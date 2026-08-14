@@ -19,6 +19,10 @@ peptideLiabilitiesTpl := assets.importTemplate(":peptide-liabilities")
 peptideProcessTpl := assets.importTemplate(":peptide-process")
 prerunTpl := assets.importTemplate(":prerun")
 
+regionFeature := func(feature) {
+	return feature == "FR4InFrame" ? "FR4" : feature
+}
+
 wf.setPreRun(prerunTpl)
 
 // Prepare phase of the workflow - collects and sets up required data
@@ -212,6 +216,7 @@ wf.body(func(args) {
 
 	// Track which features are actually present in the data
 	coveredFeatures := {}
+	coveredChainFeatures := {}
 
 	// Track which primary chains are actually present in single-cell input
 	primaryChainsSet := {}
@@ -225,16 +230,19 @@ wf.body(func(args) {
 				isScFv = true
 				for additionalSeq in additionalSequences {
 					if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
-						for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"] {
-							if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr {
+						for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"] {
+							if regionFeature(additionalSeq.spec.domain["pl7.app/vdj/feature"]) == fr {
 								chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
-								primaryChainsSet[chain] = true
 								chainLabel := (chain == "A" ? "Heavy" : "Light")
-								seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: chainLabel + " " + fr + " aa"})
-								if coveredFeatures[fr] {
-									coveredFeatures[fr] += 1
-								} else {
-									coveredFeatures[fr] = 1
+								if !coveredChainFeatures[chainLabel + " " + fr] {
+									coveredChainFeatures[chainLabel + " " + fr] = true
+									primaryChainsSet[chain] = true
+									seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: chainLabel + " " + fr + " aa"})
+									if coveredFeatures[fr] {
+										coveredFeatures[fr] += 1
+									} else {
+										coveredFeatures[fr] = 1
+									}
 								}
 							}
 						}
@@ -275,8 +283,8 @@ wf.body(func(args) {
 		}
 		// Add FR/CDR sequences from additionalSequences (bulk, no annotations)
 		for additionalSeq in additionalSequences {
-			for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"] {
-				if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr && !coveredFeatures[fr] {
+			for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"] {
+				if regionFeature(additionalSeq.spec.domain["pl7.app/vdj/feature"]) == fr && !coveredFeatures[fr] {
 					seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: fr + " aa"})
 					if coveredFeatures[fr] {
 						coveredFeatures[fr] += 1

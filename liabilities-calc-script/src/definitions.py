@@ -81,7 +81,7 @@ _ENGINEERING_FIXABILITIES = {"fixable", "easily_fixable"}
 # FR1's conserved cysteine sits a fixed short distance before CDR1, so it is anchored from the
 # FR1 end ([-4, -3]) rather than the start: start-anchored indices break when the reference
 # framing adds/removes N-terminal residues (e.g. germline-imputed FR1 shifting the cysteine).
-EXPECTED_CYS_BASE = {"FR1": [-4, -3], "FR2": [], "FR3": [], "CDR1": [], "CDR2": [], "CDR3": [0]}
+EXPECTED_CYS_BASE = {"FR1": [-4, -3], "FR2": [], "FR3": [], "FR4": [], "CDR1": [], "CDR2": [], "CDR3": [0]}
 FR1_SPECIFIC_LIABILITIES = {"Missing Cysteines", "Extra Cysteines"}
 REGION_ORDER_MAP = {"FR1": 1, "CDR1": 2, "FR2": 3, "CDR2": 4, "FR3": 5, "CDR3": 6, "FR4": 7}  # For sorting summary
 
