@@ -686,11 +686,13 @@ def main():
         df_processed = df_processed.with_columns(pl.Series(name=ann_col_name, values=annotation_values))
 
     if not cols_for_liability_analysis and CALCULATE_LIABILITIES:
-        print(
-            "Warning: No columns identified for liability analysis, but liabilities were requested."
-            " Skipping liability calculation."
-        )
-        CALCULATE_LIABILITIES = False  # Force skip if no columns to act on
+        # Skipping here leaves every global column blank, which reads as a clean result.
+        if df_processed.width > 0:
+            sys.exit(
+                "Liabilities were requested but no column can be scanned. Expected a region column"
+                f" (e.g. 'CDR3 aa') or a CDRs annotation column, got: {df_processed.columns}"
+            )
+        CALCULATE_LIABILITIES = False
     elif not cols_for_liability_analysis and not CALCULATE_LIABILITIES:
         print("No columns identified for liability analysis (and no liabilities were requested).")
 
