@@ -1080,3 +1080,13 @@ def test_sc_single_chain_fed_region_is_not_extracted_again(tmp_path):
     assert r["FR4 aa liabilities"] == "Extra Cysteines"
     # The regions the input does not carry are still extracted from the annotation.
     assert r["CDR1 aa liabilities"] == "None"
+
+
+def test_unscannable_input_fails_instead_of_reporting_clean(tmp_path):
+    """A table whose only sequence column is neither a region nor a CDRs annotation cannot be
+    scanned, and blank global columns would read as a clean result.
+    """
+    data = tmp_path / "whole_chain_only.tsv"
+    data.write_text("clonotypeKey\tHeavy  sequence aa\nk1\tQVQLVQSGAEVKKPGASVKVSCKASCARMGDFWGQGT\n")
+    with pytest.raises(SystemExit):
+        run_main(tmp_path, data_path=data)
