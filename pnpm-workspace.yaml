@@ -13,10 +13,10 @@ catalog:
   '@platforma-sdk/model': 1.81.1
   '@platforma-sdk/ui-vue': 1.81.1
   '@platforma-sdk/tengo-builder': 4.0.22
-  '@platforma-sdk/package-builder': 3.14.2
-  '@platforma-sdk/block-tools': 2.12.13
+  '@platforma-sdk/package-builder': 3.15.0
+  '@platforma-sdk/block-tools': 2.13.0
   '@platforma-sdk/eslint-config': 1.2.0
-  '@platforma-sdk/test': 1.81.2
+  '@platforma-sdk/test': 1.81.3
   '@milaboratories/helpers': 1.14.5
   '@milaboratories/strings': 0.1.2
 
