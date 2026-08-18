@@ -168,9 +168,14 @@ export const platforma = BlockModelV3.create(dataModel)
     if (!spec) return undefined;
     const axis1 = spec.axesSpec[1];
     if (axis1?.name !== 'pl7.app/variantKey') return 'antibody';
-    return axis1.domain?.['pl7.app/repertoire/extractionRunId'] !== undefined
-      ? 'amplicon'
-      : 'peptide';
+    // Three producers key on this axis and only the run-id in its domain separates them.
+    // import-vdj-data's bare antibody sets stamp pl7.app/vdj/clonotypingRunId; they are
+    // antibody, and calling them peptide picked the peptide liability list and let a custom
+    // liability through with no regions selected — meaningless for per-region scanning.
+    const domain = axis1.domain ?? {};
+    if (domain['pl7.app/repertoire/extractionRunId'] !== undefined) return 'amplicon';
+    if (domain['pl7.app/vdj/clonotypingRunId'] !== undefined) return 'antibody';
+    return 'peptide';
   }, { retentive: true })
 
   .outputWithStatus('pt', (ctx) => {
