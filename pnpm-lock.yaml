@@ -25,8 +25,8 @@ catalogs:
       specifier: ^1.4.9
       version: 1.4.9
     '@platforma-sdk/block-tools':
-      specifier: 2.12.13
-      version: 2.12.13
+      specifier: 2.13.0
+      version: 2.13.0
     '@platforma-sdk/eslint-config':
       specifier: 1.2.0
       version: 1.2.0
@@ -34,8 +34,8 @@ catalogs:
       specifier: 1.81.1
       version: 1.81.1
     '@platforma-sdk/package-builder':
-      specifier: 3.14.2
-      version: 3.14.2
+      specifier: 3.15.0
+      version: 3.15.0
     '@platforma-sdk/tengo-builder':
       specifier: 4.0.22
       version: 4.0.22
@@ -76,7 +76,7 @@ importers:
         version: 2.29.8(@types/node@24.5.2)
       '@platforma-sdk/block-tools':
         specifier: 'catalog:'
-        version: 2.12.13(@types/node@24.5.2)
+        version: 2.13.0(@types/node@24.5.2)
       shx:
         specifier: 'catalog:'
         version: 0.4.0
@@ -101,7 +101,7 @@ importers:
     devDependencies:
       '@platforma-sdk/block-tools':
         specifier: 'catalog:'
-        version: 2.12.13(@types/node@24.5.2)
+        version: 2.13.0(@types/node@24.5.2)
 
   liabilities-calc-script:
     dependencies:
@@ -111,7 +111,7 @@ importers:
     devDependencies:
       '@platforma-sdk/package-builder':
         specifier: 'catalog:'
-        version: 3.14.2
+        version: 3.15.0
 
   model:
     dependencies:
@@ -130,7 +130,7 @@ importers:
         version: 1.4.0
       '@platforma-sdk/block-tools':
         specifier: 'catalog:'
-        version: 2.12.13(@types/node@24.5.2)
+        version: 2.13.0(@types/node@24.5.2)
       '@platforma-sdk/eslint-config':
         specifier: 'catalog:'
         version: 1.2.0(@eslint/js@9.28.0)(@stylistic/eslint-plugin@2.13.0(eslint@9.28.0)(typescript@5.6.3))(eslint-plugin-n@17.15.1(eslint@9.28.0))(eslint-plugin-vue@9.32.0(eslint@9.28.0))(eslint@9.28.0)(globals@15.14.0)(typescript-eslint@8.24.0(eslint@9.28.0)(typescript@5.6.3))(typescript@5.6.3)
@@ -1322,8 +1322,8 @@ packages:
   '@platforma-open/milaboratories.software-small-binaries@2.1.1':
     resolution: {integrity: sha512-KN1PR7YgUUfx1dxh/TtcoWpSZbOXbRxXzQuJ505qHuXuE0spYwC7bXnvJsEYbEwRcPMa0foTrjBnPNORE4yr+Q==}
 
-  '@platforma-sdk/block-tools@2.12.13':
-    resolution: {integrity: sha512-eWUIjK6D2/Ce779uyOGw9pET6KOQ7FKHg+DDrrkGh/ZllE2f/f4mghc/FPeOJIBQXVGg7Jg01oWh08SYVBzB5w==}
+  '@platforma-sdk/block-tools@2.13.0':
+    resolution: {integrity: sha512-xKiTmNLjfxCnnHRr9Q4ct3HdjLfkbLztvxpU++/pek0R8Bj/Lezeoji+eLpxAAYYUxjMr8jLj935eLK5MqKrSg==}
     hasBin: true
 
   '@platforma-sdk/blocks-deps-updater@2.2.0':
@@ -1345,11 +1345,11 @@ packages:
   '@platforma-sdk/model@1.81.1':
     resolution: {integrity: sha512-pyCcCzMu+L0ELnNQkpmYMNw+A70WWCXng29WxOVllMTvFvr6/BaH4OUOA2q8ocseUlKm6qFQiRxmZTe53AcvlQ==}
 
-  '@platforma-sdk/package-builder-lib@1.2.1':
-    resolution: {integrity: sha512-H6weitj7JxbiJSlteEFLafTJ+tfty6iv/imf3ysy8oCS8AZIRJk2VMW3M/aAc+xVkQeX7oVIwMwFMYrJIoFsAg==}
+  '@platforma-sdk/package-builder-lib@1.3.0':
+    resolution: {integrity: sha512-CdBjmNo6E1fBxKYWaXa49L/L2WLURxs2f1TAqxLIZlHRE4DZ6E1TEj3jNNKESWp+/9rwtLkTAzmTzNPrDgz+2Q==}
 
-  '@platforma-sdk/package-builder@3.14.2':
-    resolution: {integrity: sha512-EtI6VRIJdmiexse4nNjyajD2wuzt0xwyS8snl/XSbHamdCIFtkyckbAeBCtjaCqmoislzOMIMGQYegw3cxfZXA==}
+  '@platforma-sdk/package-builder@3.15.0':
+    resolution: {integrity: sha512-YzRiBYAaKvwnUcJgl6JMB3XLJuhlH72L8RZE3CDt2GM8hYRH4zaDzomfC5IHYNodK63RMaduzcvE10ICruI1hQ==}
     hasBin: true
 
   '@platforma-sdk/tengo-builder@4.0.22':
@@ -5810,7 +5810,7 @@ snapshots:
       '@platforma-open/milaboratories.software-small-binaries.mnz-client': 1.6.5
       '@platforma-open/milaboratories.software-small-binaries.table-converter': 1.3.5
 
-  '@platforma-sdk/block-tools@2.12.13(@types/node@24.5.2)':
+  '@platforma-sdk/block-tools@2.13.0(@types/node@24.5.2)':
     dependencies:
       '@aws-sdk/client-ecr-public': 3.859.0
       '@aws-sdk/client-s3': 3.859.0
@@ -5822,7 +5822,7 @@ snapshots:
       '@milaboratories/resolve-helper': 1.1.3
       '@milaboratories/ts-helpers': 1.8.6
       '@platforma-sdk/blocks-deps-updater': 2.2.0
-      '@platforma-sdk/package-builder-lib': 1.2.1
+      '@platforma-sdk/package-builder-lib': 1.3.0
       canonicalize: 2.1.0
       commander: 15.0.0
       lru-cache: 11.2.4
@@ -5864,7 +5864,7 @@ snapshots:
       utility-types: 3.11.0
       zod: 3.25.76
 
-  '@platforma-sdk/package-builder-lib@1.2.1':
+  '@platforma-sdk/package-builder-lib@1.3.0':
     dependencies:
       '@aws-sdk/client-s3': 3.859.0
       '@aws-sdk/lib-storage': 3.859.0(@aws-sdk/client-s3@3.859.0)
@@ -5877,9 +5877,9 @@ snapshots:
     transitivePeerDependencies:
       - aws-crt
 
-  '@platforma-sdk/package-builder@3.14.2':
+  '@platforma-sdk/package-builder@3.15.0':
     dependencies:
-      '@platforma-sdk/package-builder-lib': 1.2.1
+      '@platforma-sdk/package-builder-lib': 1.3.0
       commander: 15.0.0
       winston: 3.17.0
     transitivePeerDependencies:
