@@ -413,7 +413,6 @@ def main():
     all_seq_cols = [c for c in df_processed.columns if c.lower().endswith("aa")]  # All potential sequence columns
     TARGET_REGION_KEYS = ["cdr1 aa", "cdr2 aa", "cdr3 aa", "fr1 aa", "fr2 aa", "fr3 aa", "fr4 aa"]  # For Path B
     cols_for_liability_analysis = []
-    skip_extraction_due_to_preexisting_regions = False
 
     # Collect full-chain AA columns (e.g. "Heavy sequence aa") for stop codon / OOF detection.
     # MiXCR places * at CDR/FR region boundaries when a codon spans a V-D-J junction — checking
@@ -425,43 +424,15 @@ def main():
         if c.lower().endswith(" aa") and not any(k in c.lower() for k in _fragment_keys_lower)
     ]
 
-    if has_input_ann_cols:
-        unique_ann_prefixes = set()
-        for name in ann_cols:
-            prefix = name[: -len("annotations")].strip().rstrip("_")
-            unique_ann_prefixes.add(prefix)
-        if unique_ann_prefixes:
-            all_prefix_sets_found_preexisting = True
-            temp_cols_for_liability_if_skipping = []
-            for ann_prefix_raw in unique_ann_prefixes:
-                prefix_for_col_lookup = f"{ann_prefix_raw} " if ann_prefix_raw else ""
-                current_prefix_all_regions_found = True
-                for region_base in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"]:  # Check for FR1/2/3, CDR1/2/3
-                    expected_col_name = " ".join(f"{prefix_for_col_lookup}{region_base} aa".split())
-                    if expected_col_name not in df_processed.columns:
-                        current_prefix_all_regions_found = False
-                        print(f"Pre-existing check: '{expected_col_name}' not found for prefix '{ann_prefix_raw}'.")
-                        break
-                    temp_cols_for_liability_if_skipping.append(expected_col_name)
-                if not current_prefix_all_regions_found:
-                    all_prefix_sets_found_preexisting = False
-                    break
-                fr4_col_name = " ".join(f"{prefix_for_col_lookup}FR4 aa".split())
-                if fr4_col_name in df_processed.columns:
-                    temp_cols_for_liability_if_skipping.append(fr4_col_name)
-            if all_prefix_sets_found_preexisting:
-                skip_extraction_due_to_preexisting_regions = True
-                cols_for_liability_analysis.extend(temp_cols_for_liability_if_skipping)
-                cols_for_liability_analysis = sorted(list(set(cols_for_liability_analysis)))
-                print(f"Pre-existing CDR/FR columns found. Skipping extraction. Using: {cols_for_liability_analysis}")
-
     # Deferred so the region scope, final only once every input path has converged, can be
     # applied to the exported annotation track too.
     pending_annotation_updates: dict[str, list] = {}
 
-    if skip_extraction_due_to_preexisting_regions:
-        print(f"Proceeding with pre-existing columns: {cols_for_liability_analysis}")
-    elif has_input_ann_cols:  # Path A: Annotation-based extraction
+    # An annotation column always routes to Path A, even when every region already arrives as its
+    # own column. Path A is the only path that writes liability coordinates back into the
+    # annotation track, and `already_fed_regions` below keeps it from re-extracting what the input
+    # supplies — so short-circuiting it here bought nothing and silently emptied the track.
+    if has_input_ann_cols:  # Path A: Annotation-based extraction
         print(
             "Path A: Extracting regions and updating annotations"
             " (with FR1 specific logic if liabilities are calculated)."
