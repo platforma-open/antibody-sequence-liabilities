@@ -33,6 +33,7 @@ self.body(func(args) {
     hasAnnotations := params.hasAnnotations
     primaryChains := params.primaryChains
     cdr3SeqPrefixed := params.cdr3SeqPrefixed
+    annotationFeature := params.annotationFeature
     newMapping := canonical.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
 
@@ -238,19 +239,25 @@ self.body(func(args) {
 
 			// Annotation column (Python script outputs e.g., "Heavy CDRs Annotations")
             if hasAnnotations {
+                // Feature of the sequence the offsets index into, inherited from the upstream
+                // track. Omitted when the upstream declares none, rather than guessed: a wrong
+                // feature pairs the annotation with a sequence its coordinates overrun.
+                annDomain := {
+                    "pl7.app/alphabet": "aminoacid",
+                    "pl7.app/vdj/scClonotypeChain": chain_val,
+                    "pl7.app/vdj/scClonotypeChain/index": "primary",
+                    "pl7.app/sequence/annotation/type": "CDRs" // Type of annotation
+                }
+                if !is_undefined(annotationFeature) {
+                    annDomain["pl7.app/vdj/feature"] = annotationFeature
+                }
                 sequenceColumns += [{
                     column: chainLabel + " annotations",
                     id: "annotations-cdrs-primary-" + text.to_lower(chainLabel),
                     spec: {
                         name: "pl7.app/vdj/sequence/annotation",
                         valueType: "String",
-                        domain: { // This domain describes the *source* of the annotation if it were from platforma
-                            "pl7.app/alphabet": "aminoacid",
-                            "pl7.app/vdj/feature": "CDR3",
-                            "pl7.app/vdj/scClonotypeChain": chain_val,
-                            "pl7.app/vdj/scClonotypeChain/index": "primary",
-                            "pl7.app/sequence/annotation/type": "CDRs" // Type of annotation
-                        },
+                        domain: annDomain,
                         annotations: {
                             "pl7.app/label": chainLabel + " CDRs Annotations",
                             "pl7.app/table/visibility": "hidden",
@@ -285,17 +292,21 @@ self.body(func(args) {
 
 		// Annotation column (Python script outputs "CDRs Annotations")
 		if hasAnnotations {
+			// See the single-cell branch above: the feature is inherited, not assumed.
+			annDomain := {
+				"pl7.app/alphabet": "aminoacid",
+				"pl7.app/sequence/annotation/type": "CDRs"
+			}
+			if !is_undefined(annotationFeature) {
+				annDomain["pl7.app/vdj/feature"] = annotationFeature
+			}
 			sequenceColumns += [{
 				column: "Annotations",
 				id: "annotations-cdrs",
 				spec: {
 				name: "pl7.app/vdj/sequence/annotation",
 				valueType: "String",
-				domain: {
-					"pl7.app/alphabet": "aminoacid",
-					"pl7.app/vdj/feature": "CDR3",
-					"pl7.app/sequence/annotation/type": "CDRs"
-				},
+				domain: annDomain,
 				annotations: {
 					"pl7.app/label": "annotations",
 					"pl7.app/table/visibility": "hidden",

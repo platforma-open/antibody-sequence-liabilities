@@ -359,7 +359,8 @@ wf.body(func(args) {
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations,
 			primaryChains: primaryChains,
-			cdr3SeqPrefixed: cdr3SeqPrefixed
+			cdr3SeqPrefixed: cdr3SeqPrefixed,
+			annotationFeature: hasAnnotations ? annotations[0].spec.domain["pl7.app/vdj/feature"] : undefined
 		})
 	}, {
 		metaInputs: { mem: args.mem }
