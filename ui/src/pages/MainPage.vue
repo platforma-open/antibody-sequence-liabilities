@@ -62,6 +62,10 @@ const isWholeSeq = computed(() =>
   app.model.outputs.modality === 'peptide' || app.model.outputs.modality === 'amplicon',
 );
 
+const isAntibody = computed(() =>
+  app.model.outputs.modality === 'antibody',
+);
+
 // ── Region scope ──────────────────────────────────────────────────────────────
 
 // Empty selection means "scan everything" — the default, and what pre-feature projects carry.
@@ -343,11 +347,10 @@ watch(
       @update:model-value="setInput"
     />
 
-    <template v-if="!isWholeSeq">
+    <template v-if="isAntibody">
       <PlDropdownMulti
         v-model="selectedRegions"
         :options="regionScopeOptions"
-        :disabled="app.model.data.inputAnchor === undefined"
         label="Regions to scan"
       >
         <template #tooltip>
@@ -489,7 +492,7 @@ watch(
             </template>
           </PlTooltip>
           <PlDropdownMulti
-            v-if="!isWholeSeq"
+            v-if="isAntibody"
             v-model="customItems[index].regions"
             label="Regions"
             :options="regionOptions"
