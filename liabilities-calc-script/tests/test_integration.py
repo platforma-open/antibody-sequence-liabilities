@@ -1090,3 +1090,54 @@ def test_unscannable_input_fails_instead_of_reporting_clean(tmp_path):
     data.write_text("clonotypeKey\tHeavy  sequence aa\nk1\tQVQLVQSGAEVKKPGASVKVSCKASCARMGDFWGQGT\n")
     with pytest.raises(SystemExit):
         run_main(tmp_path, data_path=data)
+
+
+# Same shape as SC_REGIONS but with a CDR3 that actually carries a liability, so the annotation
+# has something to record. SC_ANN offsets are unchanged — CDR3 is still 7 aa at 60.
+SC_CHAIN_SEQ_HIT = SC_CHAIN_SEQ[:60] + "CARYNGF"
+SC_REGIONS_HIT = {**SC_REGIONS, "CDR3 aa": "CARYNGF"}
+
+
+def _sc_table_hit(tmp_path: Path) -> Path:
+    header, values = ["clonotypeKey"], ["k1"]
+    for chain in ("Heavy", "Light"):
+        header += [f"{chain}  sequence aa", f"{chain} annotations"]
+        values += [SC_CHAIN_SEQ_HIT, SC_ANN]
+        header += [f"{chain} {region}" for region in SC_REGIONS_HIT]
+        values += list(SC_REGIONS_HIT.values())
+    p = tmp_path / "sc_regions_hit.tsv"
+    p.write_text("\t".join(header) + "\n" + "\t".join(values) + "\n")
+    return p
+
+
+def test_sc_fed_region_columns_still_annotate_liabilities(tmp_path):
+    """Feeding every region as its own column must not switch off the annotation write-back.
+
+    The fed columns are what the results table scans, but the annotation track is the only record
+    of *where* each liability sits, and only the extraction path writes it. Short-circuiting that
+    path when the input already supplies every region left the track carrying region markers only,
+    silently: the table stayed correct while the sequence viewer lost every highlight.
+    """
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    out_map = tmp_path / "out_map.json"
+    df = run_main(
+        tmp_path,
+        ["-m", str(label_map_file), "-o", str(out_map)],
+        data_path=_sc_table_hit(tmp_path),
+    )
+    r = row(df, "k1")
+
+    hits = [
+        (lab, start)
+        for lab, start, _length in parse_annotations(r["Heavy annotations"])
+        if lab not in LABEL_MAP
+    ]
+    assert hits, f"annotation carries no liability entries: {r['Heavy annotations']}"
+
+    final_map = json.loads(out_map.read_text())
+    assert "Deamidation (N[GS])" in final_map.values()
+
+    # The fed columns are still what gets scanned, and extraction adds no duplicate of them.
+    assert "Deamidation (N[GS])" in r["CDR3 aa liabilities"]
+    assert len(set(df.columns)) == len(df.columns)
