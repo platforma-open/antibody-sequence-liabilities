@@ -33,7 +33,7 @@ self.body(func(args) {
     hasAnnotations := params.hasAnnotations
     primaryChains := params.primaryChains
     cdr3SeqPrefixed := params.cdr3SeqPrefixed
-    annotationFeature := params.annotationFeature
+    annotationFeatures := params.annotationFeatures
     newMapping := canonical.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
 
@@ -248,9 +248,10 @@ self.body(func(args) {
                     "pl7.app/vdj/scClonotypeChain/index": "primary",
                     "pl7.app/sequence/annotation/type": "CDRs" // Type of annotation
                 }
-                if !is_undefined(annotationFeature) {
-                    annDomain["pl7.app/vdj/feature"] = annotationFeature
-                }
+				annFeature := annotationFeatures[chain_val]
+				if !is_undefined(annFeature) {
+					annDomain["pl7.app/vdj/feature"] = annFeature
+				}
                 sequenceColumns += [{
                     column: chainLabel + " annotations",
                     id: "annotations-cdrs-primary-" + text.to_lower(chainLabel),
@@ -297,8 +298,9 @@ self.body(func(args) {
 				"pl7.app/alphabet": "aminoacid",
 				"pl7.app/sequence/annotation/type": "CDRs"
 			}
-			if !is_undefined(annotationFeature) {
-				annDomain["pl7.app/vdj/feature"] = annotationFeature
+			annFeature := annotationFeatures[""]
+			if !is_undefined(annFeature) {
+				annDomain["pl7.app/vdj/feature"] = annFeature
 			}
 			sequenceColumns += [{
 				column: "Annotations",
