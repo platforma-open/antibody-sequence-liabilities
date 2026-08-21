@@ -51,7 +51,7 @@ wf.prepare(func(args) {
 		},
 		domain: {
 			"pl7.app/alphabet": "aminoacid",
-          	"pl7.app/sequence/annotation/type": "CDRs"
+		  	"pl7.app/sequence/annotation/type": "CDRs"
 		}
 	}, "annotations")
 
@@ -201,6 +201,16 @@ wf.body(func(args) {
 	}
 
 	hasAnnotations := len(annotations) > 0
+
+	// features per chain. Bulk annotations have no chain, they are indexed by ""
+	annotationFeatures := {}
+	for ann_entry in annotations {
+		chain := ann_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
+		annFeature := ann_entry.spec.domain["pl7.app/vdj/feature"]
+		if !is_undefined(annFeature) && annFeature != "" {
+			annotationFeatures[is_undefined(chain) ? "" : chain] = annFeature
+		}
+	}
 
 	numberingSchema := ""
 	for seq_entry in additionalSequences {
@@ -359,7 +369,8 @@ wf.body(func(args) {
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations,
 			primaryChains: primaryChains,
-			cdr3SeqPrefixed: cdr3SeqPrefixed
+			cdr3SeqPrefixed: cdr3SeqPrefixed,
+			annotationFeatures: annotationFeatures
 		})
 	}, {
 		metaInputs: { mem: args.mem }
