@@ -115,9 +115,25 @@ wf.body(func(args) {
 	// flat (whole-sequence) liability scanner. They differ only in the axis-domain
 	// stamp, which sequence-feature column to read, and how the echoed sequence
 	// column is labeled downstream.
-	if datasetSpec.axesSpec[1].name == "pl7.app/variantKey" {
-		axis1 := datasetSpec.axesSpec[1]
-		isAmplicon := axis1.domain && axis1.domain["pl7.app/repertoire/extractionRunId"] != undefined
+	// Three producers key on pl7.app/variantKey and only the run-id in the axis domain says
+	// which:
+	//
+	//   pl7.app/peptide/extractionRunId      peptide-extraction              -> whole sequence
+	//   pl7.app/repertoire/extractionRunId   synthetic-repertoire-profiler   -> whole sequence
+	//   pl7.app/vdj/clonotypingRunId         import-vdj-data, bare antibody  -> VDJ
+	//
+	// Entering this branch on the axis NAME alone sent a bare antibody set down the peptide
+	// path, where the peptideSequences collector asks for pl7.app/sequence with feature
+	// "peptide" and matched nothing — so the run died on "No peptide aa sequence found on
+	// variantKey axis", naming a column the scientist never had reason to expect.
+	axis1 := datasetSpec.axesSpec[1]
+	axis1Domain := is_undefined(axis1.domain) ? {} : axis1.domain
+	isWholeSequence := axis1.name == "pl7.app/variantKey" &&
+		(!is_undefined(axis1Domain["pl7.app/peptide/extractionRunId"]) ||
+			!is_undefined(axis1Domain["pl7.app/repertoire/extractionRunId"]))
+
+	if isWholeSequence {
+		isAmplicon := !is_undefined(axis1Domain["pl7.app/repertoire/extractionRunId"])
 
 		seqCols := undefined
 		seqFeature := "peptide"
@@ -212,8 +228,37 @@ wf.body(func(args) {
 		}
 	}
 
+	// Whether the chains are separated by the pl7.app/vdj/scClonotypeChain COLUMN domain rather
+	// than by the frame. Single-cell data is the long-standing case; import-vdj-data's bare
+	// antibody sets are the new one, and they carry the same domain on a pl7.app/variantKey axis.
+	//
+	// The bulk path cannot represent either: `coveredFeatures` admits the first column per
+	// feature and `sequences[0]` picks one variable domain, so a second chain is dropped and the
+	// report still looks complete. So the shape of the table follows the chain domain, not the
+	// axis name.
+	hasChainColumns := false
+	for entry in sequences {
+		if !is_undefined(entry.spec.domain["pl7.app/vdj/scClonotypeChain"]) { hasChainColumns = true }
+	}
+	for entry in additionalSequences {
+		if !is_undefined(entry.spec.domain["pl7.app/vdj/scClonotypeChain"]) { hasChainColumns = true }
+	}
+	perChain := isSingleCell || hasChainColumns
+
+	// The scheme decides where a conserved cysteine is expected, and getting it wrong is not a
+	// cosmetic error: with no scheme the detector falls back to expecting a cysteine at CDR3
+	// position 0 (definitions.py EXPECTED_CYS_BASE), so every record without one is reported
+	// Missing Cysteines — a *structural* liability, which forces Non-Developable. On a bare
+	// imported set that marked all 1,243 records non-developable.
+	//
+	// additionalSequences is scanned as well as sequences because producers differ on where the
+	// annotation sits: import-vdj-data stamps the scheme on each located REGION column and not
+	// on the whole variable domain, which is the only column `sequences` collects for it.
 	numberingSchema := ""
-	for seq_entry in additionalSequences {
+	schemaSources := []
+	for entry in sequences { schemaSources = append(schemaSources, entry) }
+	for entry in additionalSequences { schemaSources = append(schemaSources, entry) }
+	for seq_entry in schemaSources {
 		if seq_entry.spec.annotations && seq_entry.spec.annotations["pl7.app/vdj/numberingSchema"] {
 			currentSchema := seq_entry.spec.annotations["pl7.app/vdj/numberingSchema"]
 			if numberingSchema == "" {
@@ -283,6 +328,61 @@ wf.body(func(args) {
 				}
 			}
 		}
+	} else if hasChainColumns {
+		// Whether to label columns Heavy/Light at all. Only when BOTH chains are present: a
+		// single-chain set is shaped like a bulk one and is labelled like one, so main.py's
+		// unprefixed Path B reads it directly and clonotype-process finds the unprefixed
+		// "CDR1 aa liabilities" it asks for.
+		//
+		// This is the same rule `cdr3SeqPrefixed` below already applies to the echoed sequence
+		// column; the headers simply have to agree with it.
+		chainSet := {}
+		for entry in sequences {
+			c := entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
+			if !is_undefined(c) && entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" { chainSet[c] = true }
+		}
+		for entry in additionalSequences {
+			c := entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
+			if !is_undefined(c) && entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" { chainSet[c] = true }
+		}
+		prefixChains := len(chainSet) > 1
+
+		// Chains in column domains, on a key axis that is not scClonotypeKey — a bare antibody
+		// set from import-vdj-data. One record per row, both chains side by side.
+		//
+		// Every column is prefixed with its chain, which is the convention main.py already reads
+		// (it strips "Heavy "/"Light ", analyses each chain's regions, and merges them back into
+		// one summary per region reading "Heavy chain: ..., Light chain: ..."). So the work here
+		// is only to label the columns; nothing downstream needs a new mode.
+		//
+		// Unlike the single-cell branch this adds the located regions as well as the variable
+		// domain, because for a bare set the regions are the whole point — ANARCI located them
+		// at import and there are no annotation columns to re-derive them from.
+		for seq_entry in sequences {
+			if seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
+				chain := seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
+				primaryChainsSet[chain] = true
+				chainLabel := (chain == "A" ? "Heavy" : "Light")
+				seqTableBuilder.add(columnsWithSequences.getColumn(seq_entry.key), {header: prefixChains ? chainLabel + " sequence aa" : "sequence aa"})
+			}
+		}
+		for additionalSeq in additionalSequences {
+			chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
+			if is_undefined(chain) { continue }
+			if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] != "primary" { continue }
+			chainLabel := (chain == "A" ? "Heavy" : "Light")
+			for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"] {
+				if regionFeature(additionalSeq.spec.domain["pl7.app/vdj/feature"]) == fr {
+					primaryChainsSet[chain] = true
+					seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: prefixChains ? chainLabel + " " + fr + " aa" : fr + " aa"})
+					if coveredFeatures[fr] {
+						coveredFeatures[fr] += 1
+					} else {
+						coveredFeatures[fr] = 1
+					}
+				}
+			}
+		}
 	} else { // Bulk data handling
 		// Add the primary assembling feature sequence.
 		// Mark it in coveredFeatures so the additionalSequences loop below skips it.
@@ -330,8 +430,8 @@ wf.body(func(args) {
 	// A fed CDR3 region column is always chain-prefixed; only the annotation-extracted one
 	// drops the prefix, and only when a single chain is present.
 	cdr3SeqPrefixed := isScFv || len(primaryChains) > 1 || (isSingleCell && !is_undefined(coveredFeatures["CDR3"]))
-	if isSingleCell {
-		ll.assert(len(primaryChains) > 0, "single-cell input has no primary-chain sequences")
+	if perChain {
+		ll.assert(len(primaryChains) > 0, "chain-separated input has no primary-chain sequences")
 	}
 
 	seqTableBuilder.mem(string(int(math.max(16, baseMemGiB / 4))) + "GiB")
@@ -365,6 +465,9 @@ wf.body(func(args) {
 		defaultBlockLabel: args.defaultBlockLabel,
 		params: smart.createJsonResource({
 			datasetSpec: datasetSpec,
+			// Drives whether the echoed sequence columns are emitted per chain. Follows the chain
+			// domain rather than the axis, same as the table shape above.
+			perChain: perChain,
 			isSingleCell: isSingleCell,
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations,

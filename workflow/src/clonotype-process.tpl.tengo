@@ -29,6 +29,10 @@ self.body(func(args) {
     liabilitiesTable := args.liabilitiesTable
     datasetSpec := params.datasetSpec
     isSingleCell := params.isSingleCell
+    // Whether the sequence columns are separated by chain. True for single-cell, and for a bare
+    // antibody set whose chains sit in the pl7.app/vdj/scClonotypeChain column domain on a
+    // pl7.app/variantKey axis. Older callers sent only isSingleCell.
+    perChain := is_undefined(params.perChain) ? isSingleCell : params.perChain
     coveredFeatures := params.coveredFeatures
     hasAnnotations := params.hasAnnotations
     primaryChains := params.primaryChains
@@ -204,10 +208,11 @@ self.body(func(args) {
     sequenceColumns := []
 
 	// Add sequence and annotation columns. Python script always outputs annotation columns.
-	if isSingleCell {
-		// For single cell: show each present chain's sequence and annotations. Iterate only
-		// the chains that actually exist (primaryChains) so heavy-only (VHH) input doesn't
-		// request a non-existent Light chain.
+	if perChain {
+		// Chain-separated input: show each present chain's sequence and annotations. Iterate
+		// only the chains that actually exist (primaryChains) so heavy-only input — a VHH
+		// single-cell set, or a bare set with one chain mapped — doesn't request a Light chain
+		// that was never there.
 		for chain_val in primaryChains {
 			chainLabel := (chain_val == "A" ? "Heavy" : "Light")
 
