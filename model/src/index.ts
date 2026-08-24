@@ -1,8 +1,8 @@
 import type {
   ImportFileHandle,
-  PColumnSpec,
   PlDataTableStateV2,
   PlRef,
+  ResultPool,
 } from '@platforma-sdk/model';
 import {
   BlockModelV3,
@@ -87,6 +87,23 @@ export const liabilityTypes: {
 const defaultDisabled = liabilityTypes.filter((l) => !l.enabledByDefault).map((l) => l.value);
 const allLiabilityTypeValues = liabilityTypes.map((l) => l.value);
 const predefinedLiabilityNames = new Set(allLiabilityTypeValues);
+
+// Anchored on the input's entity axis, so a probe cannot match a sibling dataset in the project.
+function regionsOf(pool: ResultPool, ref: PlRef, name: string, featureKey: string): string[] {
+  const cols = pool.getAnchoredPColumns({ main: ref }, [{
+    axes: [{ anchor: 'main', idx: 1 }],
+    partialAxesMatch: true,
+    name,
+    domain: { 'pl7.app/alphabet': 'aminoacid' },
+  }]);
+  const out: string[] = [];
+  for (const col of cols ?? []) {
+    const raw = col.spec.domain?.[featureKey];
+    const region = raw === 'FR4InFrame' ? 'FR4' : raw;
+    if (region !== undefined && (allRegions as readonly string[]).includes(region)) out.push(region);
+  }
+  return out;
+}
 
 const dataModel = new DataModelBuilder()
   .from<BlockData>('v1')
@@ -192,7 +209,11 @@ export const platforma = BlockModelV3.create(dataModel)
     // antibody, and calling them peptide picked the peptide liability list and let a custom
     // liability through with no regions selected — meaningless for per-region scanning.
     const domain = axis1.domain ?? {};
-    if (domain['pl7.app/repertoire/extractionRunId'] !== undefined) return 'amplicon';
+    if (domain['pl7.app/repertoire/extractionRunId'] !== undefined) {
+      // Per-region scanning needs CDR3: clonotype-process echoes that column unconditionally.
+      const regions = regionsOf(ctx.resultPool, ref, 'pl7.app/sequence', 'pl7.app/feature');
+      return regions.includes('CDR3') ? 'antibody' : 'amplicon';
+    }
     if (domain['pl7.app/vdj/clonotypingRunId'] !== undefined) return 'antibody';
     return 'peptide';
   }, { retentive: true })
@@ -203,31 +224,20 @@ export const platforma = BlockModelV3.create(dataModel)
     const ref = ctx.data.inputAnchor;
     if (ref === undefined) return undefined;
 
-    const cols = ctx.resultPool.getAnchoredPColumns(
-      { main: ref },
-      (spec: PColumnSpec) =>
-        spec.name === 'pl7.app/vdj/sequence'
-        && spec.domain?.['pl7.app/alphabet'] === 'aminoacid',
-    );
-
-    const found = new Set<string>();
-    for (const col of cols ?? []) {
-      const rawFeature = col.spec.domain?.['pl7.app/vdj/feature'];
-      const feature = rawFeature === 'FR4InFrame' ? 'FR4' : rawFeature;
-      if (feature !== undefined && (allRegions as readonly string[]).includes(feature)) {
-        found.add(feature);
-      }
-    }
+    // VDJ producers and the repertoire profiler name the same concept in different namespaces.
+    const found = new Set<string>([
+      ...regionsOf(ctx.resultPool, ref, 'pl7.app/vdj/sequence', 'pl7.app/vdj/feature'),
+      ...regionsOf(ctx.resultPool, ref, 'pl7.app/sequence', 'pl7.app/feature'),
+    ]);
 
     // Regions are extracted only from CDRs annotations, which carry the CDR boundaries
-    const annotationCols = ctx.resultPool.getAnchoredPColumns(
-      { main: ref },
-      (spec: PColumnSpec) =>
-        spec.name === 'pl7.app/vdj/sequence/annotation'
-        && spec.annotations?.['pl7.app/sequence/isAnnotation'] === 'true'
-        && spec.domain?.['pl7.app/sequence/annotation/type'] === 'CDRs'
-        && spec.domain?.['pl7.app/alphabet'] === 'aminoacid',
-    );
+    const annotationCols = ctx.resultPool.getAnchoredPColumns({ main: ref }, [{
+      axes: [{ anchor: 'main', idx: 1 }],
+      partialAxesMatch: true,
+      name: 'pl7.app/vdj/sequence/annotation',
+      domain: { 'pl7.app/alphabet': 'aminoacid', 'pl7.app/sequence/annotation/type': 'CDRs' },
+      annotations: { 'pl7.app/sequence/isAnnotation': 'true' },
+    }]);
     if (annotationCols !== undefined && annotationCols.length > 0) {
       // Mirrors extract_cdrs_fr1 / expected_regions in main.py.
       for (const r of ['CDR1', 'CDR2', 'CDR3', 'FR1']) found.add(r);
