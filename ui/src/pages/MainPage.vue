@@ -62,6 +62,42 @@ const isWholeSeq = computed(() =>
   app.model.outputs.modality === 'peptide' || app.model.outputs.modality === 'amplicon',
 );
 
+const isAntibody = computed(() =>
+  app.model.outputs.modality === 'antibody',
+);
+
+// ── Region scope ──────────────────────────────────────────────────────────────
+
+// Empty selection means "scan everything" — the default, and what pre-feature projects carry.
+const regionScopeOptions = computed(() =>
+  (app.model.outputs.availableRegions ?? []).map((r) => ({ value: r, label: r })),
+);
+
+const selectedRegions = computed({
+  get: () => app.model.data.regions ?? [],
+  set: (value) => { app.model.data.regions = value.length > 0 ? value : undefined; },
+});
+
+// PlDropdownMulti hides values absent from `:options`, so these narrow the scan invisibly.
+// Cleared by user action, not by a watcher — that would be a hairpin (output -> data write).
+const staleRegions = computed(() => {
+  const available = new Set<string>(app.model.outputs.availableRegions ?? []);
+  if (available.size === 0) return [];
+  return selectedRegions.value.filter((r) => !available.has(r));
+});
+
+function dropStaleRegions(): void {
+  const available = new Set<string>(app.model.outputs.availableRegions ?? []);
+  const kept = selectedRegions.value.filter((r) => available.has(r));
+  app.model.data.regions = kept.length > 0 ? kept : undefined;
+}
+
+// main.py widens an unsatisfiable scope to "scan everything" rather than "scan nothing", so
+// this case needs the opposite warning to a partly-stale one.
+const allSelectedRegionsStale = computed(() =>
+  selectedRegions.value.length > 0 && staleRegions.value.length === selectedRegions.value.length,
+);
+
 // Predefined liability list filtered by modality (per applicableTo). Defaults
 // to the full list when modality is undefined (during initial load). Amplicon
 // shares the peptide rule set, so map it to 'peptide' for applicability.
@@ -311,6 +347,34 @@ watch(
       @update:model-value="setInput"
     />
 
+    <template v-if="isAntibody">
+      <PlDropdownMulti
+        v-model="selectedRegions"
+        :options="regionScopeOptions"
+        label="Regions to scan"
+      >
+        <template #tooltip>
+          Restrict liability detection to these regions. Leave empty to scan every region in
+          the dataset. Use this when liabilities carried in the parental sequence are already
+          accepted and should not contaminate the scores. Regions left out are neither
+          scanned nor reported.
+        </template>
+      </PlDropdownMulti>
+
+      <PlAlert v-if="staleRegions.length > 0" type="warn">
+        <template v-if="allSelectedRegionsStale">
+          None of the selected regions ({{ staleRegions.join(', ') }}) are present in this
+          dataset, so the scope cannot be applied and every region will be scanned.
+        </template>
+        <template v-else>
+          {{ staleRegions.join(', ') }}
+          {{ staleRegions.length === 1 ? 'is' : 'are' }} selected but not present in this dataset,
+          so {{ staleRegions.length === 1 ? 'it is' : 'they are' }} silently narrowing the scan.
+        </template>
+        <PlBtnGhost @click="dropStaleRegions">Remove them</PlBtnGhost>
+      </PlAlert>
+    </template>
+
     <PlTooltip position="left">
       <PlCheckbox
         :model-value="app.model.data.usePredefinedLiabilities ?? true"
@@ -428,7 +492,7 @@ watch(
             </template>
           </PlTooltip>
           <PlDropdownMulti
-            v-if="!isWholeSeq"
+            v-if="isAntibody"
             v-model="customItems[index].regions"
             label="Regions"
             :options="regionOptions"

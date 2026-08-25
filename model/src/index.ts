@@ -2,12 +2,14 @@ import type {
   ImportFileHandle,
   PlDataTableStateV2,
   PlRef,
+  ResultPool,
 } from '@platforma-sdk/model';
 import {
   BlockModelV3,
+  DataColumn,
   DataModelBuilder,
   createPlDataTableStateV2,
-  createPlDataTableV2,
+  createPlDataTableV3,
 } from '@platforma-sdk/model';
 import { getDefaultBlockLabel } from './label';
 export type * from '@milaboratories/helpers';
@@ -37,6 +39,10 @@ type OldUiState = {
   tableState: PlDataTableStateV2;
 };
 
+/** Canonical VDJ region names, in biological order. Mirrors REGION_ORDER_MAP in definitions.py. */
+export const allRegions = ['FR1', 'CDR1', 'FR2', 'CDR2', 'FR3', 'CDR3', 'FR4'] as const;
+export type Region = (typeof allRegions)[number];
+
 export type BlockData = {
   defaultBlockLabel: string;
   customBlockLabel: string;
@@ -45,6 +51,9 @@ export type BlockData = {
   usePredefinedLiabilities?: boolean;
   disabledPredefinedLiabilities?: string[];
   customLiabilities?: CustomLiability[];
+  /** Undefined or empty = scan everything, the pre-feature behaviour — hence absent from
+   *  `init()`. Antibody only; whole-sequence modes have no regions. */
+  regions?: string[];
   importFileHandle?: ImportFileHandle;
   mem?: number;
   tableState: PlDataTableStateV2;
@@ -78,6 +87,23 @@ export const liabilityTypes: {
 const defaultDisabled = liabilityTypes.filter((l) => !l.enabledByDefault).map((l) => l.value);
 const allLiabilityTypeValues = liabilityTypes.map((l) => l.value);
 const predefinedLiabilityNames = new Set(allLiabilityTypeValues);
+
+// Anchored on the input's entity axis, so a probe cannot match a sibling dataset in the project.
+function regionsOf(pool: ResultPool, ref: PlRef, name: string, featureKey: string): string[] {
+  const cols = pool.getAnchoredPColumns({ main: ref }, [{
+    axes: [{ anchor: 'main', idx: 1 }],
+    partialAxesMatch: true,
+    name,
+    domain: { 'pl7.app/alphabet': 'aminoacid' },
+  }]);
+  const out: string[] = [];
+  for (const col of cols ?? []) {
+    const raw = col.spec.domain?.[featureKey];
+    const region = raw === 'FR4InFrame' ? 'FR4' : raw;
+    if (region !== undefined && (allRegions as readonly string[]).includes(region)) out.push(region);
+  }
+  return out;
+}
 
 const dataModel = new DataModelBuilder()
   .from<BlockData>('v1')
@@ -124,6 +150,15 @@ export const platforma = BlockModelV3.create(dataModel)
         throw new Error(`Custom liability "${c.name}" must have at least one region selected`);
     }
 
+    // Suppressed in whole-sequence modes and canonicalized to biological order, so that
+    // semantically-identical scopes yield identical args bytes and never mark the block stale.
+    const wholeSeqModality = data.modality === 'peptide' || data.modality === 'amplicon';
+    const selectedRegions = wholeSeqModality ? undefined : data.regions;
+    const regions
+      = selectedRegions && selectedRegions.length > 0
+        ? allRegions.filter((r) => selectedRegions.includes(r))
+        : undefined;
+
     return {
       defaultBlockLabel: data.defaultBlockLabel,
       customBlockLabel: data.customBlockLabel,
@@ -131,6 +166,7 @@ export const platforma = BlockModelV3.create(dataModel)
       usePredefinedLiabilities: data.usePredefinedLiabilities,
       disabledPredefinedLiabilities: data.disabledPredefinedLiabilities,
       customLiabilities: data.customLiabilities,
+      regions,
       importFileHandle: data.importFileHandle,
       mem: data.mem,
     };
@@ -173,21 +209,54 @@ export const platforma = BlockModelV3.create(dataModel)
     // antibody, and calling them peptide picked the peptide liability list and let a custom
     // liability through with no regions selected — meaningless for per-region scanning.
     const domain = axis1.domain ?? {};
-    if (domain['pl7.app/repertoire/extractionRunId'] !== undefined) return 'amplicon';
+    if (domain['pl7.app/repertoire/extractionRunId'] !== undefined) {
+      // Per-region scanning needs CDR3: clonotype-process echoes that column unconditionally.
+      const regions = regionsOf(ctx.resultPool, ref, 'pl7.app/sequence', 'pl7.app/feature');
+      return regions.includes('CDR3') ? 'antibody' : 'amplicon';
+    }
     if (domain['pl7.app/vdj/clonotypingRunId'] !== undefined) return 'antibody';
     return 'peptide';
   }, { retentive: true })
 
+  /** Regions with an upstream sequence column, plus CDR1-3/FR1 which main.py extracts from an
+   *  annotation column and so has none. Full list when nothing is found — specs may be loading. */
+  .output('availableRegions', (ctx) => {
+    const ref = ctx.data.inputAnchor;
+    if (ref === undefined) return undefined;
+
+    // VDJ producers and the repertoire profiler name the same concept in different namespaces.
+    const found = new Set<string>([
+      ...regionsOf(ctx.resultPool, ref, 'pl7.app/vdj/sequence', 'pl7.app/vdj/feature'),
+      ...regionsOf(ctx.resultPool, ref, 'pl7.app/sequence', 'pl7.app/feature'),
+    ]);
+
+    // Regions are extracted only from CDRs annotations, which carry the CDR boundaries
+    const annotationCols = ctx.resultPool.getAnchoredPColumns({ main: ref }, [{
+      axes: [{ anchor: 'main', idx: 1 }],
+      partialAxesMatch: true,
+      name: 'pl7.app/vdj/sequence/annotation',
+      domain: { 'pl7.app/alphabet': 'aminoacid', 'pl7.app/sequence/annotation/type': 'CDRs' },
+      annotations: { 'pl7.app/sequence/isAnnotation': 'true' },
+    }]);
+    if (annotationCols !== undefined && annotationCols.length > 0) {
+      // Mirrors extract_cdrs_fr1 / expected_regions in main.py.
+      for (const r of ['CDR1', 'CDR2', 'CDR3', 'FR1']) found.add(r);
+    }
+
+    if (found.size === 0) return [...allRegions];
+    return allRegions.filter((r) => found.has(r));
+  }, { retentive: true })
+
   .outputWithStatus('pt', (ctx) => {
     const pCols = ctx.outputs?.resolve('outputLiabilities')?.getPColumns();
-    if (pCols === undefined) {
+    if (pCols === undefined || pCols.length === 0) {
       return undefined;
     }
-    return createPlDataTableV2(
-      ctx,
-      pCols,
-      ctx.data.tableState,
-    );
+    return createPlDataTableV3(ctx, {
+      primaryColumns: [DataColumn.fromColumn(pCols[0])],
+      columns: pCols.slice(1).map((c) => DataColumn.fromColumn(c)),
+      tableState: ctx.data.tableState,
+    });
   })
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
@@ -209,7 +278,7 @@ export const platforma = BlockModelV3.create(dataModel)
 
   // Blob handle for the uploaded file, readable by ReactiveFileContent in the UI
   .retentiveOutput('importedFile', (ctx) =>
-    ctx.prerun?.resolveAny({ field: 'importedFile' })?.getFileHandle(),
+    ctx.prerun?.traverse({ field: 'importedFile' })?.getFileHandle(),
   )
 
   .title(() => 'Sequence Liabilities')

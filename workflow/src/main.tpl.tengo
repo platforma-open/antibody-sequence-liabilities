@@ -19,6 +19,18 @@ peptideLiabilitiesTpl := assets.importTemplate(":peptide-liabilities")
 peptideProcessTpl := assets.importTemplate(":peptide-process")
 prerunTpl := assets.importTemplate(":prerun")
 
+REGIONS := ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"]
+
+regionFeature := func(feature) {
+	return feature == "FR4InFrame" ? "FR4" : feature
+}
+
+// The repertoire profiler names regions in the un-prefixed namespace; VDJ producers prefix them.
+featureOf := func(spec) {
+	f := spec.domain["pl7.app/vdj/feature"]
+	return regionFeature(is_undefined(f) ? spec.domain["pl7.app/feature"] : f)
+}
+
 wf.setPreRun(prerunTpl)
 
 // Prepare phase of the workflow - collects and sets up required data
@@ -47,7 +59,7 @@ wf.prepare(func(args) {
 		},
 		domain: {
 			"pl7.app/alphabet": "aminoacid",
-          	"pl7.app/sequence/annotation/type": "CDRs"
+		  	"pl7.app/sequence/annotation/type": "CDRs"
 		}
 	}, "annotations")
 
@@ -73,9 +85,7 @@ wf.prepare(func(args) {
 	}, "peptideSequences")
 
 	// Amplicon whole-variant aa sequence (synthetic-repertoire-profiler). Keyed
-	// on the same variantKey axis, but carries feature "amplicon-sequence". Region
-	// subsequences carry their region name as feature and are intentionally
-	// excluded — whole-sequence mode scans the full variant.
+	// on the same variantKey axis, but carries feature "amplicon-sequence".
 	bundleBuilder.addMulti({
 		axes: [{ anchor: "main", idx: 1 }],
 		name: "pl7.app/sequence",
@@ -84,6 +94,15 @@ wf.prepare(func(args) {
 			"pl7.app/alphabet": "aminoacid"
 		}
 	}, "ampliconSequences")
+
+	// Region subsequences of the same variant; feature carries the region name, so it cannot be pinned.
+	bundleBuilder.addMulti({
+		axes: [{ anchor: "main", idx: 1 }],
+		name: "pl7.app/sequence",
+		domain: {
+			"pl7.app/alphabet": "aminoacid"
+		}
+	}, "repertoireSequences")
 
 		return {
 			columns: bundleBuilder.build()
@@ -115,7 +134,7 @@ wf.body(func(args) {
 	// which:
 	//
 	//   pl7.app/peptide/extractionRunId      peptide-extraction              -> whole sequence
-	//   pl7.app/repertoire/extractionRunId   synthetic-repertoire-profiler   -> whole sequence
+	//   pl7.app/repertoire/extractionRunId   synthetic-repertoire-profiler   -> VDJ when regions exist
 	//   pl7.app/vdj/clonotypingRunId         import-vdj-data, bare antibody  -> VDJ
 	//
 	// Entering this branch on the axis NAME alone sent a bare antibody set down the peptide
@@ -124,17 +143,27 @@ wf.body(func(args) {
 	// variantKey axis", naming a column the scientist never had reason to expect.
 	axis1 := datasetSpec.axesSpec[1]
 	axis1Domain := is_undefined(axis1.domain) ? {} : axis1.domain
+	isRepertoire := !is_undefined(axis1Domain["pl7.app/repertoire/extractionRunId"])
+
+	repertoireRegions := {}
+	if isRepertoire {
+		for entry in columnsWithSequences.getColumns("repertoireSequences") {
+			for fr in REGIONS {
+				if featureOf(entry.spec) == fr { repertoireRegions[fr] = entry }
+			}
+		}
+	}
+
+	// CDR3 is required: clonotype-process echoes that column unconditionally on the bulk path.
 	isWholeSequence := axis1.name == "pl7.app/variantKey" &&
 		(!is_undefined(axis1Domain["pl7.app/peptide/extractionRunId"]) ||
-			!is_undefined(axis1Domain["pl7.app/repertoire/extractionRunId"]))
+			(isRepertoire && is_undefined(repertoireRegions["CDR3"])))
 
 	if isWholeSequence {
-		isAmplicon := !is_undefined(axis1Domain["pl7.app/repertoire/extractionRunId"])
-
 		seqCols := undefined
 		seqFeature := "peptide"
 		seqLabel := "Peptide aa"
-		if isAmplicon {
+		if isRepertoire {
 			seqCols = columnsWithSequences.getColumns("ampliconSequences")
 			seqFeature = "amplicon-sequence"
 			seqLabel = "Sequence aa"
@@ -156,7 +185,8 @@ wf.body(func(args) {
 		seqTableBuilder.cpu(1)
 		seqTable := seqTableBuilder.build()
 
-		liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
+		// Whole-sequence modes have no regions; region scope is not forwarded.
+		liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities, undefined)
 
 		liabilitiesResultCalc := render.create(peptideLiabilitiesTpl, {
 			table: seqTable,
@@ -196,6 +226,13 @@ wf.body(func(args) {
 	sequences := columnsWithSequences.getColumns("sequences")
 	annotations := columnsWithSequences.getColumns("annotations")
 	additionalSequences := columnsWithSequences.getColumns("additionalSequences")
+	// Region-scanned repertoire input: the whole variant stands in for the assembling feature.
+	if isRepertoire {
+		sequences = columnsWithSequences.getColumns("ampliconSequences")
+		for fr in REGIONS {
+			if !is_undefined(repertoireRegions[fr]) { additionalSequences = append(additionalSequences, repertoireRegions[fr]) }
+		}
+	}
 	// Determine if we're working with single cell data
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
 
@@ -212,6 +249,16 @@ wf.body(func(args) {
 	}
 
 	hasAnnotations := len(annotations) > 0
+
+	// features per chain. Bulk annotations have no chain, they are indexed by ""
+	annotationFeatures := {}
+	for ann_entry in annotations {
+		chain := ann_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
+		annFeature := ann_entry.spec.domain["pl7.app/vdj/feature"]
+		if !is_undefined(annFeature) && annFeature != "" {
+			annotationFeatures[is_undefined(chain) ? "" : chain] = annFeature
+		}
+	}
 
 	// Whether the chains are separated by the pl7.app/vdj/scClonotypeChain COLUMN domain rather
 	// than by the frame. Single-cell data is the long-standing case; import-vdj-data's bare
@@ -256,10 +303,36 @@ wf.body(func(args) {
 
 	// Track which features are actually present in the data
 	coveredFeatures := {}
+	coveredChainFeatures := {}
 
 	// Track which primary chains are actually present in single-cell input
 	primaryChainsSet := {}
 	isScFv := false
+
+	// Feeds the primary chains' per-region sequence columns into the analysis table, the way the
+	// bulk branch below does. Every single-cell input carries them, not just scFv.
+	addPrimaryRegionColumns := func() {
+		for additionalSeq in additionalSequences {
+			if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
+				for fr in REGIONS {
+					if featureOf(additionalSeq.spec) == fr {
+						chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
+						chainLabel := (chain == "A" ? "Heavy" : "Light")
+						if !coveredChainFeatures[chainLabel + " " + fr] {
+							coveredChainFeatures[chainLabel + " " + fr] = true
+							primaryChainsSet[chain] = true
+							seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: chainLabel + " " + fr + " aa"})
+							if coveredFeatures[fr] {
+								coveredFeatures[fr] += 1
+							} else {
+								coveredFeatures[fr] = 1
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 
 	if isSingleCell {
 		// Single-cell data handling
@@ -267,23 +340,6 @@ wf.body(func(args) {
 		for seq_entry in sequences {
 			if seq_entry.spec.name == "pl7.app/vdj/scFv-sequence" {
 				isScFv = true
-				for additionalSeq in additionalSequences {
-					if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
-						for fr in ["CDR1", "CDR2", "CDR3", "FR1"] {
-							if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr {
-								chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
-								primaryChainsSet[chain] = true
-								chainLabel := (chain == "A" ? "Heavy" : "Light")
-								seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: chainLabel + " " + fr + " aa"})
-								if coveredFeatures[fr] {
-									coveredFeatures[fr] += 1
-								} else {
-									coveredFeatures[fr] = 1
-								}
-							}
-						}
-					}
-				}
 			} else if seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
 				chain := seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
 				primaryChainsSet[chain] = true
@@ -291,6 +347,7 @@ wf.body(func(args) {
 				seqTableBuilder.add(columnsWithSequences.getColumn(seq_entry.key), {header: chainLabel + " " + " sequence aa"})
 			}
 		}
+		addPrimaryRegionColumns()
 		// Add primary chain annotations if they exist
 		if hasAnnotations {
 			for ann_entry in annotations {
@@ -304,12 +361,10 @@ wf.body(func(args) {
 			}
 		}
 	} else if hasChainColumns {
-		// Whether to label columns Heavy/Light at all. Only when BOTH chains are present:
-		// _combine_heavy_light_prefixed_columns in main.py merges the per-chain columns back
-		// into one per region by intersecting the Heavy and Light base names, so with a single
-		// chain nothing merges and the prefixed columns survive to the output — where
-		// clonotype-process asks for the unprefixed "CDR1 aa liabilities" and the run dies on a
-		// missing column. A single-chain set is shaped like a bulk one and is labelled like one.
+		// Whether to label columns Heavy/Light at all. Only when BOTH chains are present: a
+		// single-chain set is shaped like a bulk one and is labelled like one, so main.py's
+		// unprefixed Path B reads it directly and clonotype-process finds the unprefixed
+		// "CDR1 aa liabilities" it asks for.
 		//
 		// This is the same rule `cdr3SeqPrefixed` below already applies to the echoed sequence
 		// column; the headers simply have to agree with it.
@@ -348,12 +403,8 @@ wf.body(func(args) {
 			if is_undefined(chain) { continue }
 			if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] != "primary" { continue }
 			chainLabel := (chain == "A" ? "Heavy" : "Light")
-			// The same six regions the bulk branch sends. FR4 is deliberately not among them:
-			// the scoring script's TARGET_REGION_KEYS and EXPECTED_CYS_BASE both stop at FR3,
-			// set that way in one commit by one author, so FR4 reaching the TSV would be
-			// analysed by nothing.
-			for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"] {
-				if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr {
+			for fr in REGIONS {
+				if featureOf(additionalSeq.spec) == fr {
 					primaryChainsSet[chain] = true
 					seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: prefixChains ? chainLabel + " " + fr + " aa" : fr + " aa"})
 					if coveredFeatures[fr] {
@@ -380,8 +431,8 @@ wf.body(func(args) {
 		}
 		// Add FR/CDR sequences from additionalSequences (bulk, no annotations)
 		for additionalSeq in additionalSequences {
-			for fr in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"] {
-				if additionalSeq.spec.domain["pl7.app/vdj/feature"] == fr && !coveredFeatures[fr] {
+			for fr in REGIONS {
+				if featureOf(additionalSeq.spec) == fr && !coveredFeatures[fr] {
 					seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: fr + " aa"})
 					if coveredFeatures[fr] {
 						coveredFeatures[fr] += 1
@@ -408,7 +459,9 @@ wf.body(func(args) {
 	if primaryChainsSet["B"] {
 		primaryChains += ["B"]
 	}
-	cdr3SeqPrefixed := isScFv || len(primaryChains) > 1
+	// A fed CDR3 region column is always chain-prefixed; only the annotation-extracted one
+	// drops the prefix, and only when a single chain is present.
+	cdr3SeqPrefixed := isScFv || len(primaryChains) > 1 || (isSingleCell && !is_undefined(coveredFeatures["CDR3"]))
 	if perChain {
 		ll.assert(len(primaryChains) > 0, "chain-separated input has no primary-chain sequences")
 	}
@@ -417,7 +470,7 @@ wf.body(func(args) {
 	seqTableBuilder.cpu(1)
 	seqTable := seqTableBuilder.build()
 
-	liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities)
+	liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities, args.regions)
 
 	liabilitiesResultCalc := render.create(calculateLiabilitiesTpl, {
 		table: seqTable,
@@ -425,7 +478,8 @@ wf.body(func(args) {
 		numberingSchema: numberingSchema,
 		customLiabilities: liabCfg.customLiabilities,
 		usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
-		disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities
+		disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities,
+		regions: liabCfg.regions
 	}, {
 		metaInputs: { mem: args.mem }
 	})
@@ -450,7 +504,8 @@ wf.body(func(args) {
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations,
 			primaryChains: primaryChains,
-			cdr3SeqPrefixed: cdr3SeqPrefixed
+			cdr3SeqPrefixed: cdr3SeqPrefixed,
+			annotationFeatures: annotationFeatures
 		})
 	}, {
 		metaInputs: { mem: args.mem }

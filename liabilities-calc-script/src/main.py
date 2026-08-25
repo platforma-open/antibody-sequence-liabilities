@@ -30,15 +30,40 @@ from scoring import (
     compute_developability_score,
 )
 
+# Canonical region names. _column_region uses whole-word matching.
+CANONICAL_REGIONS = ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"]
 
-def _is_productive_expr(liab_cols: list[str], fixability_map: dict[str, str]) -> pl.Expr:
+
+def _column_region(col_name: str) -> str | None:
+    """Map a sequence/fragment column name to its canonical region, or None.
+
+    Region scope is chain-agnostic: "Heavy CDR3 aa" and "CDR3 aa" both return "CDR3".
+    """
+    for region in CANONICAL_REGIONS:
+        if re.search(r"\b" + re.escape(region) + r"\b", col_name, re.IGNORECASE):
+            return region
+    return None
+
+
+def _is_productive_expr(
+    liab_cols: list[str],
+    fixability_map: dict[str, str],
+    extra_seq_cols: list[str] | None = None,
+) -> pl.Expr:
     """Return a Polars expression that evaluates to 'Fail'/'Pass' for each row.
 
     'Fail' when any liability column contains the name of a disqualifying liability.
     Uses vectorised str.contains + any_horizontal instead of per-row map_elements.
+
+    `extra_seq_cols` are scanned for stop codons (*) and out-of-frame markers (_): productivity
+    is whole-molecule, so a stop codon in a region the user deselected must still fail the row.
     """
     disqualifying = {name for name, fix in fixability_map.items() if fix == "disqualifying"}
     conditions = [pl.col(c).str.contains(name, literal=True) for c in liab_cols for name in disqualifying]
+    for c in extra_seq_cols or []:
+        _col = pl.col(c).cast(pl.Utf8)
+        conditions.append(_col.str.contains(r"\*", literal=False).fill_null(False))
+        conditions.append(_col.str.contains(r"_", literal=False).fill_null(False))
     if not conditions:
         return pl.lit("Pass")
     return pl.when(pl.any_horizontal(conditions)).then(pl.lit("Fail")).otherwise(pl.lit("Pass"))
@@ -70,40 +95,30 @@ def _combine_heavy_light_prefixed_columns(
                     if base_name:
                         prefixed_cols_map[prefix_val][base_name] = col_name
                     break
-    common_bases = set()
-    if prefixed_cols_map[prefixes[0]]:
-        common_bases = set(prefixed_cols_map[prefixes[0]].keys())
-        for i in range(1, len(prefixes)):
-            if prefixed_cols_map[prefixes[i]]:
-                common_bases &= set(prefixed_cols_map[prefixes[i]].keys())
-            else:
-                common_bases = set()
-                break
-    else:
-        common_bases = set()
+    all_bases = set()
+    for prefix_val in prefixes:
+        all_bases |= set(prefixed_cols_map[prefix_val].keys())
+    # The chain label distinguishes two chains' values inside one cell, so it is only written when
+    # the frame actually holds more than one chain.
+    label_chains = len([prefix_val for prefix_val in prefixes if prefixed_cols_map[prefix_val]]) > 1
     cols_to_drop = []
-    for base_name in common_bases:
+    for base_name in sorted(all_bases):
         if not base_name:
             continue
         combined_col_name = f"{base_name} {suffix}"
         concat_expressions = []
-        all_chains_present_for_base = True
         temp_cols_to_drop_for_base = []
-        for i, prefix_val in enumerate(prefixes):
-            if base_name not in prefixed_cols_map[prefix_val]:
-                all_chains_present_for_base = False
-                break
-            col_to_include = prefixed_cols_map[prefix_val][base_name]
-            if i > 0:
+        for prefix_val in prefixes:
+            col_to_include = prefixed_cols_map[prefix_val].get(base_name)
+            if col_to_include is None or col_to_include not in current_df_columns:
+                continue
+            if concat_expressions:
                 concat_expressions.append(pl.lit(" | "))
-            concat_expressions.append(pl.lit(f"{prefix_val}: "))
-            if col_to_include in current_df_columns:
-                concat_expressions.append(pl.col(col_to_include).cast(pl.Utf8).fill_null("N/A"))
-                temp_cols_to_drop_for_base.append(col_to_include)
-            else:
-                all_chains_present_for_base = False
-                break
-        if all_chains_present_for_base and concat_expressions:
+            if label_chains:
+                concat_expressions.append(pl.lit(f"{prefix_val}: "))
+            concat_expressions.append(pl.col(col_to_include).cast(pl.Utf8).fill_null("N/A"))
+            temp_cols_to_drop_for_base.append(col_to_include)
+        if concat_expressions:
             if combined_col_name not in df.columns:
                 df = df.with_columns(pl.concat_str(concat_expressions).alias(combined_col_name))
                 cols_to_drop.extend(temp_cols_to_drop_for_base)
@@ -250,6 +265,15 @@ def main():
         "--output-regions-found", type=str, help="Path to output a JSON list of found regions (CDR1, CDR2, CDR3, FR1)."
     )
     p.add_argument(
+        "--regions",
+        type=str,
+        help=(
+            "Comma-delimited list of regions to scan (e.g. 'CDR3' or 'CDR1,CDR2,CDR3')."
+            " Restricts liability detection to these regions only; regions outside the list are"
+            " neither scanned nor reported. Omit to scan every region present in the input."
+        ),
+    )
+    p.add_argument(
         "--numbering-schema",
         type=str,
         help="Optional numbering schema name (e.g., imgt, kabat, chothia) to adjust conserved cysteine coordinates.",
@@ -273,6 +297,19 @@ def main():
     args = p.parse_args()
 
     use_predefined = str(args.use_predefined_liabilities).strip().lower() not in ("false", "0", "no")
+
+    # None = scan every region present. Unknown names warn rather than raise, so a stale name
+    # from an older block version degrades to "scan what I recognise" instead of failing the run.
+    REQUESTED_REGIONS: set[str] | None = None
+    if args.regions is not None:
+        requested_raw = {name.strip().upper() for name in args.regions.split(",") if name.strip()}
+        unknown = requested_raw - set(CANONICAL_REGIONS)
+        if unknown:
+            print(f"Warning: ignoring unknown region name(s) {sorted(unknown)}.", file=sys.stderr)
+        REQUESTED_REGIONS = requested_raw & set(CANONICAL_REGIONS)
+        if not REQUESTED_REGIONS:
+            print("Warning: --regions resolved to an empty set; scanning all regions.", file=sys.stderr)
+            REQUESTED_REGIONS = None
 
     # When --include-liabilities is absent, default to all predefined names.
     # The exclude-list (--disabled-predefined-liabilities) then trims specific entries.
@@ -374,9 +411,8 @@ def main():
     # Path B: no annotation columns (pre-fragmented user data — CDR/FR columns already present).
     has_input_ann_cols = bool(ann_cols)
     all_seq_cols = [c for c in df_processed.columns if c.lower().endswith("aa")]  # All potential sequence columns
-    TARGET_REGION_KEYS = ["cdr1 aa", "cdr2 aa", "cdr3 aa", "fr1 aa", "fr2 aa", "fr3 aa"]  # For Path B
+    TARGET_REGION_KEYS = ["cdr1 aa", "cdr2 aa", "cdr3 aa", "fr1 aa", "fr2 aa", "fr3 aa", "fr4 aa"]  # For Path B
     cols_for_liability_analysis = []
-    skip_extraction_due_to_preexisting_regions = False
 
     # Collect full-chain AA columns (e.g. "Heavy sequence aa") for stop codon / OOF detection.
     # MiXCR places * at CDR/FR region boundaries when a codon spans a V-D-J junction — checking
@@ -388,36 +424,15 @@ def main():
         if c.lower().endswith(" aa") and not any(k in c.lower() for k in _fragment_keys_lower)
     ]
 
-    if has_input_ann_cols:
-        unique_ann_prefixes = set()
-        for name in ann_cols:
-            prefix = name[: -len("annotations")].strip().rstrip("_")
-            unique_ann_prefixes.add(prefix)
-        if unique_ann_prefixes:
-            all_prefix_sets_found_preexisting = True
-            temp_cols_for_liability_if_skipping = []
-            for ann_prefix_raw in unique_ann_prefixes:
-                prefix_for_col_lookup = f"{ann_prefix_raw} " if ann_prefix_raw else ""
-                current_prefix_all_regions_found = True
-                for region_base in ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3"]:  # Check for FR1/2/3, CDR1/2/3
-                    expected_col_name = " ".join(f"{prefix_for_col_lookup}{region_base} aa".split())
-                    if expected_col_name not in df_processed.columns:
-                        current_prefix_all_regions_found = False
-                        print(f"Pre-existing check: '{expected_col_name}' not found for prefix '{ann_prefix_raw}'.")
-                        break
-                    temp_cols_for_liability_if_skipping.append(expected_col_name)
-                if not current_prefix_all_regions_found:
-                    all_prefix_sets_found_preexisting = False
-                    break
-            if all_prefix_sets_found_preexisting:
-                skip_extraction_due_to_preexisting_regions = True
-                cols_for_liability_analysis.extend(temp_cols_for_liability_if_skipping)
-                cols_for_liability_analysis = sorted(list(set(cols_for_liability_analysis)))
-                print(f"Pre-existing CDR/FR columns found. Skipping extraction. Using: {cols_for_liability_analysis}")
+    # Deferred so the region scope, final only once every input path has converged, can be
+    # applied to the exported annotation track too.
+    pending_annotation_updates: dict[str, list] = {}
 
-    if skip_extraction_due_to_preexisting_regions:
-        print(f"Proceeding with pre-existing columns: {cols_for_liability_analysis}")
-    elif has_input_ann_cols:  # Path A: Annotation-based extraction
+    # An annotation column always routes to Path A, even when every region already arrives as its
+    # own column. Path A is the only path that writes liability coordinates back into the
+    # annotation track, and `already_fed_regions` below keeps it from re-extracting what the input
+    # supplies — so short-circuiting it here bought nothing and silently emptied the track.
+    if has_input_ann_cols:  # Path A: Annotation-based extraction
         print(
             "Path A: Extracting regions and updating annotations"
             " (with FR1 specific logic if liabilities are calculated)."
@@ -451,17 +466,35 @@ def main():
                 continue
 
             seq_col_name = matched_seq_cols[0]
-            updated_annotations_for_col, fragment_rows_for_col = [], []
+            # Regions this chain already carries as their own column are matched by region, not by
+            # column name: the extracted copy drops the chain prefix on single-chain input while the
+            # input's column keeps it, so the two names differ and the name check below cannot see
+            # them. Both copies would then be scanned, and the extracted one would win the
+            # unprefixed output column the Tengo side declares.
+            fed_col_prefix = f"{current_prefix_raw} " if current_prefix_raw else ""
+            existing_cols_lower = {c.lower() for c in df_processed.columns}
+            already_fed_regions = {
+                region for region in CANONICAL_REGIONS if f"{fed_col_prefix}{region} aa".lower() in existing_cols_lower
+            }
+            if already_fed_regions:
+                print(
+                    f"Path A: {sorted(already_fed_regions)} already present as columns"
+                    f" for prefix '{current_prefix_raw}'; keeping those, not the extracted copies."
+                )
+            pending_ann_rows_for_col, fragment_rows_for_col = [], []
 
             for seq_data, ann_data in zip(df_processed[seq_col_name].to_list(), df_processed[ann_col_name].to_list()):
                 if seq_data is None or ann_data is None:
-                    updated_annotations_for_col.append(ann_data)
+                    pending_ann_rows_for_col.append((None, ann_data, {}))
                     fragment_rows_for_col.append({})
                     continue
 
                 parsed_segments = parse_annotations(ann_data)
                 extracted_frags, frag_coords = extract_cdrs_fr1(seq_data, parsed_segments, str_key_initial_region_map)
                 current_ann_parts = [p for p in (ann_data.split("|") if ann_data and ann_data.strip() else []) if p]
+                # region -> [(liability name, start, length)]. Codes are assigned at write-back,
+                # so an out-of-scope region leaves neither an annotation nor a legend entry.
+                region_hits: dict[str, list] = {}
 
                 if CALCULATE_LIABILITIES:
                     for region_name, fragment_seq in extracted_frags.items():
@@ -485,12 +518,8 @@ def main():
                                     cys_liability_name = "Extra Cysteines"
 
                                 if cys_liability_name and cys_liability_name in active_cys_defs:
-                                    if cys_liability_name not in liability_codes:
-                                        liability_codes[cys_liability_name] = str(next_code)
-                                        next_code += 1
-                                    code = liability_codes[cys_liability_name]
-                                    current_ann_parts.append(
-                                        f"{code}:{base36_encode(start_coord)}+{base36_encode(0)}"
+                                    region_hits.setdefault(region_name, []).append(
+                                        (cys_liability_name, start_coord, 0)
                                     )  # Length 0 for point annotation
                         if region_name != "FR1":  # For CDRs and other non-FR1 regions from extraction
                             for liability_name, pattern in active_liability_regex.items():
@@ -499,29 +528,31 @@ def main():
                                         start_coord + match.start(),
                                         match.end() - match.start(),
                                     )
-                                    if liability_name not in liability_codes:
-                                        liability_codes[liability_name] = str(next_code)
-                                        next_code += 1
-                                    code = liability_codes[liability_name]
-                                    current_ann_parts.append(
-                                        f"{code}:{base36_encode(global_start)}+{base36_encode(global_length)}"
+                                    region_hits.setdefault(region_name, []).append(
+                                        (liability_name, global_start, global_length)
                                     )
 
-                updated_annotations_for_col.append("|".join(sorted(list(set(current_ann_parts)))))
+                pending_ann_rows_for_col.append((current_ann_parts, ann_data, region_hits))
                 row_dict = {}
                 prefix_for_frag_col = (
                     f"{current_prefix_raw.capitalize()} " if current_prefix_raw and multiple_chains_present else ""
                 )
                 for r_name, r_seq in extracted_frags.items():
+                    if r_name in already_fed_regions:
+                        continue
                     row_dict[f"{prefix_for_frag_col}{r_name} aa"] = r_seq
                 fragment_rows_for_col.append(row_dict)
 
-            df_processed = df_processed.with_columns(pl.Series(name=ann_col_name, values=updated_annotations_for_col))
+            pending_annotation_updates[ann_col_name] = pending_ann_rows_for_col
             if fragment_rows_for_col:
                 schema_for_frag_df = None
                 first_valid_row = next((item for item in fragment_rows_for_col if item), None)
                 if first_valid_row:
-                    schema_for_frag_df = {col_name: pl.Utf8 for col_name in first_valid_row.keys()}
+                    # Backstop for the horizontal concat below, which aborts the run on a duplicate
+                    # name. The region check above is what normally keeps the input's own column.
+                    schema_for_frag_df = {
+                        col_name: pl.Utf8 for col_name in first_valid_row.keys() if col_name not in df_processed.columns
+                    }
                 if schema_for_frag_df:
                     filled_rows = [
                         {key: row.get(key) for key in schema_for_frag_df} for row in fragment_rows_for_col
@@ -562,7 +593,7 @@ def main():
             c
             for c in df_processed.columns
             if c.lower().endswith(" aa")
-            and any(k in c.lower() for k in ["cdr1", "cdr2", "cdr3", "fr1", "fr2", "fr3"])
+            and any(k in c.lower() for k in ["cdr1", "cdr2", "cdr3", "fr1", "fr2", "fr3", "fr4"])
             and not c.lower().endswith("sequence aa")
         ]
         cols_for_liability_analysis.extend(path_a_frag_cols)
@@ -581,12 +612,58 @@ def main():
         cols_for_liability_analysis.extend(candidate_seq_cols_for_path_b)
         cols_for_liability_analysis = sorted(list(set(cols_for_liability_analysis)))
 
+    # Filtered here, where all three input paths have converged, so every shape is scoped
+    # identically. full_input_sequence_cols is deliberately left unscoped (whole-chain).
+    scope_dropped_cols: list[str] = []
+    if REQUESTED_REGIONS is not None:
+        before_scope = list(cols_for_liability_analysis)
+        scoped = [c for c in cols_for_liability_analysis if _column_region(c) in REQUESTED_REGIONS]
+        if not scoped and before_scope:
+            # Restricted-to-nothing would exclude every analysis column, disabling liability
+            # calculation and emptying the required global columns — so widen, as an empty scope does.
+            print(
+                f"Warning: region scope {sorted(REQUESTED_REGIONS)} matches no column in this input"
+                f" (it offers {sorted({r for c in before_scope if (r := _column_region(c))})});"
+                " scanning all regions instead.",
+                file=sys.stderr,
+            )
+            REQUESTED_REGIONS = None
+        else:
+            cols_for_liability_analysis = scoped
+            scope_dropped_cols = [c for c in before_scope if c not in scoped]
+            print(
+                f"Region scope {sorted(REQUESTED_REGIONS)}: analyzing {cols_for_liability_analysis};"
+                f" excluded {scope_dropped_cols}"
+            )
+
+    # Runs once the scope is final — the fallback above may have widened it. Out-of-scope hits are
+    # dropped so the annotation track highlights the same regions the results table reports on.
+    for ann_col_name, pending_rows in pending_annotation_updates.items():
+        annotation_values = []
+        for base_parts, original_ann, region_hits in pending_rows:
+            if base_parts is None:  # Row skipped during extraction — keep the input untouched
+                annotation_values.append(original_ann)
+                continue
+            parts = list(base_parts)
+            for region_name, hits in region_hits.items():
+                if REQUESTED_REGIONS is not None and region_name not in REQUESTED_REGIONS:
+                    continue
+                for liability_name, start, length in hits:
+                    if liability_name not in liability_codes:
+                        liability_codes[liability_name] = str(next_code)
+                        next_code += 1
+                    parts.append(f"{liability_codes[liability_name]}:{base36_encode(start)}+{base36_encode(length)}")
+            annotation_values.append("|".join(sorted(set(parts))))
+        df_processed = df_processed.with_columns(pl.Series(name=ann_col_name, values=annotation_values))
+
     if not cols_for_liability_analysis and CALCULATE_LIABILITIES:
-        print(
-            "Warning: No columns identified for liability analysis, but liabilities were requested."
-            " Skipping liability calculation."
-        )
-        CALCULATE_LIABILITIES = False  # Force skip if no columns to act on
+        # Skipping here leaves every global column blank, which reads as a clean result.
+        if df_processed.width > 0:
+            sys.exit(
+                "Liabilities were requested but no column can be scanned. Expected a region column"
+                f" (e.g. 'CDR3 aa') or a CDRs annotation column, got: {df_processed.columns}"
+            )
+        CALCULATE_LIABILITIES = False
     elif not cols_for_liability_analysis and not CALCULATE_LIABILITIES:
         print("No columns identified for liability analysis (and no liabilities were requested).")
 
@@ -700,12 +777,21 @@ def main():
 
         # Global classification columns: replace the old "Liabilities risk" with four new columns
         liab_cols_for_global = [c for c in generated_liability_summary_col_names if c in df_processed.columns]
+
+        # Pre-fragmented input often lacks a whole-chain column, so scoping away a region would
+        # hide a real stop codon. MiXCR-origin reads stop/OOF whole-chain already — nothing to add.
+        productivity_extra_cols = (
+            [c for c in scope_dropped_cols if c in df_processed.columns] if not has_input_ann_cols else []
+        )
+        if productivity_extra_cols:
+            print(f"Is Productive additionally scans scope-excluded columns: {productivity_extra_cols}")
+
         if liab_cols_for_global:
             cfm = combined_fixability_map
             rlm = combined_risk_level_map
             df_processed = df_processed.with_columns(
                 [
-                    _is_productive_expr(liab_cols_for_global, cfm).alias("Is Productive"),
+                    _is_productive_expr(liab_cols_for_global, cfm, productivity_extra_cols).alias("Is Productive"),
                     _structural_risk_expr(liab_cols_for_global, cfm).alias("Structural liabilities"),
                     pl.struct(liab_cols_for_global)
                     .map_elements(
@@ -962,14 +1048,11 @@ def main():
 
     if args.output_regions_found:
         found_regions_set = set()
-        CANONICAL_REGIONS = ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"]  # Expanded
         if cols_for_liability_analysis:  # Based on what was analyzed
             for col_name in cols_for_liability_analysis:
-                for region_canonical_name in CANONICAL_REGIONS:
-                    # Use regex to match whole word region name to avoid FR1 matching in e.g. "MYFR10Sequence"
-                    if re.search(r"\b" + re.escape(region_canonical_name) + r"\b", col_name, re.IGNORECASE):
-                        found_regions_set.add(region_canonical_name)
-                        break  # Found one canonical region in this col_name
+                region_canonical_name = _column_region(col_name)
+                if region_canonical_name:
+                    found_regions_set.add(region_canonical_name)
             list_of_found_regions = sorted(list(found_regions_set), key=lambda x: REGION_ORDER_MAP.get(x, 99))
         else:
             list_of_found_regions = []
