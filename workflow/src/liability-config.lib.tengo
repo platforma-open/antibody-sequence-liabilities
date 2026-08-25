@@ -1,7 +1,7 @@
 ll := import("@platforma-sdk/workflow-tengo:ll")
 slices := import("@platforma-sdk/workflow-tengo:slices")
 
-normalize := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities) {
+normalize := func(customLiabilities, usePredefinedLiabilities, disabledPredefinedLiabilities, regions) {
 	usePredefined := is_undefined(usePredefinedLiabilities) ? true : usePredefinedLiabilities
 
 	custom := undefined
@@ -19,10 +19,18 @@ normalize := func(customLiabilities, usePredefinedLiabilities, disabledPredefine
 		disabled = slices.sortUnique(disabledPredefinedLiabilities)
 	}
 
+	// Sorted because array order is not canonicalized on the CID — an unsorted list would make
+	// identical scopes hash differently. Empty stays undefined: "no restriction" != "nothing".
+	regionScope := undefined
+	if regions && len(regions) > 0 {
+		regionScope = slices.sortUnique(regions)
+	}
+
 	return {
 		customLiabilities: custom,
 		usePredefinedLiabilities: usePredefined,
-		disabledPredefinedLiabilities: disabled
+		disabledPredefinedLiabilities: disabled,
+		regions: regionScope
 	}
 }
 

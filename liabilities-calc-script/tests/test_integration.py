@@ -20,6 +20,7 @@ import polars as pl
 import pytest
 
 import main as m
+from annotations import parse_annotations
 
 DATA = Path(__file__).parent / "data" / "sequences.tsv"
 DATA_ANNOTATED = Path(__file__).parent / "data" / "sequences_annotated.tsv"
@@ -638,3 +639,505 @@ def test_structural_supersedes_hard_to_fix_in_developability_risk(tmp_path):
     # hard_to_fix alone → Very High; structural wins → Non-Developable.
     assert r["Developability risk"] == "Non-Developable"
     assert r["Structural liabilities"] == "Present"
+
+
+# ---------------------------------------------------------------------------
+# --regions (region scope)
+# ---------------------------------------------------------------------------
+
+# Parental-contamination fixture. FR1 and CDR1 carry liabilities the user considers
+# known-good (they came in with the parent scaffold); CDR3 is the region actually being
+# engineered. Without scoping, both candidates score identically High and cannot be told
+# apart — the exact problem region scope exists to solve.
+PARENTAL_HEADER = "clonotypeKey\tCDR1 aa\tCDR2 aa\tCDR3 aa\tFR1 aa\n"
+PARENTAL_ROWS = (
+    "cand_clean_cdr3\tGYTFTNGY\tISPGRGIT\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\n"
+    "cand_dirty_cdr3\tGYTFTNGY\tISPGRGIT\tCARYNGF\tQVQLVQSGAEVKKPDPSVKVSCKAS\n"
+)
+
+
+def _parental_data(tmp_path: Path) -> Path:
+    p = tmp_path / "parental.tsv"
+    p.write_text(PARENTAL_HEADER + PARENTAL_ROWS)
+    return p
+
+
+def test_regions_absent_scans_every_region(tmp_path):
+    """No --regions flag = pre-feature behaviour: every region present is scanned."""
+    df = run_main(tmp_path, data_path=_parental_data(tmp_path))
+    assert "CDR1 aa liabilities" in df.columns
+    assert "FR1 aa liabilities" in df.columns
+    assert "CDR3 aa liabilities" in df.columns
+
+
+def test_regions_drops_unselected_region_columns(tmp_path):
+    """Deselected regions disappear from the output rather than being emitted empty.
+
+    This is what shrinks the per-region PColumn set the workflow emits: the Tengo side
+    builds its output columns from --output-regions-found, which is derived from the same
+    filtered column list.
+    """
+    df = run_main(tmp_path, ["--regions", "CDR3"], data_path=_parental_data(tmp_path))
+    assert "CDR3 aa liabilities" in df.columns
+    assert "CDR3 aa risk" in df.columns
+    for absent in ("CDR1 aa liabilities", "CDR2 aa liabilities", "FR1 aa liabilities"):
+        assert absent not in df.columns
+
+
+def test_regions_found_output_reflects_scope(tmp_path):
+    out_regions = tmp_path / "regions.json"
+    run_main(
+        tmp_path,
+        ["--regions", "CDR3", "--output-regions-found", str(out_regions)],
+        data_path=_parental_data(tmp_path),
+    )
+    assert json.loads(out_regions.read_text()) == ["CDR3"]
+
+
+def test_regions_excludes_parental_liabilities_from_score(tmp_path):
+    """The point of the feature: scoping to CDR3 separates candidates that were tied.
+
+    Unscoped, both rows are High because of the shared FR1/CDR1 parental liabilities.
+    Scoped to CDR3, the candidate with a clean CDR3 drops to None and the one with a
+    real CDR3 liability stays High.
+    """
+    data = _parental_data(tmp_path)
+    unscoped_dir = tmp_path / "a"
+    unscoped_dir.mkdir()
+    scoped_dir = tmp_path / "b"
+    scoped_dir.mkdir()
+
+    unscoped = run_main(unscoped_dir, data_path=data)
+    assert row(unscoped, "cand_clean_cdr3")["Developability risk"] == "High"
+    assert row(unscoped, "cand_dirty_cdr3")["Developability risk"] == "High"
+
+    scoped = run_main(scoped_dir, ["--regions", "CDR3"], data_path=data)
+    clean = row(scoped, "cand_clean_cdr3")
+    dirty = row(scoped, "cand_dirty_cdr3")
+    assert clean["Developability risk"] == "None"
+    assert clean["Developability cost"] == pytest.approx(0.0)
+    assert dirty["Developability risk"] == "High"
+    # CDR3 weight 1.5 x fixable weight 3.0
+    assert dirty["Developability cost"] == pytest.approx(4.5)
+
+
+def test_regions_multi_select(tmp_path):
+    df = run_main(tmp_path, ["--regions", "CDR1,CDR3"], data_path=_parental_data(tmp_path))
+    assert "CDR1 aa liabilities" in df.columns
+    assert "CDR3 aa liabilities" in df.columns
+    assert "FR1 aa liabilities" not in df.columns
+
+
+def test_regions_is_case_and_whitespace_insensitive(tmp_path):
+    df = run_main(tmp_path, ["--regions", " cdr3 , Cdr1 "], data_path=_parental_data(tmp_path))
+    assert "CDR3 aa liabilities" in df.columns
+    assert "CDR1 aa liabilities" in df.columns
+    assert "FR1 aa liabilities" not in df.columns
+
+
+def test_regions_unknown_name_is_ignored_not_fatal(tmp_path):
+    """A stale region name degrades to 'scan what I recognise', never a failed run."""
+    df = run_main(tmp_path, ["--regions", "CDR3,NOTAREGION"], data_path=_parental_data(tmp_path))
+    assert "CDR3 aa liabilities" in df.columns
+    assert "FR1 aa liabilities" not in df.columns
+
+
+def test_regions_empty_value_falls_back_to_all(tmp_path):
+    """Empty scope must mean 'no restriction', not 'restricted to nothing'."""
+    df = run_main(tmp_path, ["--regions", ""], data_path=_parental_data(tmp_path))
+    assert "CDR1 aa liabilities" in df.columns
+    assert "FR1 aa liabilities" in df.columns
+
+
+def test_regions_all_absent_from_input_falls_back_to_all(tmp_path):
+    """FR2 is canonical, so it survives the unknown-name filter — but no FR2 column exists here.
+
+    Reachable by keeping a selection while switching to a dataset that lacks those regions.
+    """
+    df = run_main(tmp_path, ["--regions", "FR2"], data_path=_parental_data(tmp_path))
+    assert row(df, "cand_clean_cdr3")["Is Productive"] == "Pass"
+    assert row(df, "cand_dirty_cdr3")["Developability risk"] == "High"
+    for present in ("CDR1 aa liabilities", "CDR2 aa liabilities", "CDR3 aa liabilities", "FR1 aa liabilities"):
+        assert present in df.columns
+
+
+def test_regions_all_absent_reports_every_found_region(tmp_path):
+    """The fallback must be visible to the Tengo side, which builds columns from this list."""
+    out_regions = tmp_path / "regions.json"
+    run_main(
+        tmp_path,
+        ["--regions", "FR2", "--output-regions-found", str(out_regions)],
+        data_path=_parental_data(tmp_path),
+    )
+    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "CDR2", "CDR3"]
+
+
+def test_regions_partially_absent_still_narrows(tmp_path):
+    """One satisfiable region keeps the restriction — the fallback is only for a fully dead scope."""
+    df = run_main(tmp_path, ["--regions", "CDR3,FR2"], data_path=_parental_data(tmp_path))
+    assert "CDR3 aa liabilities" in df.columns
+    for absent in ("CDR1 aa liabilities", "CDR2 aa liabilities", "FR1 aa liabilities"):
+        assert absent not in df.columns
+
+
+# Path A fixture for the exported annotation track: one liability in CDR1 and a different one in
+# CDR3, so scope has something to exclude and something to keep. Offsets match DATA_ANNOTATED.
+ANN_SCOPE_SEQ = (
+    "QVQLVQSGAEVKKPGASVKVSCKAS"  # FR1 (synthesized, 0+25)
+    "GYTFDGY"  # CDR1 (25+7) — DG at 29
+    "WVRQAPGK"  # not extracted (no segment)
+    "ISPGRGIT"  # CDR2 (40+8) — clean
+    "ARNTSKPT"  # not extracted (no segment)
+    "CARYNGF"  # CDR3 (56+7) — NG at 60
+)
+ANN_SCOPE_KEY = "ann_two_regions"
+CDR1_HIT = ("Isomerization (D[DGHST])", 29)
+CDR3_HIT = ("Deamidation (N[GS])", 60)
+
+
+def _annotated_scope_data(tmp_path: Path) -> Path:
+    p = tmp_path / "annotated_scope.tsv"
+    p.write_text(
+        "clonotypeKey\tsequence aa\tannotations\n" + f"{ANN_SCOPE_KEY}\t{ANN_SCOPE_SEQ}\t1:P+7|2:14+8|3:1K+7\n"
+    )
+    return p
+
+
+def _annotation_liability_hits(tmp_path: Path, extra_args: list[str]) -> tuple[list[tuple[str, int]], dict]:
+    """Run Path A and decode the exported annotation into (liability name, start) pairs.
+
+    Region segments (codes from the input label map) are filtered out; the rest is what the
+    sequence viewer highlights.
+    """
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    out_map = tmp_path / "out_map.json"
+    df = run_main(
+        tmp_path,
+        ["-m", str(label_map_file), "-o", str(out_map), *extra_args],
+        data_path=_annotated_scope_data(tmp_path),
+    )
+    final_map = json.loads(out_map.read_text())
+    hits = [
+        (final_map.get(lab), start)
+        for lab, start, _length in parse_annotations(row(df, ANN_SCOPE_KEY)["annotations"])
+        if lab not in LABEL_MAP
+    ]
+    return sorted(hits, key=lambda h: h[1]), final_map
+
+
+def test_annotation_track_unscoped_carries_every_region(tmp_path):
+    """Baseline: with no scope both regions' liabilities are highlighted."""
+    hits, _ = _annotation_liability_hits(tmp_path, [])
+    assert hits == [CDR1_HIT, CDR3_HIT]
+
+
+def test_regions_scopes_exported_annotation_track(tmp_path):
+    """Scoping away the parental scaffold must not leave its liabilities painted on the sequence,
+    here or in any downstream block consuming the annotation.
+    """
+    hits, final_map = _annotation_liability_hits(tmp_path, ["--regions", "CDR3"])
+    assert hits == [CDR3_HIT]
+    # A liability whose only occurrence was scoped away leaves no legend entry either.
+    assert CDR1_HIT[0] not in final_map.values()
+
+
+def test_regions_annotation_track_follows_scope_fallback(tmp_path):
+    """An unsatisfiable scope widens to 'scan everything' — the annotation track widens with it,
+    which is why the write-back happens after the scope decision rather than during extraction.
+    """
+    hits, _ = _annotation_liability_hits(tmp_path, ["--regions", "FR2"])
+    assert hits == [CDR1_HIT, CDR3_HIT]
+
+
+def test_regions_does_not_affect_is_productive(tmp_path):
+    """Is Productive reads the whole-chain column, so region scope must not change it.
+
+    clone_stop carries a stop codon outside CDR3; scoping to CDR3 must still fail it.
+    """
+    scoped = run_main(tmp_path, ["--regions", "CDR3"])
+    assert row(scoped, "clone_stop")["Is Productive"] == "Fail"
+    assert row(scoped, "clone_out_of_frame")["Is Productive"] == "Fail"
+    assert row(scoped, "clone_clean")["Is Productive"] == "Pass"
+
+
+# ---------------------------------------------------------------------------
+# FR4
+# ---------------------------------------------------------------------------
+
+FR4_HEADER = "clonotypeKey\tCDR1 aa\tCDR2 aa\tCDR3 aa\tFR1 aa\tFR4 aa\n"
+FR4_ROWS = (
+    "fr4_germline\tGYTFAGY\tISPGRGIT\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\tWGQGTMVTVSS\n"
+    "fr4_extra_cys\tGYTFAGY\tISPGRGIT\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\tWGQGTCVTVSS\n"
+)
+
+
+def _fr4_data(tmp_path: Path) -> Path:
+    p = tmp_path / "fr4.tsv"
+    p.write_text(FR4_HEADER + FR4_ROWS)
+    return p
+
+
+def test_fr4_gets_cysteine_rules_only(tmp_path):
+    """Germline FR4 carries a Trp and a Met: motif rules are CDR-only, as for FR1-FR3.
+    A cysteine is reported, as it already is for FR2/FR3, and reaches the global columns.
+    """
+    df = run_main(tmp_path, data_path=_fr4_data(tmp_path))
+    clean = row(df, "fr4_germline")
+    dirty = row(df, "fr4_extra_cys")
+    assert clean["FR4 aa liabilities"] == "None"
+    assert clean["Developability risk"] == "None"
+    assert dirty["FR4 aa liabilities"] == "Extra Cysteines"
+    assert dirty["FR4 aa risk"] == "High"
+    assert dirty["Developability risk"] == "Very High"
+    # FR4 weight 0.3 x hard_to_fix weight 8.0
+    assert dirty["Developability cost"] == pytest.approx(2.4)
+
+
+def test_fr4_scope_is_honoured_not_widened(tmp_path):
+    """A dataset offering FR4 must accept FR4 as a scope instead of falling back to all regions."""
+    out_regions = tmp_path / "regions.json"
+    df = run_main(
+        tmp_path,
+        ["--regions", "FR4", "--output-regions-found", str(out_regions)],
+        data_path=_fr4_data(tmp_path),
+    )
+    assert json.loads(out_regions.read_text()) == ["FR4"]
+    assert "FR4 aa liabilities" in df.columns
+    for absent in ("CDR1 aa liabilities", "CDR2 aa liabilities", "CDR3 aa liabilities", "FR1 aa liabilities"):
+        assert absent not in df.columns
+
+
+# The pre-existing-regions check is an all-must-be-present gate, not a filter. FR4 has no
+# extraction fallback (the CDRs annotation maps only CDR1-3, from which FR1 is derived), so
+# gating on it sends annotated inputs lacking FR4 down the extraction path, where the extracted
+# fragments collide with the input's own columns of the same name.
+
+
+def test_annotated_input_without_fr4_uses_preexisting_columns(tmp_path):
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    header = "clonotypeKey\tsequence aa\tannotations\tCDR1 aa\tCDR2 aa\tCDR3 aa\tFR1 aa\tFR2 aa\tFR3 aa\n"
+    seq = "QVQLVQSGAEVKKPDPSVKVSCKASGYTFAGYWVRQAPGKISPGRGITARNTSKPTLYLQCARYALD"
+    data = tmp_path / "annotated_bulk.tsv"
+    data.write_text(
+        header
+        + "\t".join(
+            [
+                "k1",
+                seq,
+                "1:P+7|2:14+8|3:1O+7",
+                "GYTFAGY",
+                "ISPGRGIT",
+                "CARYALD",
+                "QVQLVQSGAEVKKPDPSVKVSCKAS",
+                "WVRQAPGK",
+                "ARNTSKPTLYLQ",
+            ]
+        )
+        + "\n"
+    )
+    df = run_main(tmp_path, ["-m", str(label_map_file)], data_path=data)
+    assert "CDR3 aa liabilities" in df.columns
+    assert row(df, "k1")["Is Productive"] == "Pass"
+
+
+# ---------------------------------------------------------------------------
+# Chain-asymmetric regions
+# ---------------------------------------------------------------------------
+
+
+def test_single_chain_values_carry_no_chain_label(tmp_path):
+    """One chain in the input means the chain label carries no information, and a labelled value
+    would not match the discreteValues the risk PColumns declare.
+    """
+    data = tmp_path / "single_chain.tsv"
+    data.write_text(
+        "clonotypeKey\tHeavy CDR3 aa\tHeavy FR1 aa\tHeavy FR4 aa\n"
+        "one\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\tWGQGTCVTVSS\n"
+    )
+    r = row(run_main(tmp_path, data_path=data), "one")
+    assert r["CDR3 aa liabilities"] == "None"
+    assert r["CDR3 aa risk"] == "None"
+    assert r["FR4 aa liabilities"] == "Extra Cysteines"
+    assert r["FR4 aa risk"] == "High"
+
+
+def test_region_on_one_chain_still_emits_combined_column(tmp_path):
+    """The Tengo side declares "<region> aa liabilities" for every region in --output-regions-found,
+    never chain-prefixed, so a one-sided region must still produce that name.
+    """
+    out_regions = tmp_path / "regions.json"
+    data = tmp_path / "asym.tsv"
+    data.write_text(
+        "clonotypeKey\tHeavy CDR3 aa\tHeavy FR1 aa\tHeavy FR4 aa\tLight CDR3 aa\tLight FR1 aa\n"
+        "asym\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\tWGQGTCVTVSS\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\n"
+    )
+    df = run_main(tmp_path, ["--output-regions-found", str(out_regions)], data_path=data)
+    assert row(df, "asym")["FR4 aa liabilities"] == "Heavy: Extra Cysteines"
+    assert "Heavy FR4 aa liabilities" not in df.columns
+    for region in json.loads(out_regions.read_text()):
+        assert f"{region} aa liabilities" in df.columns
+        assert f"{region} aa risk" in df.columns
+
+
+# ---------------------------------------------------------------------------
+# Single-cell region columns
+# ---------------------------------------------------------------------------
+
+SC_CHAIN_SEQ = "QVQLVQSGAEVKKPDPSVKVSCKASGYTFAGYWVRQAPGKISPGRGITARNTSKPTLYLQCARYALD"
+SC_ANN = "1:P+7|2:14+8|3:1O+7"
+SC_REGIONS = {
+    "CDR1 aa": "GYTFAGY",
+    "CDR2 aa": "ISPGRGIT",
+    "CDR3 aa": "CARYALD",
+    "FR1 aa": "QVQLVQSGAEVKKPDPSVKVSCKAS",
+    "FR2 aa": "WVRQAPGK",
+    "FR3 aa": "ARNTSKPTLYLQ",
+    "FR4 aa": "WGQGTMVTVSS",
+}
+
+
+def _sc_table(tmp_path: Path, regions: dict, name: str = "sc_regions.tsv") -> Path:
+    """Mirrors the single-cell table the workflow builds: per-chain whole sequence, CDRs
+    annotation, and the per-chain region columns.
+    """
+    header, values = ["clonotypeKey"], ["k1"]
+    for chain in ("Heavy", "Light"):
+        header += [f"{chain}  sequence aa", f"{chain} annotations"]
+        values += [SC_CHAIN_SEQ, SC_ANN]
+        header += [f"{chain} {region}" for region in regions]
+        values += list(regions.values())
+    p = tmp_path / name
+    p.write_text("\t".join(header) + "\n" + "\t".join(values) + "\n")
+    return p
+
+
+def test_sc_region_columns_cover_every_region(tmp_path):
+    """Single-cell input carries all seven regions as columns, as bulk does, so all seven are
+    scanned instead of only the four the CDRs annotation can yield.
+    """
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    out_regions = tmp_path / "regions.json"
+    df = run_main(
+        tmp_path,
+        ["-m", str(label_map_file), "--output-regions-found", str(out_regions)],
+        data_path=_sc_table(tmp_path, SC_REGIONS),
+    )
+    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "FR2", "CDR2", "FR3", "CDR3", "FR4"]
+    for region in ("FR1", "CDR1", "FR2", "CDR2", "FR3", "CDR3", "FR4"):
+        assert f"{region} aa liabilities" in df.columns
+        assert f"{region} aa risk" in df.columns
+    # cdr3SeqPrefixed: a fed CDR3 column keeps its chain prefix, and the Tengo side declares it so.
+    assert "Heavy CDR3 aa" in df.columns
+    assert "Light CDR3 aa" in df.columns
+
+
+def test_sc_partial_region_columns_do_not_collide_with_extraction(tmp_path):
+    """Regions the input lacks are still extracted from the annotation. The extracted copy of a
+    region the input does carry must not be added twice — the horizontal concat rejects it.
+    """
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    out_regions = tmp_path / "regions.json"
+    partial = {"CDR3 aa": "CARYALD", "FR4 aa": "WGQGTCVTVSS"}
+    df = run_main(
+        tmp_path,
+        ["-m", str(label_map_file), "--output-regions-found", str(out_regions)],
+        data_path=_sc_table(tmp_path, partial, name="sc_partial.tsv"),
+    )
+    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "CDR2", "CDR3", "FR4"]
+    assert row(df, "k1")["FR4 aa liabilities"] == "Heavy: Extra Cysteines | Light: Extra Cysteines"
+    assert row(df, "k1")["CDR1 aa liabilities"] == "Heavy: None | Light: None"
+
+
+def test_sc_single_chain_fed_region_is_not_extracted_again(tmp_path):
+    """On single-chain input the extracted copy is unprefixed while the input's own column is not,
+    so a name check cannot pair them. The region must still be scanned once, from the input's
+    column, under the unprefixed name the Tengo side declares.
+    """
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    out_regions = tmp_path / "regions.json"
+    data = tmp_path / "sc_one_chain.tsv"
+    data.write_text(
+        "clonotypeKey\tHeavy  sequence aa\tHeavy annotations\tHeavy CDR3 aa\tHeavy FR4 aa\n"
+        f"k1\t{SC_CHAIN_SEQ}\t{SC_ANN}\tCARYALD\tWGQGTCVTVSS\n"
+    )
+    df = run_main(
+        tmp_path,
+        ["-m", str(label_map_file), "--output-regions-found", str(out_regions)],
+        data_path=data,
+    )
+    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "CDR2", "CDR3", "FR4"]
+    # One CDR3 scan, from the fed column, and no second unprefixed copy of it.
+    assert "Heavy CDR3 aa liabilities" not in df.columns
+    assert "CDR3 aa" not in df.columns
+    assert "Heavy CDR3 aa" in df.columns
+    r = row(df, "k1")
+    assert r["CDR3 aa liabilities"] == "None"
+    assert r["FR4 aa liabilities"] == "Extra Cysteines"
+    # The regions the input does not carry are still extracted from the annotation.
+    assert r["CDR1 aa liabilities"] == "None"
+
+
+def test_unscannable_input_fails_instead_of_reporting_clean(tmp_path):
+    """A table whose only sequence column is neither a region nor a CDRs annotation cannot be
+    scanned, and blank global columns would read as a clean result.
+    """
+    data = tmp_path / "whole_chain_only.tsv"
+    data.write_text("clonotypeKey\tHeavy  sequence aa\nk1\tQVQLVQSGAEVKKPGASVKVSCKASCARMGDFWGQGT\n")
+    with pytest.raises(SystemExit):
+        run_main(tmp_path, data_path=data)
+
+
+# Same shape as SC_REGIONS but with a CDR3 that actually carries a liability, so the annotation
+# has something to record. SC_ANN offsets are unchanged — CDR3 is still 7 aa at 60.
+SC_CHAIN_SEQ_HIT = SC_CHAIN_SEQ[:60] + "CARYNGF"
+SC_REGIONS_HIT = {**SC_REGIONS, "CDR3 aa": "CARYNGF"}
+
+
+def _sc_table_hit(tmp_path: Path) -> Path:
+    header, values = ["clonotypeKey"], ["k1"]
+    for chain in ("Heavy", "Light"):
+        header += [f"{chain}  sequence aa", f"{chain} annotations"]
+        values += [SC_CHAIN_SEQ_HIT, SC_ANN]
+        header += [f"{chain} {region}" for region in SC_REGIONS_HIT]
+        values += list(SC_REGIONS_HIT.values())
+    p = tmp_path / "sc_regions_hit.tsv"
+    p.write_text("\t".join(header) + "\n" + "\t".join(values) + "\n")
+    return p
+
+
+def test_sc_fed_region_columns_still_annotate_liabilities(tmp_path):
+    """Feeding every region as its own column must not switch off the annotation write-back.
+
+    The fed columns are what the results table scans, but the annotation track is the only record
+    of *where* each liability sits, and only the extraction path writes it. Short-circuiting that
+    path when the input already supplies every region left the track carrying region markers only,
+    silently: the table stayed correct while the sequence viewer lost every highlight.
+    """
+    label_map_file = tmp_path / "label_map.json"
+    label_map_file.write_text(json.dumps(LABEL_MAP))
+    out_map = tmp_path / "out_map.json"
+    df = run_main(
+        tmp_path,
+        ["-m", str(label_map_file), "-o", str(out_map)],
+        data_path=_sc_table_hit(tmp_path),
+    )
+    r = row(df, "k1")
+
+    hits = [
+        (lab, start)
+        for lab, start, _length in parse_annotations(r["Heavy annotations"])
+        if lab not in LABEL_MAP
+    ]
+    assert hits, f"annotation carries no liability entries: {r['Heavy annotations']}"
+
+    final_map = json.loads(out_map.read_text())
+    assert "Deamidation (N[GS])" in final_map.values()
+
+    # The fed columns are still what gets scanned, and extraction adds no duplicate of them.
+    assert "Deamidation (N[GS])" in r["CDR3 aa liabilities"]
+    assert len(set(df.columns)) == len(df.columns)

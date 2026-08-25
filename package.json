@@ -2,6 +2,7 @@
   "scripts": {
     "build": "turbo run build",
     "build:dev": "env PL_PKG_DEV=local turbo run build",
+    "build:dev-remote": "env PL_PKG_DEV=local PL_DOCKER_BUILD=1 PL_DOCKER_AUTOPUSH=1 turbo run build",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
     "test": "env PL_PKG_DEV=local turbo run test --concurrency 1 --env-mode=loose",
