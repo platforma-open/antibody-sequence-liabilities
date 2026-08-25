@@ -1,5 +1,95 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 5.2.0
+
+### Minor Changes
+
+- 2f8b97f: Scan FR4 on datasets that provide it
+
+  Both region loops filling the analysis table stopped at FR3, so a dataset's FR4 sequence column
+  never reached the scan. FR4 is now fed in for bulk and scFv data, and its Liabilities and Risk
+  columns appear.
+
+  FR4 gets the cysteine rules only, as FR2 and FR3 already do; motifs stay CDR-only.
+
+  Selecting FR4 in "Regions to scan" is now honoured instead of silently scanning every region.
+
+  A region present on one chain only now still produces its combined column, carrying just that
+  chain's value, rather than staying chain-prefixed and failing the pframe import. FR4 is the
+  likeliest region to be one-sided. The `Heavy:` / `Light:` label inside a value is written only
+  when the input holds both chains, so single-chain data keeps the bare `None` / `High` values its
+  Risk columns are declared to hold.
+
+  Results change for datasets carrying FR4.
+
+- adb3cb8: Add a "Regions to scan" selector that restricts liability detection to chosen regions
+
+  Candidates whose parental scaffold carries known-good liabilities were all scoring High on
+  Developability risk, leaving no way to rank them by the region actually being engineered.
+  Selecting regions (e.g. CDR3, or the CDRs) now scans only those: their per-region columns are
+  the only ones emitted, and Developability risk and cost are computed from them alone.
+
+  The scope reaches the exported sequence annotation too: liabilities found in regions left out
+  are no longer highlighted in the sequence viewer or passed to downstream blocks, so the
+  highlighted positions always match what the results table reports.
+
+  Leaving the selector empty scans every region, which is the previous behaviour — existing
+  projects are unaffected and their cached results still match.
+
+  A selection left in place while switching to a dataset that has none of those regions also
+  falls back to scanning everything, rather than being honoured as "restricted to nothing" —
+  that would exclude every analysis column, disabling liability calculation and leaving
+  Is Productive, Structural liabilities and Developability risk/cost empty. The UI warns when
+  the selection cannot be applied. A selection that is only partly present still narrows the
+  scan to the regions that are there.
+
+  Is Productive remains whole-molecule: stop-codon and out-of-frame detection still covers
+  regions left out of the scope.
+
+  Regions are now ordered biologically (FR1, CDR1, FR2, CDR2, FR3, CDR3, FR4), changing the
+  per-region table column order and the segment order inside `Sequence liabilities summary`.
+
+  The results table moved from createPlDataTableV2 to V3 to ensure stale sorts are dropped.
+
+- 7bf8c3a: Scan repertoire input per region when it carries located regions
+
+  A synthetic-repertoire-profiler dataset was always scanned as one whole sequence, even when the
+  run located FR1-FR4/CDR1-3, because the modality was read from the producer's run-id stamp rather
+  than from what the dataset actually offers. Such input now takes the antibody path: the region
+  selector appears, the antibody rule set is offered, and a region scope is honoured. Runs whose
+  region set has no CDR3 — and runs with no regions at all — are unchanged.
+
+- e8a4a52: Scan every region single-cell data provides
+
+  Only scFv input had its per-region sequence columns fed into the analysis table. Other
+  single-cell data was fed the whole chain plus the CDRs annotation, so the scan was limited to the
+  four regions that annotation yields: FR2, FR3 and FR4 appeared in "Regions to scan" but widened
+  the scope to everything instead of being applied. Every single-cell input is now fed its region
+  columns, the way bulk data already was.
+
+  A region the input carries as its own column is no longer extracted from the annotation a second
+  time. On multi-chain input the duplicate column aborted the run whenever a dataset offered some
+  regions but not all of them; on single-chain input the two copies were named differently, so both
+  were scanned and the extracted copy was the one reported.
+
+  Results change for single-cell datasets. FR2, FR3 and FR4 liability and risk columns appear, and
+  the other regions are read from the dataset's own columns instead of being re-derived from
+  annotation offsets. As with full-coverage bulk data, the exported annotation track then carries
+  the CDR boundaries only, without liability marks.
+
+### Patch Changes
+
+- Updated dependencies [2f8b97f]
+- Updated dependencies [258ffde]
+- Updated dependencies [adb3cb8]
+- Updated dependencies [76f2c1a]
+- Updated dependencies [7bf8c3a]
+- Updated dependencies [e8a4a52]
+- Updated dependencies [9a8dd3f]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.workflow@6.2.0
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@6.1.0
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.ui@6.1.0
+
 ## 5.1.0
 
 ### Minor Changes
