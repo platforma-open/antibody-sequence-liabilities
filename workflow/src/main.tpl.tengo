@@ -130,9 +130,12 @@ wf.body(func(args) {
 	// flat (whole-sequence) liability scanner. They differ only in the axis-domain
 	// stamp, which sequence-feature column to read, and how the echoed sequence
 	// column is labeled downstream.
-	// Three producers key on pl7.app/variantKey and only the run-id in the axis domain says
-	// which:
+	// Three producers key on pl7.app/variantKey. The profiler declares its kind outright; for the
+	// other two, and for profiler runs made before the declaration landed, the run-id in the axis
+	// domain is the only thing that says which:
 	//
+	//   pl7.app/modality: amplicon           synthetic-repertoire-profiler   -> whole sequence
+	//   pl7.app/modality: vdj                synthetic-repertoire-profiler   -> VDJ
 	//   pl7.app/peptide/extractionRunId      peptide-extraction              -> whole sequence
 	//   pl7.app/repertoire/extractionRunId   synthetic-repertoire-profiler   -> VDJ when regions exist
 	//   pl7.app/vdj/clonotypingRunId         import-vdj-data, bare antibody  -> VDJ
@@ -145,6 +148,13 @@ wf.body(func(args) {
 	axis1Domain := is_undefined(axis1.domain) ? {} : axis1.domain
 	isRepertoire := !is_undefined(axis1Domain["pl7.app/repertoire/extractionRunId"])
 
+	// The profiler runs one pipeline over both antibody/TCR parents and designed libraries, and
+	// everything it emits sits on the modality-neutral variantKey axis. So it declares which kind
+	// of repertoire it made instead of leaving consumers to guess. "vdj" is the data layer's word
+	// for what this block calls antibody; "amplicon" is the general case. The key is absent on
+	// projects made before the declaration landed, and on the other two producers on this axis.
+	declaredModality := axis1Domain["pl7.app/modality"]
+
 	repertoireRegions := {}
 	if isRepertoire {
 		for entry in columnsWithSequences.getColumns("repertoireSequences") {
@@ -154,10 +164,28 @@ wf.body(func(args) {
 		}
 	}
 
-	// CDR3 is required: clonotype-process echoes that column unconditionally on the bulk path.
+	// Whether a repertoire input is scanned whole rather than per region. The declaration decides
+	// it when present; without one, fall back to asking whether the input carries the CDR3 region
+	// column a region scan needs anyway.
+	repertoireIsWholeSeq := false
+	if isRepertoire {
+		if declaredModality == "amplicon" {
+			repertoireIsWholeSeq = true
+		} else if declaredModality == "vdj" {
+			// A VDJ run always partitions FR1-FR4, so a missing CDR3 column is a producer-side
+			// gap, not something the scientist chose. Say so instead of quietly scanning whole
+			// sequences: clonotype-process declares a "CDR3 aa" output column unconditionally on
+			// the bulk path, so the region branch cannot run without one either.
+			ll.assert(!is_undefined(repertoireRegions["CDR3"]),
+				"Input declares pl7.app/modality: vdj but carries no CDR3 aa region column. Expected pl7.app/sequence with domain.pl7.app/feature: CDR3 and pl7.app/alphabet: aminoacid on the variant axis.")
+		} else {
+			// CDR3 is required: clonotype-process echoes that column unconditionally on the bulk path.
+			repertoireIsWholeSeq = is_undefined(repertoireRegions["CDR3"])
+		}
+	}
+
 	isWholeSequence := axis1.name == "pl7.app/variantKey" &&
-		(!is_undefined(axis1Domain["pl7.app/peptide/extractionRunId"]) ||
-			(isRepertoire && is_undefined(repertoireRegions["CDR3"])))
+		(!is_undefined(axis1Domain["pl7.app/peptide/extractionRunId"]) || repertoireIsWholeSeq)
 
 	if isWholeSequence {
 		seqCols := undefined

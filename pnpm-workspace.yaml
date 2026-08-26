@@ -2,21 +2,22 @@ packages:
   - workflow
   - model
   - ui
+  - kind
   - liabilities-calc-script
   - block
 
 catalog:
   # SDK packages - EXACT VERSIONS (no ^ or ~)
-  '@milaboratories/ts-builder': 1.6.2
+  '@milaboratories/ts-builder': 1.7.1
   '@milaboratories/ts-configs': 1.4.0
-  '@platforma-sdk/workflow-tengo': 6.8.2
-  '@platforma-sdk/model': 1.81.1
-  '@platforma-sdk/ui-vue': 1.81.1
-  '@platforma-sdk/tengo-builder': 4.0.22
+  '@platforma-sdk/workflow-tengo': 6.8.3
+  '@platforma-sdk/model': 1.83.0
+  '@platforma-sdk/ui-vue': 1.83.1
+  '@platforma-sdk/tengo-builder': 4.0.23
   '@platforma-sdk/package-builder': 3.15.0
   '@platforma-sdk/block-tools': 2.14.3
   '@platforma-sdk/eslint-config': 1.2.0
-  '@platforma-sdk/test': 1.81.3
+  '@platforma-sdk/test': 1.83.2
   '@milaboratories/helpers': 1.14.5
   '@milaboratories/strings': 0.1.2
 
@@ -32,3 +33,4 @@ catalog:
   'shx': ^0.4.0
   'eslint': ^9.25.1
   '@changesets/cli': ^2.29.8
+  "@platforma-sdk/block-kind": 1.1.0
