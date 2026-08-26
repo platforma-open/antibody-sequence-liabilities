@@ -1,11 +1,11 @@
-import { assertParamsObject, defineBlockKind } from '@platforma-sdk/block-kind';
-import { name, version } from '../package.json' with { type: 'json' };
+import { assertParamsObject, defineBlockKind } from "@platforma-sdk/block-kind";
+import { name, version } from "../package.json" with { type: "json" };
 
 /** How likely a liability is to be a real problem. */
-export type RiskLevel = 'Low' | 'Medium' | 'High';
+export type RiskLevel = "Low" | "Medium" | "High";
 
 /** How much work it takes to engineer a liability out. */
-export type Fixability = 'easily_fixable' | 'fixable' | 'hard_to_fix';
+export type Fixability = "easily_fixable" | "fixable" | "hard_to_fix";
 
 /**
  * A user-defined liability rule: a regex over the amino-acid sequence, plus how
@@ -57,8 +57,8 @@ export type BlockParams = {
   regions?: string[];
 };
 
-const RISK_LEVELS: readonly RiskLevel[] = ['Low', 'Medium', 'High'];
-const FIXABILITIES: readonly Fixability[] = ['easily_fixable', 'fixable', 'hard_to_fix'];
+const RISK_LEVELS: readonly RiskLevel[] = ["Low", "Medium", "High"];
+const FIXABILITIES: readonly Fixability[] = ["easily_fixable", "fixable", "hard_to_fix"];
 
 /**
  * The same contract at runtime, for params that arrive from a template file
@@ -80,30 +80,23 @@ const FIXABILITIES: readonly Fixability[] = ['easily_fixable', 'fixable', 'hard_
 function parseInitializationParams(value: unknown): BlockParams {
   assertParamsObject(value);
 
-  const {
-    usePredefinedLiabilities,
-    disabledPredefinedLiabilities,
-    customLiabilities,
-    regions,
-  } = value;
+  const { usePredefinedLiabilities, disabledPredefinedLiabilities, customLiabilities, regions } =
+    value;
 
   return {
-    usePredefinedLiabilities: optionalBoolean(
-      usePredefinedLiabilities,
-      'usePredefinedLiabilities',
-    ),
+    usePredefinedLiabilities: optionalBoolean(usePredefinedLiabilities, "usePredefinedLiabilities"),
     disabledPredefinedLiabilities: optionalStringList(
       disabledPredefinedLiabilities,
-      'disabledPredefinedLiabilities',
+      "disabledPredefinedLiabilities",
     ),
     customLiabilities: optionalCustomLiabilities(customLiabilities),
-    regions: optionalStringList(regions, 'regions'),
+    regions: optionalStringList(regions, "regions"),
   };
 }
 
 function optionalBoolean(value: unknown, field: string): boolean | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== 'boolean') throw new Error(`'${field}' must be true or false.`);
+  if (typeof value !== "boolean") throw new Error(`'${field}' must be true or false.`);
   return value;
 }
 
@@ -111,7 +104,7 @@ function optionalStringList(value: unknown, field: string): string[] | undefined
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) throw new Error(`'${field}' must be a list.`);
   return value.map((entry, i) => {
-    if (typeof entry !== 'string') throw new Error(`'${field}[${i}]' must be a string.`);
+    if (typeof entry !== "string") throw new Error(`'${field}[${i}]' must be a string.`);
     return entry;
   });
 }
@@ -122,14 +115,14 @@ function optionalEnum<T extends string>(
   field: string,
 ): T | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== 'string' || !(allowed as readonly string[]).includes(value))
-    throw new Error(`'${field}' must be one of ${allowed.join(', ')}.`);
+  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value))
+    throw new Error(`'${field}' must be one of ${allowed.join(", ")}.`);
   return value as T;
 }
 
 function optionalCustomLiabilities(value: unknown): CustomLiability[] | undefined {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value)) throw new Error('\'customLiabilities\' must be a list.');
+  if (!Array.isArray(value)) throw new Error("'customLiabilities' must be a list.");
   return value.map((entry, i) => parseCustomLiability(entry, `customLiabilities[${i}]`));
 }
 
@@ -137,7 +130,7 @@ function optionalCustomLiabilities(value: unknown): CustomLiability[] | undefine
  *  object, but names the field it was reading — the message goes to whoever wrote
  *  the file, and "params must be an object" would point at the wrong line. */
 function assertObjectAt(value: unknown, at: string): asserts value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value))
+  if (typeof value !== "object" || value === null || Array.isArray(value))
     throw new Error(`'${at}' must be an object.`);
 }
 
@@ -149,9 +142,9 @@ function parseCustomLiability(value: unknown, at: string): CustomLiability {
   // Empty strings pass: the settings panel adds a rule with a blank name and a
   // blank pattern, and that half-filled row is ordinary state. The model's args
   // lambda is what refuses to run on it.
-  if (typeof ruleName !== 'string')
+  if (typeof ruleName !== "string")
     throw new Error(`'${at}.name' is required, and must be a string.`);
-  if (typeof pattern !== 'string')
+  if (typeof pattern !== "string")
     throw new Error(`'${at}.pattern' is required, and must be a string.`);
 
   const parsedRisk = optionalEnum(riskLevel, RISK_LEVELS, `${at}.riskLevel`);
