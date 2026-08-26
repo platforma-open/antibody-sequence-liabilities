@@ -1,21 +1,42 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities",
   "version": "5.2.0",
-  "scripts": {
-    "build": "shx rm -rf ./block-pack && block-tools pack",
-    "do-pack": "shx rm -f *.tgz && pnpm pack && shx mv *.tgz package.tgz",
-    "mark-stable": "block-tools mark-stable -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
-    "prepublishOnly": "block-tools publish -r s3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1 --registry-serve-url https://blocks.pl-open.science"
-  },
   "files": [
-    "index.d.ts",
-    "index.js"
+    "dist",
+    "block-pack"
   ],
-  "dependencies": {
-    "@platforma-open/milaboratories.antibody-sequence-liabilities.workflow": "workspace:*",
-    "@platforma-open/milaboratories.antibody-sequence-liabilities.model": "workspace:*",
-    "@platforma-open/milaboratories.antibody-sequence-liabilities.ui": "workspace:*"
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "sources": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
+  "scripts": {
+    "build": "ts-builder build --target block-facade && block-tools pack",
+    "do-pack": "shx rm -f package.tgz && pnpm pack && shx mv *.tgz package.tgz",
+    "mark-stable": "block-tools mark-stable -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
+    "prepublishOnly": "block-tools publish -r s3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1 --registry-serve-url https://blocks.pl-open.science",
+    "check": "ts-builder type-check --target block-facade"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@milaboratories/ts-builder": "catalog:",
+    "@milaboratories/ts-configs": "catalog:",
+    "@platforma-open/milaboratories.antibody-sequence-liabilities.kind": "workspace:*",
+    "@platforma-open/milaboratories.antibody-sequence-liabilities.model": "workspace:*",
+    "@platforma-open/milaboratories.antibody-sequence-liabilities.ui": "workspace:*",
+    "@platforma-open/milaboratories.antibody-sequence-liabilities.workflow": "workspace:*",
+    "@platforma-sdk/block-tools": "catalog:",
+    "@platforma-sdk/model": "catalog:",
+    "shx": "catalog:",
+    "typescript": "catalog:"
+  },
+  "packageManager": "pnpm@9.12.0",
   "block": {
     "components": {
       "workflow": "@platforma-open/milaboratories.antibody-sequence-liabilities.workflow/dist/tengo/tpl/main.plj.gz",
@@ -44,10 +65,5 @@
       },
       "marketplaceRanking": 15000
     }
-  },
-  "devDependencies": {
-    "@platforma-open/milaboratories.antibody-sequence-liabilities.kind": "workspace:*",
-    "@platforma-sdk/block-tools": "catalog:"
-  },
-  "packageManager": "pnpm@9.12.0"
+  }
 }

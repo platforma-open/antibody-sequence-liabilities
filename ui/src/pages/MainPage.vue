@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import strings from '@milaboratories/strings';
-import type { CustomLiability } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
-import { liabilityTypes, predefinedLiabilityNames } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
-import type { PlRef } from '@platforma-sdk/model';
+import strings from "@milaboratories/strings";
+import type { CustomLiability } from "@platforma-open/milaboratories.antibody-sequence-liabilities.model";
+import {
+  liabilityTypes,
+  predefinedLiabilityNames,
+} from "@platforma-open/milaboratories.antibody-sequence-liabilities.model";
+import type { PlRef } from "@platforma-sdk/model";
 import {
   PlAccordionSection,
   PlAgDataTableV2,
@@ -23,9 +26,9 @@ import {
   PlTooltip,
   ReactiveFileContent,
   usePlDataTableSettingsV2,
-} from '@platforma-sdk/ui-vue';
-import { computed, ref, watch } from 'vue';
-import { useApp } from '../app';
+} from "@platforma-sdk/ui-vue";
+import { computed, ref, watch } from "vue";
+import { useApp } from "../app";
 
 const app = useApp();
 
@@ -58,13 +61,11 @@ const resourceSectionOpen = ref(false);
 // Whole-sequence modes scan the full sequence with no region/chain concept:
 // peptide (peptide-extraction) and amplicon (synthetic-repertoire-profiler).
 // Both hide the region selector and share the peptide rule set.
-const isWholeSeq = computed(() =>
-  app.model.outputs.modality === 'peptide' || app.model.outputs.modality === 'amplicon',
+const isWholeSeq = computed(
+  () => app.model.outputs.modality === "peptide" || app.model.outputs.modality === "amplicon",
 );
 
-const isAntibody = computed(() =>
-  app.model.outputs.modality === 'antibody',
-);
+const isAntibody = computed(() => app.model.outputs.modality === "antibody");
 
 // ── Region scope ──────────────────────────────────────────────────────────────
 
@@ -75,7 +76,9 @@ const regionScopeOptions = computed(() =>
 
 const selectedRegions = computed({
   get: () => app.model.data.regions ?? [],
-  set: (value) => { app.model.data.regions = value.length > 0 ? value : undefined; },
+  set: (value) => {
+    app.model.data.regions = value.length > 0 ? value : undefined;
+  },
 });
 
 // PlDropdownMulti hides values absent from `:options`, so these narrow the scan invisibly.
@@ -94,8 +97,9 @@ function dropStaleRegions(): void {
 
 // main.py widens an unsatisfiable scope to "scan everything" rather than "scan nothing", so
 // this case needs the opposite warning to a partly-stale one.
-const allSelectedRegionsStale = computed(() =>
-  selectedRegions.value.length > 0 && staleRegions.value.length === selectedRegions.value.length,
+const allSelectedRegionsStale = computed(
+  () =>
+    selectedRegions.value.length > 0 && staleRegions.value.length === selectedRegions.value.length,
 );
 
 // Predefined liability list filtered by modality (per applicableTo). Defaults
@@ -106,8 +110,8 @@ const predefinedItems = computed(() =>
     .filter((lt) => {
       const modality = app.model.outputs.modality;
       if (!modality) return true;
-      const effective = modality === 'amplicon' ? 'peptide' : modality;
-      return lt.applicableTo.includes(effective as 'antibody' | 'peptide');
+      const effective = modality === "amplicon" ? "peptide" : modality;
+      return lt.applicableTo.includes(effective as "antibody" | "peptide");
     })
     .map((lt) => ({ ...lt })),
 );
@@ -127,39 +131,41 @@ function toggleLiability(item: (typeof liabilityTypes)[number]): void {
 }
 
 const fixabilityLabel: Record<string, string> = {
-  easily_fixable: 'Easy fix',
-  fixable: 'Fixable',
-  hard_to_fix: 'Hard to fix',
-  structural: 'Structural',
+  easily_fixable: "Easy fix",
+  fixable: "Fixable",
+  hard_to_fix: "Hard to fix",
+  structural: "Structural",
 };
 
 // ── Custom liabilities ────────────────────────────────────────────────────────
 
 const regionOptions = [
-  { value: 'CDR1', label: 'CDR1' },
-  { value: 'CDR2', label: 'CDR2' },
-  { value: 'CDR3', label: 'CDR3' },
-  { value: 'FR1', label: 'FR1' },
-  { value: 'FR2', label: 'FR2' },
-  { value: 'FR3', label: 'FR3' },
-  { value: 'FR4', label: 'FR4' },
+  { value: "CDR1", label: "CDR1" },
+  { value: "CDR2", label: "CDR2" },
+  { value: "CDR3", label: "CDR3" },
+  { value: "FR1", label: "FR1" },
+  { value: "FR2", label: "FR2" },
+  { value: "FR3", label: "FR3" },
+  { value: "FR4", label: "FR4" },
 ];
 
 const riskLevelOptions = [
-  { value: 'Low', label: 'Low' },
-  { value: 'Medium', label: 'Medium' },
-  { value: 'High', label: 'High' },
+  { value: "Low", label: "Low" },
+  { value: "Medium", label: "Medium" },
+  { value: "High", label: "High" },
 ];
 
 const fixabilityOptions = [
-  { value: 'easily_fixable', label: 'Easy fix' },
-  { value: 'fixable', label: 'Fixable' },
-  { value: 'hard_to_fix', label: 'Hard to fix' },
+  { value: "easily_fixable", label: "Easy fix" },
+  { value: "fixable", label: "Fixable" },
+  { value: "hard_to_fix", label: "Hard to fix" },
 ];
 
 const customItems = computed({
   get: () => app.model.data.customLiabilities ?? [],
-  set: (value) => { app.model.data.customLiabilities = value; },
+  set: (value) => {
+    app.model.data.customLiabilities = value;
+  },
 });
 
 const expandedIndices = ref<Set<number>>(new Set());
@@ -167,12 +173,12 @@ const expandedIndices = ref<Set<number>>(new Set());
 function addCustomLiability(): void {
   const current = app.model.data.customLiabilities ?? [];
   const newItem: CustomLiability = {
-    name: '',
-    pattern: '',
-    riskLevel: 'Medium',
-    fixability: 'fixable',
+    name: "",
+    pattern: "",
+    riskLevel: "Medium",
+    fixability: "fixable",
     // Whole-sequence mode (peptide / amplicon): rule applies to the whole sequence
-    regions: isWholeSeq.value ? [] : ['CDR1', 'CDR2', 'CDR3'],
+    regions: isWholeSeq.value ? [] : ["CDR1", "CDR2", "CDR3"],
   };
   expandedIndices.value = new Set([...expandedIndices.value, current.length]);
   app.model.data.customLiabilities = [...current, newItem];
@@ -221,8 +227,8 @@ function isDuplicateName(index: number): boolean {
 }
 
 function customNameError(index: number): string | undefined {
-  if (isPredefinedName(index)) return 'Name collides with a predefined liability';
-  if (isDuplicateName(index)) return 'Name must be unique';
+  if (isPredefinedName(index)) return "Name collides with a predefined liability";
+  if (isDuplicateName(index)) return "Name must be unique";
   return undefined;
 }
 
@@ -230,11 +236,11 @@ function customNameError(index: number): string | undefined {
 
 function exportCustomLiabilities(): void {
   const data = JSON.stringify(app.model.data.customLiabilities ?? [], null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
+  const blob = new Blob([data], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
-  a.download = 'custom-liabilities.json';
+  a.download = "custom-liabilities.json";
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -257,61 +263,58 @@ const importedFileData = computed(() => {
   return reactiveFileContent.getContentJson(handle.handle).value;
 });
 
-watch(
-  [importedFileBytes, importedFileData] as const,
-  ([bytes, data]) => {
-    if (bytes === undefined) return;
-    if (app.model.data.importFileHandle === undefined) return;
+watch([importedFileBytes, importedFileData] as const, ([bytes, data]) => {
+  if (bytes === undefined) return;
+  if (app.model.data.importFileHandle === undefined) return;
 
-    importError.value = undefined;
+  importError.value = undefined;
 
-    if (data === undefined) {
-      importError.value = 'Failed to read file — ensure it is valid JSON';
-      app.model.data.importFileHandle = undefined;
-      return;
-    }
-    if (!Array.isArray(data)) {
-      importError.value = 'Invalid format: expected a JSON array';
-      app.model.data.importFileHandle = undefined;
-      return;
-    }
-    const names = (data as CustomLiability[]).map((item) => item.name);
-    if (names.length !== new Set(names).size) {
-      importError.value = 'Duplicate names in imported liabilities';
-      app.model.data.importFileHandle = undefined;
-      return;
-    }
-    const predefinedCollision = names.find((n) => predefinedLiabilityNames.has(n));
-    if (predefinedCollision) {
-      importError.value = `"${predefinedCollision}" collides with a predefined liability name`;
-      app.model.data.importFileHandle = undefined;
-      return;
-    }
-    for (const item of data as CustomLiability[]) {
-      if (!item.name || !item.pattern) {
-        importError.value = 'Each liability must have a name and pattern';
-        app.model.data.importFileHandle = undefined;
-        return;
-      }
-      try {
-        new RegExp(item.pattern);
-      } catch {
-        importError.value = `Invalid regex: "${item.pattern}"`;
-        app.model.data.importFileHandle = undefined;
-        return;
-      }
-      // Regions check applies only in antibody mode (whole-sequence modes ignore regions).
-      const regions = item.regions ?? [];
-      if (!isWholeSeq.value && regions.length === 0) {
-        importError.value = `"${item.name}" must have at least one region`;
-        app.model.data.importFileHandle = undefined;
-        return;
-      }
-    }
-    app.model.data.customLiabilities = data as CustomLiability[];
+  if (data === undefined) {
+    importError.value = "Failed to read file — ensure it is valid JSON";
     app.model.data.importFileHandle = undefined;
-  },
-);
+    return;
+  }
+  if (!Array.isArray(data)) {
+    importError.value = "Invalid format: expected a JSON array";
+    app.model.data.importFileHandle = undefined;
+    return;
+  }
+  const names = (data as CustomLiability[]).map((item) => item.name);
+  if (names.length !== new Set(names).size) {
+    importError.value = "Duplicate names in imported liabilities";
+    app.model.data.importFileHandle = undefined;
+    return;
+  }
+  const predefinedCollision = names.find((n) => predefinedLiabilityNames.has(n));
+  if (predefinedCollision) {
+    importError.value = `"${predefinedCollision}" collides with a predefined liability name`;
+    app.model.data.importFileHandle = undefined;
+    return;
+  }
+  for (const item of data as CustomLiability[]) {
+    if (!item.name || !item.pattern) {
+      importError.value = "Each liability must have a name and pattern";
+      app.model.data.importFileHandle = undefined;
+      return;
+    }
+    try {
+      new RegExp(item.pattern);
+    } catch {
+      importError.value = `Invalid regex: "${item.pattern}"`;
+      app.model.data.importFileHandle = undefined;
+      return;
+    }
+    // Regions check applies only in antibody mode (whole-sequence modes ignore regions).
+    const regions = item.regions ?? [];
+    if (!isWholeSeq.value && regions.length === 0) {
+      importError.value = `"${item.name}" must have at least one region`;
+      app.model.data.importFileHandle = undefined;
+      return;
+    }
+  }
+  app.model.data.customLiabilities = data as CustomLiability[];
+  app.model.data.importFileHandle = undefined;
+});
 </script>
 
 <template>
@@ -354,22 +357,21 @@ watch(
         label="Regions to scan"
       >
         <template #tooltip>
-          Restrict liability detection to these regions. Leave empty to scan every region in
-          the dataset. Use this when liabilities carried in the parental sequence are already
-          accepted and should not contaminate the scores. Regions left out are neither
-          scanned nor reported.
+          Restrict liability detection to these regions. Leave empty to scan every region in the
+          dataset. Use this when liabilities carried in the parental sequence are already accepted
+          and should not contaminate the scores. Regions left out are neither scanned nor reported.
         </template>
       </PlDropdownMulti>
 
       <PlAlert v-if="staleRegions.length > 0" type="warn">
         <template v-if="allSelectedRegionsStale">
-          None of the selected regions ({{ staleRegions.join(', ') }}) are present in this
-          dataset, so the scope cannot be applied and every region will be scanned.
+          None of the selected regions ({{ staleRegions.join(", ") }}) are present in this dataset,
+          so the scope cannot be applied and every region will be scanned.
         </template>
         <template v-else>
-          {{ staleRegions.join(', ') }}
-          {{ staleRegions.length === 1 ? 'is' : 'are' }} selected but not present in this dataset,
-          so {{ staleRegions.length === 1 ? 'it is' : 'they are' }} silently narrowing the scan.
+          {{ staleRegions.join(", ") }}
+          {{ staleRegions.length === 1 ? "is" : "are" }} selected but not present in this dataset,
+          so {{ staleRegions.length === 1 ? "it is" : "they are" }} silently narrowing the scan.
         </template>
         <PlBtnGhost @click="dropStaleRegions">Remove them</PlBtnGhost>
       </PlAlert>
@@ -383,7 +385,8 @@ watch(
         Use predefined liabilities
       </PlCheckbox>
       <template #tooltip>
-        Curated library of patterns covering deamidation, oxidation, fragmentation, glycosylation, and structural issues. Disable to exclude all built-in checks from scoring.
+        Curated library of patterns covering deamidation, oxidation, fragmentation, glycosylation,
+        and structural issues. Disable to exclude all built-in checks from scoring.
       </template>
     </PlTooltip>
 
@@ -404,11 +407,14 @@ watch(
               @update:model-value="() => toggleLiability(item)"
             >
               {{ item.label }}
-              <span :style="{ fontSize: '11px', opacity: 0.6, marginLeft: '6px' }">{{ fixabilityLabel[item.fixability] }}</span>
+              <span :style="{ fontSize: '11px', opacity: 0.6, marginLeft: '6px' }">{{
+                fixabilityLabel[item.fixability]
+              }}</span>
             </PlCheckbox>
             <template #tooltip>
-              Off by default. RGD/RYD/KGD/NGR/LDV/DGE/GPR motifs trigger off-target cell adhesion via integrin receptors.
-              Enable for in vivo therapeutic candidates where off-target binding is a safety concern.
+              Off by default. RGD/RYD/KGD/NGR/LDV/DGE/GPR motifs trigger off-target cell adhesion
+              via integrin receptors. Enable for in vivo therapeutic candidates where off-target
+              binding is a safety concern.
               <br /><br />
               For peptides intentionally targeting integrins, keep this rule disabled.
             </template>
@@ -419,7 +425,9 @@ watch(
             @update:model-value="() => toggleLiability(item)"
           >
             {{ item.label }}
-            <span :style="{ fontSize: '11px', opacity: 0.6, marginLeft: '6px' }">{{ fixabilityLabel[item.fixability] }}</span>
+            <span :style="{ fontSize: '11px', opacity: 0.6, marginLeft: '6px' }">{{
+              fixabilityLabel[item.fixability]
+            }}</span>
           </PlCheckbox>
         </template>
       </div>
@@ -427,10 +435,11 @@ watch(
 
     <!-- Warn when no liabilities are active — shown outside the collapsible so always visible -->
     <PlAlert
-      v-if="(
-        !app.model.data.usePredefinedLiabilities ||
-        predefinedItems.every((item) => !isLiabilityEnabled(item))
-      ) && (app.model.data.customLiabilities?.length ?? 0) === 0"
+      v-if="
+        (!app.model.data.usePredefinedLiabilities ||
+          predefinedItems.every((item) => !isLiabilityEnabled(item))) &&
+        (app.model.data.customLiabilities?.length ?? 0) === 0
+      "
       type="warn"
     >
       No liabilities active — all sequences will pass without scoring.
@@ -448,7 +457,7 @@ watch(
         :disable-dragging="true"
       >
         <template #item-title="{ item }">
-          {{ item.name || 'New custom liability' }}
+          {{ item.name || "New custom liability" }}
         </template>
         <template #item-content="{ index }">
           <PlTextField
@@ -461,13 +470,17 @@ watch(
             v-model="customItems[index].pattern"
             label="Pattern (regex)"
             placeholder="e.g. N[GS]"
-            :error="customItems[index].pattern && !isPatternValid(customItems[index].pattern) ? 'Invalid regular expression' : undefined"
+            :error="
+              customItems[index].pattern && !isPatternValid(customItems[index].pattern)
+                ? 'Invalid regular expression'
+                : undefined
+            "
           >
             <template #tooltip>
               <div>
-                <code>W</code> — single character literal<br>
-                <code>[GS]</code> — character class (G or S)<br>
-                <code>[^P]</code> — negated class (not P)<br>
+                <code>W</code> — single character literal<br />
+                <code>[GS]</code> — character class (G or S)<br />
+                <code>[^P]</code> — negated class (not P)<br />
                 <code>DP</code> — exact dipeptide
               </div>
             </template>
@@ -485,8 +498,10 @@ watch(
             />
             <template #tooltip>
               <div>
-                <b>Easy fix:</b> One conservative substitution, minimal binding impact (e.g. Met oxidation, Trp oxidation)<br>
-                <b>Fixable:</b> 1–2 mutations, moderate affinity risk (e.g. Deamidation N[GS], Fragmentation DP)<br>
+                <b>Easy fix:</b> One conservative substitution, minimal binding impact (e.g. Met
+                oxidation, Trp oxidation)<br />
+                <b>Fixable:</b> 1–2 mutations, moderate affinity risk (e.g. Deamidation N[GS],
+                Fragmentation DP)<br />
                 <b>Hard to fix:</b> Significant reengineering required (e.g. Extra Cysteines)
               </div>
             </template>
@@ -496,7 +511,11 @@ watch(
             v-model="customItems[index].regions"
             label="Regions"
             :options="regionOptions"
-            :error="(customItems[index].regions?.length ?? 0) === 0 ? 'At least one region must be selected' : undefined"
+            :error="
+              (customItems[index].regions?.length ?? 0) === 0
+                ? 'At least one region must be selected'
+                : undefined
+            "
           />
         </template>
       </PlElementList>
@@ -517,7 +536,11 @@ watch(
         />
         <template #tooltip>
           Importing replaces your current custom liabilities. See
-          <a href="https://docs.platforma.bio/guides/antibody-discovery/sequence-liabilities/" target="_blank">documentation</a>
+          <a
+            href="https://docs.platforma.bio/guides/antibody-discovery/sequence-liabilities/"
+            target="_blank"
+            >documentation</a
+          >
           for the expected JSON format.
         </template>
       </PlTooltip>
@@ -532,7 +555,8 @@ watch(
         :maxValue="1012"
       >
         <template #tooltip>
-          Sets the amount of memory available for the liabilities calculation. Increase for large datasets (&gt;10M sequences).
+          Sets the amount of memory available for the liabilities calculation. Increase for large
+          datasets (&gt;10M sequences).
         </template>
       </PlNumberField>
     </PlAccordionSection>
