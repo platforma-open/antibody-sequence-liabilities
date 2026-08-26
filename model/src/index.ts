@@ -4,6 +4,7 @@ import type {
   PlRef,
   ResultPool,
 } from '@platforma-sdk/model';
+import type { CustomLiability } from '@platforma-open/milaboratories.antibody-sequence-liabilities.kind';
 import {
   BlockModelV3,
   DataColumn,
@@ -11,18 +12,19 @@ import {
   createPlDataTableStateV2,
   createPlDataTableV3,
 } from '@platforma-sdk/model';
+import { kind } from '@platforma-open/milaboratories.antibody-sequence-liabilities.kind';
 import { getDefaultBlockLabel } from './label';
 export type * from '@milaboratories/helpers';
 
-export type Modality = 'antibody' | 'peptide' | 'amplicon';
+// The custom-liability shape is part of the kind's init-params contract, so the
+// kind declares it. Re-exported here because the UI reads it from the model.
+export type {
+  CustomLiability,
+  Fixability,
+  RiskLevel,
+} from '@platforma-open/milaboratories.antibody-sequence-liabilities.kind';
 
-export type CustomLiability = {
-  name: string;
-  pattern: string;
-  riskLevel: 'Low' | 'Medium' | 'High';
-  fixability: 'easily_fixable' | 'fixable' | 'hard_to_fix';
-  regions: string[];
-};
+export type Modality = 'antibody' | 'peptide' | 'amplicon';
 
 type OldArgs = {
   defaultBlockLabel: string;
@@ -88,6 +90,26 @@ const defaultDisabled = liabilityTypes.filter((l) => !l.enabledByDefault).map((l
 const allLiabilityTypeValues = liabilityTypes.map((l) => l.value);
 const predefinedLiabilityNames = new Set(allLiabilityTypeValues);
 
+/** Entity-axis domain key by which a producer declares which kind of repertoire it made. */
+const MODALITY_DOMAIN_KEY = 'pl7.app/modality';
+
+/** The declared modality, translated into this block's vocabulary. Undefined when the producer
+ *  declares nothing, which sends the caller to its heuristics.
+ *
+ *  The data layer's word for the antibody/TCR case is `vdj`; this block calls it `antibody`.
+ *  The two names mean the same thing, so the translation is written out deliberately rather
+ *  than left to a string match that would break the day either side is renamed. */
+function declaredModality(domain: Record<string, string>): Modality | undefined {
+  switch (domain[MODALITY_DOMAIN_KEY]) {
+    case 'vdj':
+      return 'antibody';
+    case 'amplicon':
+      return 'amplicon';
+    default:
+      return undefined;
+  }
+}
+
 // Anchored on the input's entity axis, so a probe cannot match a sibling dataset in the project.
 function regionsOf(pool: ResultPool, ref: PlRef, name: string, featureKey: string): string[] {
   const cols = pool.getAnchoredPColumns({ main: ref }, [{
@@ -105,27 +127,43 @@ function regionsOf(pool: ResultPool, ref: PlRef, name: string, featureKey: strin
   return out;
 }
 
-const dataModel = new DataModelBuilder()
+const dataModel = new DataModelBuilder({ kind })
   .from<BlockData>('v1')
   .upgradeLegacy<OldArgs, OldUiState>(({ args, uiState }) => ({
     ...args,
     tableState: uiState.tableState,
   }))
-  .init(() => ({
-    defaultBlockLabel: getDefaultBlockLabel({
-      usePredefinedLiabilities: true,
-      disabledPredefinedLiabilities: defaultDisabled,
-      allLiabilityTypes: allLiabilityTypeValues,
-      customLiabilities: [],
-    }),
-    customBlockLabel: '',
-    usePredefinedLiabilities: true,
-    disabledPredefinedLiabilities: defaultDisabled,
-    customLiabilities: [],
-    tableState: createPlDataTableStateV2(),
-  }));
+  // The first group of fields is the kind's init-params contract, field for field,
+  // and `.templateParams(...)` below projects those same fields back out. `params`
+  // is optional — a block may be created without a template — so every field keeps
+  // its own default.
+  .init(({ params }) => {
+    const usePredefinedLiabilities = params?.usePredefinedLiabilities ?? true;
+    const disabledPredefinedLiabilities = params?.disabledPredefinedLiabilities ?? defaultDisabled;
+    const customLiabilities = params?.customLiabilities ?? [];
+    return {
+      usePredefinedLiabilities,
+      disabledPredefinedLiabilities,
+      customLiabilities,
+      // Undefined = scan everything, so a template that says nothing keeps the
+      // pre-contract behaviour.
+      regions: params?.regions,
 
-export const platforma = BlockModelV3.create(dataModel)
+      // Derived from the four fields above, so it is not a param of its own.
+      defaultBlockLabel: getDefaultBlockLabel({
+        usePredefinedLiabilities,
+        disabledPredefinedLiabilities,
+        allLiabilityTypes: allLiabilityTypeValues,
+        customLiabilities,
+      }),
+
+      // Not init params: view state. See the kind for why each group stays out.
+      customBlockLabel: '',
+      tableState: createPlDataTableStateV2(),
+    };
+  });
+
+export const platforma = BlockModelV3.create({ dataModel, kind })
 
   .args((data) => {
     if (!data.inputAnchor) throw new Error('Input anchor is required');
@@ -204,11 +242,20 @@ export const platforma = BlockModelV3.create(dataModel)
     if (!spec) return undefined;
     const axis1 = spec.axesSpec[1];
     if (axis1?.name !== 'pl7.app/variantKey') return 'antibody';
-    // Three producers key on this axis and only the run-id in its domain separates them.
+    const domain = axis1.domain ?? {};
+
+    // The producer says what it made. synthetic-repertoire-profiler runs one pipeline over
+    // both antibody/TCR parents and designed libraries, and everything it emits sits on the
+    // modality-neutral variantKey axis — so it declares the kind rather than leaving us to
+    // guess. Read the declaration before any heuristic below.
+    const declared = declaredModality(domain);
+    if (declared !== undefined) return declared;
+
+    // No declaration: projects made before it landed, plus the two other producers on this
+    // axis. Only the run-id in the domain separates the three.
     // import-vdj-data's bare antibody sets stamp pl7.app/vdj/clonotypingRunId; they are
     // antibody, and calling them peptide picked the peptide liability list and let a custom
     // liability through with no regions selected — meaningless for per-region scanning.
-    const domain = axis1.domain ?? {};
     if (domain['pl7.app/repertoire/extractionRunId'] !== undefined) {
       // Per-region scanning needs CDR3: clonotype-process echoes that column unconditionally.
       const regions = regionsOf(ctx.resultPool, ref, 'pl7.app/sequence', 'pl7.app/feature');
@@ -280,6 +327,15 @@ export const platforma = BlockModelV3.create(dataModel)
   .retentiveOutput('importedFile', (ctx) =>
     ctx.prerun?.traverse({ field: 'importedFile' })?.getFileHandle(),
   )
+
+  // The inverse of `init` above: the same fields, so a project exported as a
+  // template and re-applied comes back with the liability panel it went out with.
+  .templateParams((data) => ({
+    usePredefinedLiabilities: data.usePredefinedLiabilities,
+    disabledPredefinedLiabilities: data.disabledPredefinedLiabilities,
+    customLiabilities: data.customLiabilities,
+    regions: data.regions,
+  }))
 
   .title(() => 'Sequence Liabilities')
 

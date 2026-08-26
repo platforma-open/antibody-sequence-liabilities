@@ -1,0 +1,39 @@
+{
+  "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.kind",
+  "version": "1.0.0",
+  "description": "Block kind: identity and init-params contract",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "sources": "./src/index.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "ts-builder build --target block-kind && block-tools build-kind-manifest",
+    "watch": "ts-builder build --target block-kind --watch",
+    "type-check": "ts-builder type-check --target block-kind",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@platforma-sdk/block-kind": "catalog:"
+  },
+  "devDependencies": {
+    "@milaboratories/ts-builder": "catalog:",
+    "@milaboratories/ts-configs": "catalog:",
+    "@platforma-sdk/block-tools": "catalog:",
+    "@platforma-sdk/eslint-config": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "@types/node": "*"
+  }
+}
