@@ -33,8 +33,8 @@ from scoring import (
 # Canonical region names. _column_region uses whole-word matching.
 CANONICAL_REGIONS = ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"]
 
-# Chains arrive as receptor-neutral slots; --chain-labels carries the display names.
-CHAIN_SLOTS = ("A", "B")
+# Chains arrive as receptor-neutral letters; --chain-labels carries the display names.
+CHAIN_LETTERS = ("A", "B")
 DEFAULT_CHAIN_LABELS = {"A": "Heavy", "B": "Light"}
 
 
@@ -87,7 +87,7 @@ def _structural_risk_expr(liab_cols: list[str], fixability_map: dict[str, str]) 
 
 
 def _combine_chain_prefixed_columns(
-    df: pl.DataFrame, suffix: str, chain_labels: dict[str, str], prefixes: tuple = CHAIN_SLOTS
+    df: pl.DataFrame, suffix: str, chain_labels: dict[str, str], prefixes: tuple = CHAIN_LETTERS
 ) -> pl.DataFrame:
     prefixed_cols_map = {prefix: {} for prefix in prefixes}
     current_df_columns = df.columns
@@ -154,12 +154,12 @@ def _create_sequence_liabilities_summary_str(row_dict: dict, chain_labels: dict[
     Creates a formatted string summarizing liabilities for a sequence (row).
     Input: row_dict where keys are liability column names and values are their string values.
     """
-    per_slot_data: dict[str, list] = {slot: [] for slot in CHAIN_SLOTS}
-    # For regions that carry no slot prefix even in per-chain mode, or for all in bulk mode
+    per_letter_data: dict[str, list] = {letter: [] for letter in CHAIN_LETTERS}
+    # For regions that carry no chain prefix even in per-chain mode, or for all in bulk mode
     bulk_parts_data = []
 
-    # First pass to determine whether any relevant column carries a slot prefix
-    per_chain_mode = any(col_name.startswith(f"{slot} ") for col_name in row_dict for slot in CHAIN_SLOTS)
+    # First pass to determine whether any relevant column carries a chain-letter prefix
+    per_chain_mode = any(col_name.startswith(f"{letter} ") for col_name in row_dict for letter in CHAIN_LETTERS)
 
     for col_name, liability_value in row_dict.items():
         # Standardize missing/unknown liability values for the summary string
@@ -178,10 +178,10 @@ def _create_sequence_liabilities_summary_str(row_dict: dict, chain_labels: dict[
         current_col_name = col_name
         current_prefix = ""  # A, B, or empty (for bulk or common regions)
 
-        for slot in CHAIN_SLOTS:
-            if current_col_name.startswith(f"{slot} "):
-                current_prefix = slot
-                current_col_name = current_col_name[len(slot) + 1 :]
+        for letter in CHAIN_LETTERS:
+            if current_col_name.startswith(f"{letter} "):
+                current_prefix = letter
+                current_col_name = current_col_name[len(letter) + 1 :]
                 break
 
         # Remove " aa liabilities" or " liabilities" suffix to get the base region name
@@ -197,7 +197,7 @@ def _create_sequence_liabilities_summary_str(row_dict: dict, chain_labels: dict[
         entry_str = f"{region_base}: {liability_value}"
 
         if per_chain_mode and current_prefix:
-            per_slot_data[current_prefix].append((sort_key, region_base, entry_str))
+            per_letter_data[current_prefix].append((sort_key, region_base, entry_str))
         else:  # Bulk mode, or a common region not specific to one chain
             bulk_parts_data.append((sort_key, region_base, entry_str))
 
@@ -205,21 +205,21 @@ def _create_sequence_liabilities_summary_str(row_dict: dict, chain_labels: dict[
 
     if per_chain_mode:
         bulk_parts_data.sort()  # Sort "other" common regions too
-        any_slot_data = False
-        for slot in CHAIN_SLOTS:
-            parts = per_slot_data[slot]
+        any_chain_data = False
+        for letter in CHAIN_LETTERS:
+            parts = per_letter_data[letter]
             if not parts:
                 continue
             parts.sort()  # Sorts by (sort_key, region_base, entry_str)
-            any_slot_data = True
-            label = chain_labels.get(slot, slot)
+            any_chain_data = True
+            label = chain_labels.get(letter, letter)
             final_summary_elements.append(f"{label} chain: " + ", ".join([item[2] for item in parts]))
 
         # If there were non-prefixed items (common regions) in per-chain mode, add them.
         if bulk_parts_data:
-            prefix_for_common = "Other: " if any_slot_data else ""
+            prefix_for_common = "Other: " if any_chain_data else ""
             final_summary_elements.append(prefix_for_common + ", ".join([item[2] for item in bulk_parts_data]))
-    else:  # Bulk mode (no slot prefixes detected among liability columns)
+    else:  # Bulk mode (no chain-letter prefixes detected among liability columns)
         bulk_parts_data.sort()
         if bulk_parts_data:
             final_summary_elements.append(", ".join([item[2] for item in bulk_parts_data]))
@@ -286,15 +286,15 @@ def main():
     p.add_argument(
         "--chain-labels",
         type=str,
-        help="Display names for the chain slots, e.g. 'A=Alpha,B=Beta' (default: 'A=Heavy,B=Light').",
+        help="Display names for the chain letters, e.g. 'A=Beta,B=Alpha' (default: 'A=Heavy,B=Light').",
     )
     args = p.parse_args()
 
     chain_labels = dict(DEFAULT_CHAIN_LABELS)
     for item in (args.chain_labels or "").split(","):
-        slot, _, label = item.partition("=")
-        if slot.strip().upper() in CHAIN_SLOTS and label.strip():
-            chain_labels[slot.strip().upper()] = label.strip()
+        letter, _, label = item.partition("=")
+        if letter.strip().upper() in CHAIN_LETTERS and label.strip():
+            chain_labels[letter.strip().upper()] = label.strip()
 
     use_predefined = str(args.use_predefined_liabilities).strip().lower() not in ("false", "0", "no")
 
@@ -442,7 +442,7 @@ def main():
             if " " in ann_col_name_for_prefix_check:
                 chain_prefixes_found.add(ann_col_name_for_prefix_check.split(" ")[0])
         multiple_chains_present = len(chain_prefixes_found) > 1 and any(
-            p.upper() in CHAIN_SLOTS for p in chain_prefixes_found
+            p.upper() in CHAIN_LETTERS for p in chain_prefixes_found
         )
 
         processed_frag_dfs = []

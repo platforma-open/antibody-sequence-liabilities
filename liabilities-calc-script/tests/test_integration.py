@@ -433,11 +433,11 @@ def test_sc_summary_has_chain_prefix(tmp_path):
 
 
 def test_sc_summary_uses_supplied_chain_labels(tmp_path):
-    """--chain-labels renames the slots in every user-facing string; the wire stays A/B."""
-    df = run_main(tmp_path, ["--chain-labels", "A=Alpha,B=Beta"], data_path=DATA_SC)
+    """--chain-labels renames the chains in every user-facing string; the wire stays A/B."""
+    df = run_main(tmp_path, ["--chain-labels", "A=Beta,B=Alpha"], data_path=DATA_SC)
     summary = row(df, "sc_both_chains_liab")["Sequence liabilities summary"]
-    assert "Alpha chain" in summary
     assert "Beta chain" in summary
+    assert "Alpha chain" in summary
     assert "Heavy" not in summary
 
 

@@ -21,11 +21,11 @@ prerunTpl := assets.importTemplate(":prerun")
 
 REGIONS := ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"]
 
-// Chain slots A/B travel receptor-neutral; these are display names only.
+// Chain letter A is always the D-recombining chain — MiXCR receptorInfos (process.tpl.tengo:41).
 CHAIN_LABELS := {
 	"IG": { "A": "Heavy", "B": "Light" },
-	"TCRAB": { "A": "Alpha", "B": "Beta" },
-	"TCRGD": { "A": "Gamma", "B": "Delta" }
+	"TCRAB": { "A": "Beta", "B": "Alpha" },
+	"TCRGD": { "A": "Delta", "B": "Gamma" }
 }
 
 regionFeature := func(feature) {
@@ -366,7 +366,7 @@ wf.body(func(args) {
 			}
 		}
 	} else if hasChainColumns {
-		// Whether to prefix columns with the chain slot at all. Only when BOTH chains are present: a
+		// Whether to prefix columns with the chain letter at all. Only when BOTH chains are present: a
 		// single-chain set is shaped like a bulk one and is labelled like one, so main.py's
 		// unprefixed Path B reads it directly and clonotype-process finds the unprefixed
 		// "CDR1 aa liabilities" it asks for.
@@ -387,7 +387,7 @@ wf.body(func(args) {
 		// Chains in column domains, on a key axis that is not scClonotypeKey — a bare antibody
 		// set from import-vdj-data. One record per row, both chains side by side.
 		//
-		// Every column is prefixed with its chain slot, which is the convention main.py already
+		// Every column is prefixed with its chain letter, which is the convention main.py already
 		// reads (it strips "A "/"B ", analyses each chain's regions, and merges them back into one
 		// summary per region, rendering the display label it was given). So the work here is only
 		// to prefix the columns; nothing downstream needs a new mode.
