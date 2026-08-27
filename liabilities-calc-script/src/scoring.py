@@ -98,7 +98,7 @@ def compute_developability_score(
     """Engineering burden: sum of fixability_weight × region_weight for all non-disqualifying liabilities.
 
     Keys in col_to_liabs may be pure region names ('CDR3') or full column names
-    ('Heavy CDR1 aa liabilities'). The region weight is extracted from the key.
+    ('A CDR1 aa liabilities'). The region weight is extracted from the key.
     """
     total = 0.0
     for col_name, liabs_str in col_to_liabs.items():

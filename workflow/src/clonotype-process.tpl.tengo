@@ -36,6 +36,7 @@ self.body(func(args) {
     coveredFeatures := params.coveredFeatures
     hasAnnotations := params.hasAnnotations
     primaryChains := params.primaryChains
+    chainLabels := is_undefined(params.chainLabels) ? { "A": "Heavy", "B": "Light" } : params.chainLabels
     cdr3SeqPrefixed := params.cdr3SeqPrefixed
     annotationFeatures := params.annotationFeatures
     newMapping := canonical.encode(args.newMapping.getDataAsJson())
@@ -210,21 +211,20 @@ self.body(func(args) {
 	// Add sequence and annotation columns. Python script always outputs annotation columns.
 	if perChain {
 		// Chain-separated input: show each present chain's sequence and annotations. Iterate
-		// only the chains that actually exist (primaryChains) so heavy-only input — a VHH
-		// single-cell set, or a bare set with one chain mapped — doesn't request a Light chain
+		// only the chains that actually exist (primaryChains) so single-chain input — a VHH
+		// single-cell set, or a bare set with one chain mapped — doesn't request a second chain
 		// that was never there.
 		for chain_val in primaryChains {
-			chainLabel := (chain_val == "A" ? "Heavy" : "Light")
+			chainLabel := chainLabels[chain_val]
 
 			// main.py drops the chain prefix on the extracted CDR3 sequence for single-chain
-			// non-scFv data (bare "CDR3 aa"), but keeps it for scFv or multi-chain ("Heavy
-			// CDR3 aa").
-			cdr3SeqColumn := cdr3SeqPrefixed ? (chainLabel + " " + "CDR3 aa") : "CDR3 aa"
+			// non-scFv data (bare "CDR3 aa"), but keeps it for scFv or multi-chain ("A CDR3 aa").
+			cdr3SeqColumn := cdr3SeqPrefixed ? (chain_val + " CDR3 aa") : "CDR3 aa"
 
-			// Sequence column (Python script selects these based on input like "Heavy CDR3 aa")
+			// Sequence column (Python script selects these based on input like "A CDR3 aa")
 			sequenceColumns += [{
 				column: cdr3SeqColumn,
-				id: "cdr3-aa-primary-" + text.to_lower(chainLabel),
+				id: "cdr3-aa-primary-" + text.to_lower(chain_val),
 				spec: {
 					name: "pl7.app/vdj/sequence",
 					valueType: "String",
@@ -235,14 +235,14 @@ self.body(func(args) {
 						"pl7.app/vdj/scClonotypeChain/index": "primary"
 					},
 					annotations: {
-						"pl7.app/label": chainLabel + " " + "CDR3 aa",
+						"pl7.app/label": chainLabel + " CDR3 aa",
 						"pl7.app/table/visibility": "default",
 						"pl7.app/table/orderPriority": (chain_val == "A" ? "101" : "100")
 					}
 				}
 			}]
 
-			// Annotation column (Python script outputs e.g., "Heavy CDRs Annotations")
+			// Annotation column (Python script outputs e.g., "A annotations")
             if hasAnnotations {
                 // Feature of the sequence the offsets index into, inherited from the upstream
                 // track. Omitted when the upstream declares none, rather than guessed: a wrong
@@ -258,8 +258,8 @@ self.body(func(args) {
 					annDomain["pl7.app/vdj/feature"] = annFeature
 				}
                 sequenceColumns += [{
-                    column: chainLabel + " annotations",
-                    id: "annotations-cdrs-primary-" + text.to_lower(chainLabel),
+                    column: chain_val + " annotations",
+                    id: "annotations-cdrs-primary-" + text.to_lower(chain_val),
                     spec: {
                         name: "pl7.app/vdj/sequence/annotation",
                         valueType: "String",
