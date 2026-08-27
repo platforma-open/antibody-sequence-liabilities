@@ -21,6 +21,13 @@ prerunTpl := assets.importTemplate(":prerun")
 
 REGIONS := ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"]
 
+// Chain slots A/B travel receptor-neutral; these are display names only.
+CHAIN_LABELS := {
+	"IG": { "A": "Heavy", "B": "Light" },
+	"TCRAB": { "A": "Alpha", "B": "Beta" },
+	"TCRGD": { "A": "Gamma", "B": "Delta" }
+}
+
 regionFeature := func(feature) {
 	return feature == "FR4InFrame" ? "FR4" : feature
 }
@@ -143,6 +150,8 @@ wf.body(func(args) {
 	// variantKey axis", naming a column the scientist never had reason to expect.
 	axis1 := datasetSpec.axesSpec[1]
 	axis1Domain := is_undefined(axis1.domain) ? {} : axis1.domain
+	receptor := is_undefined(axis1Domain["pl7.app/vdj/receptor"]) ? "IG" : axis1Domain["pl7.app/vdj/receptor"]
+	chainLabels := is_undefined(CHAIN_LABELS[receptor]) ? CHAIN_LABELS["IG"] : CHAIN_LABELS[receptor]
 	isRepertoire := !is_undefined(axis1Domain["pl7.app/repertoire/extractionRunId"])
 
 	repertoireRegions := {}
@@ -317,11 +326,10 @@ wf.body(func(args) {
 				for fr in REGIONS {
 					if featureOf(additionalSeq.spec) == fr {
 						chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
-						chainLabel := (chain == "A" ? "Heavy" : "Light")
-						if !coveredChainFeatures[chainLabel + " " + fr] {
-							coveredChainFeatures[chainLabel + " " + fr] = true
+						if !coveredChainFeatures[chain + " " + fr] {
+							coveredChainFeatures[chain + " " + fr] = true
 							primaryChainsSet[chain] = true
-							seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: chainLabel + " " + fr + " aa"})
+							seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: chain + " " + fr + " aa"})
 							if coveredFeatures[fr] {
 								coveredFeatures[fr] += 1
 							} else {
@@ -343,8 +351,7 @@ wf.body(func(args) {
 			} else if seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
 				chain := seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
 				primaryChainsSet[chain] = true
-				chainLabel := (chain == "A" ? "Heavy" : "Light")
-				seqTableBuilder.add(columnsWithSequences.getColumn(seq_entry.key), {header: chainLabel + " " + " sequence aa"})
+				seqTableBuilder.add(columnsWithSequences.getColumn(seq_entry.key), {header: chain + " sequence aa"})
 			}
 		}
 		addPrimaryRegionColumns()
@@ -353,15 +360,13 @@ wf.body(func(args) {
 			for ann_entry in annotations {
 				if ann_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
 					chain := ann_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
-					chainLabel := (chain == "A" ? "Heavy" : "Light")
 					// Python script expects annotation columns to end with "annotations"
-					// and might derive prefix like "Heavy CDRs" or "Light CDRs"
-					seqTableBuilder.add(columnsWithSequences.getColumn(ann_entry.key), {header: chainLabel + " annotations"})
+					seqTableBuilder.add(columnsWithSequences.getColumn(ann_entry.key), {header: chain + " annotations"})
 				}
 			}
 		}
 	} else if hasChainColumns {
-		// Whether to label columns Heavy/Light at all. Only when BOTH chains are present: a
+		// Whether to prefix columns with the chain slot at all. Only when BOTH chains are present: a
 		// single-chain set is shaped like a bulk one and is labelled like one, so main.py's
 		// unprefixed Path B reads it directly and clonotype-process finds the unprefixed
 		// "CDR1 aa liabilities" it asks for.
@@ -382,10 +387,10 @@ wf.body(func(args) {
 		// Chains in column domains, on a key axis that is not scClonotypeKey — a bare antibody
 		// set from import-vdj-data. One record per row, both chains side by side.
 		//
-		// Every column is prefixed with its chain, which is the convention main.py already reads
-		// (it strips "Heavy "/"Light ", analyses each chain's regions, and merges them back into
-		// one summary per region reading "Heavy chain: ..., Light chain: ..."). So the work here
-		// is only to label the columns; nothing downstream needs a new mode.
+		// Every column is prefixed with its chain slot, which is the convention main.py already
+		// reads (it strips "A "/"B ", analyses each chain's regions, and merges them back into one
+		// summary per region, rendering the display label it was given). So the work here is only
+		// to prefix the columns; nothing downstream needs a new mode.
 		//
 		// Unlike the single-cell branch this adds the located regions as well as the variable
 		// domain, because for a bare set the regions are the whole point — ANARCI located them
@@ -394,19 +399,17 @@ wf.body(func(args) {
 			if seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
 				chain := seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
 				primaryChainsSet[chain] = true
-				chainLabel := (chain == "A" ? "Heavy" : "Light")
-				seqTableBuilder.add(columnsWithSequences.getColumn(seq_entry.key), {header: prefixChains ? chainLabel + " sequence aa" : "sequence aa"})
+				seqTableBuilder.add(columnsWithSequences.getColumn(seq_entry.key), {header: prefixChains ? chain + " sequence aa" : "sequence aa"})
 			}
 		}
 		for additionalSeq in additionalSequences {
 			chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
 			if is_undefined(chain) { continue }
 			if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] != "primary" { continue }
-			chainLabel := (chain == "A" ? "Heavy" : "Light")
 			for fr in REGIONS {
 				if featureOf(additionalSeq.spec) == fr {
 					primaryChainsSet[chain] = true
-					seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: prefixChains ? chainLabel + " " + fr + " aa" : fr + " aa"})
+					seqTableBuilder.add(columnsWithSequences.getColumn(additionalSeq.key), {header: prefixChains ? chain + " " + fr + " aa" : fr + " aa"})
 					if coveredFeatures[fr] {
 						coveredFeatures[fr] += 1
 					} else {
@@ -476,6 +479,7 @@ wf.body(func(args) {
 		table: seqTable,
 		mapping: hasAnnotations ? annotations[0].spec.annotations["pl7.app/sequence/annotation/mapping"] : undefined,
 		numberingSchema: numberingSchema,
+		chainLabels: "A=" + chainLabels["A"] + ",B=" + chainLabels["B"],
 		customLiabilities: liabCfg.customLiabilities,
 		usePredefinedLiabilities: liabCfg.usePredefinedLiabilities,
 		disabledPredefinedLiabilities: liabCfg.disabledPredefinedLiabilities,
@@ -504,6 +508,7 @@ wf.body(func(args) {
 			coveredFeatures: features,
 			hasAnnotations: hasAnnotations,
 			primaryChains: primaryChains,
+			chainLabels: chainLabels,
 			cdr3SeqPrefixed: cdr3SeqPrefixed,
 			annotationFeatures: annotationFeatures
 		})

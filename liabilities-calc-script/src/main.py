@@ -33,11 +33,15 @@ from scoring import (
 # Canonical region names. _column_region uses whole-word matching.
 CANONICAL_REGIONS = ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"]
 
+# Chains arrive as receptor-neutral slots; --chain-labels carries the display names.
+CHAIN_SLOTS = ("A", "B")
+DEFAULT_CHAIN_LABELS = {"A": "Heavy", "B": "Light"}
+
 
 def _column_region(col_name: str) -> str | None:
     """Map a sequence/fragment column name to its canonical region, or None.
 
-    Region scope is chain-agnostic: "Heavy CDR3 aa" and "CDR3 aa" both return "CDR3".
+    Region scope is chain-agnostic: "A CDR3 aa" and "CDR3 aa" both return "CDR3".
     """
     for region in CANONICAL_REGIONS:
         if re.search(r"\b" + re.escape(region) + r"\b", col_name, re.IGNORECASE):
@@ -82,8 +86,8 @@ def _structural_risk_expr(liab_cols: list[str], fixability_map: dict[str, str]) 
     return pl.when(pl.any_horizontal(conditions)).then(pl.lit("Present")).otherwise(pl.lit("None"))
 
 
-def _combine_heavy_light_prefixed_columns(
-    df: pl.DataFrame, suffix: str, prefixes: tuple = ("Heavy", "Light")
+def _combine_chain_prefixed_columns(
+    df: pl.DataFrame, suffix: str, chain_labels: dict[str, str], prefixes: tuple = CHAIN_SLOTS
 ) -> pl.DataFrame:
     prefixed_cols_map = {prefix: {} for prefix in prefixes}
     current_df_columns = df.columns
@@ -115,7 +119,7 @@ def _combine_heavy_light_prefixed_columns(
             if concat_expressions:
                 concat_expressions.append(pl.lit(" | "))
             if label_chains:
-                concat_expressions.append(pl.lit(f"{prefix_val}: "))
+                concat_expressions.append(pl.lit(f"{chain_labels.get(prefix_val, prefix_val)}: "))
             concat_expressions.append(pl.col(col_to_include).cast(pl.Utf8).fill_null("N/A"))
             temp_cols_to_drop_for_base.append(col_to_include)
         if concat_expressions:
@@ -145,27 +149,17 @@ def _output_final_label_map(base_map: dict, liability_map: dict, output_path: st
         print(f"\n{description} label map:\n{json.dumps(final_map_all_strings, indent=2, sort_keys=True)}")
 
 
-def _create_sequence_liabilities_summary_str(row_dict: dict) -> str:
+def _create_sequence_liabilities_summary_str(row_dict: dict, chain_labels: dict[str, str]) -> str:
     """
     Creates a formatted string summarizing liabilities for a sequence (row).
     Input: row_dict where keys are liability column names and values are their string values.
     """
-    heavy_parts_data = []
-    light_parts_data = []
-    # For regions that don't have H/L prefix even in H/L mode, or for all in bulk mode
+    per_slot_data: dict[str, list] = {slot: [] for slot in CHAIN_SLOTS}
+    # For regions that carry no slot prefix even in per-chain mode, or for all in bulk mode
     bulk_parts_data = []
 
-    has_any_heavy_prefix = False
-    has_any_light_prefix = False
-
-    # First pass to determine if H/L specific prefixes exist on any relevant columns
-    for col_name in row_dict.keys():
-        if col_name.startswith("Heavy "):
-            has_any_heavy_prefix = True
-        elif col_name.startswith("Light "):
-            has_any_light_prefix = True
-
-    is_heavy_light_mode = has_any_heavy_prefix or has_any_light_prefix
+    # First pass to determine whether any relevant column carries a slot prefix
+    per_chain_mode = any(col_name.startswith(f"{slot} ") for col_name in row_dict for slot in CHAIN_SLOTS)
 
     for col_name, liability_value in row_dict.items():
         # Standardize missing/unknown liability values for the summary string
@@ -182,14 +176,13 @@ def _create_sequence_liabilities_summary_str(row_dict: dict) -> str:
             continue
 
         current_col_name = col_name
-        current_prefix = ""  # Heavy, Light, or empty (for bulk or common regions)
+        current_prefix = ""  # A, B, or empty (for bulk or common regions)
 
-        if current_col_name.startswith("Heavy "):
-            current_prefix = "Heavy"
-            current_col_name = current_col_name[len("Heavy ") :]
-        elif current_col_name.startswith("Light "):
-            current_prefix = "Light"
-            current_col_name = current_col_name[len("Light ") :]
+        for slot in CHAIN_SLOTS:
+            if current_col_name.startswith(f"{slot} "):
+                current_prefix = slot
+                current_col_name = current_col_name[len(slot) + 1 :]
+                break
 
         # Remove " aa liabilities" or " liabilities" suffix to get the base region name
         if current_col_name.endswith(" aa liabilities"):
@@ -203,34 +196,30 @@ def _create_sequence_liabilities_summary_str(row_dict: dict) -> str:
         sort_key = REGION_ORDER_MAP.get(region_base.upper(), 99)  # .upper() for robust key lookup
         entry_str = f"{region_base}: {liability_value}"
 
-        if is_heavy_light_mode:
-            if current_prefix == "Heavy":
-                heavy_parts_data.append((sort_key, region_base, entry_str))
-            elif current_prefix == "Light":
-                light_parts_data.append((sort_key, region_base, entry_str))
-            else:
-                # Non-prefixed column in H/L mode (e.g. a common region not specific to H/L chains)
-                bulk_parts_data.append((sort_key, region_base, entry_str))
-        else:  # Bulk mode, all go to bulk_parts
+        if per_chain_mode and current_prefix:
+            per_slot_data[current_prefix].append((sort_key, region_base, entry_str))
+        else:  # Bulk mode, or a common region not specific to one chain
             bulk_parts_data.append((sort_key, region_base, entry_str))
 
     final_summary_elements = []
 
-    if is_heavy_light_mode:
-        heavy_parts_data.sort()  # Sorts by (sort_key, region_base, entry_str)
-        light_parts_data.sort()
+    if per_chain_mode:
         bulk_parts_data.sort()  # Sort "other" common regions too
+        any_slot_data = False
+        for slot in CHAIN_SLOTS:
+            parts = per_slot_data[slot]
+            if not parts:
+                continue
+            parts.sort()  # Sorts by (sort_key, region_base, entry_str)
+            any_slot_data = True
+            label = chain_labels.get(slot, slot)
+            final_summary_elements.append(f"{label} chain: " + ", ".join([item[2] for item in parts]))
 
-        if heavy_parts_data:
-            final_summary_elements.append("Heavy chain: " + ", ".join([item[2] for item in heavy_parts_data]))
-        if light_parts_data:
-            final_summary_elements.append("Light chain: " + ", ".join([item[2] for item in light_parts_data]))
-
-        # If there were non-prefixed items (common regions) in H/L mode, add them.
+        # If there were non-prefixed items (common regions) in per-chain mode, add them.
         if bulk_parts_data:
-            prefix_for_common = "Other: " if (heavy_parts_data or light_parts_data) else ""
+            prefix_for_common = "Other: " if any_slot_data else ""
             final_summary_elements.append(prefix_for_common + ", ".join([item[2] for item in bulk_parts_data]))
-    else:  # Bulk mode (no H/L prefixes detected among liability columns)
+    else:  # Bulk mode (no slot prefixes detected among liability columns)
         bulk_parts_data.sort()
         if bulk_parts_data:
             final_summary_elements.append(", ".join([item[2] for item in bulk_parts_data]))
@@ -294,7 +283,18 @@ def main():
         type=str,
         help="Path to a JSON file containing an array of predefined liability names to disable.",
     )
+    p.add_argument(
+        "--chain-labels",
+        type=str,
+        help="Display names for the chain slots, e.g. 'A=Alpha,B=Beta' (default: 'A=Heavy,B=Light').",
+    )
     args = p.parse_args()
+
+    chain_labels = dict(DEFAULT_CHAIN_LABELS)
+    for item in (args.chain_labels or "").split(","):
+        slot, _, label = item.partition("=")
+        if slot.strip().upper() in CHAIN_SLOTS and label.strip():
+            chain_labels[slot.strip().upper()] = label.strip()
 
     use_predefined = str(args.use_predefined_liabilities).strip().lower() not in ("false", "0", "no")
 
@@ -414,7 +414,7 @@ def main():
     TARGET_REGION_KEYS = ["cdr1 aa", "cdr2 aa", "cdr3 aa", "fr1 aa", "fr2 aa", "fr3 aa", "fr4 aa"]  # For Path B
     cols_for_liability_analysis = []
 
-    # Collect full-chain AA columns (e.g. "Heavy sequence aa") for stop codon / OOF detection.
+    # Collect full-chain AA columns (e.g. "A sequence aa") for stop codon / OOF detection.
     # MiXCR places * at CDR/FR region boundaries when a codon spans a V-D-J junction — checking
     # the full chain avoids these false positives in per-region fragments.
     _fragment_keys_lower = {"cdr1", "cdr2", "cdr3", "fr1", "fr2", "fr3", "fr4"}
@@ -442,7 +442,7 @@ def main():
             if " " in ann_col_name_for_prefix_check:
                 chain_prefixes_found.add(ann_col_name_for_prefix_check.split(" ")[0])
         multiple_chains_present = len(chain_prefixes_found) > 1 and any(
-            p.lower() in ["heavy", "light"] for p in chain_prefixes_found
+            p.upper() in CHAIN_SLOTS for p in chain_prefixes_found
         )
 
         processed_frag_dfs = []
@@ -457,7 +457,7 @@ def main():
             if not matched_seq_cols and current_prefix_raw:
                 matched_seq_cols = [
                     sc for sc in all_seq_cols if sc.lower() == f"{current_prefix_raw} aa".lower()
-                ]  # Fallback for e.g. "Heavy aa"
+                ]  # Fallback for e.g. "A aa"
             if not matched_seq_cols:
                 print(
                     f"⚠️ Path A: Skip {ann_col_name}: No corresponding sequence column '{seq_col_name_to_find}' found.",
@@ -683,7 +683,7 @@ def main():
         )
 
         # Stop codon / OOF check on the full chain sequence. Only runs when a non-fragmented
-        # chain column exists (e.g. "Heavy sequence aa" from non-scFv MiXCR upstreams).
+        # chain column exists (e.g. "A sequence aa" from non-scFv MiXCR upstreams).
         # The scFv upstream provides only CDR/FR columns, so this block is skipped — scFv
         # already guarantees productivity via --export-productive-clones-only.
         if active_extra_defs_full_seq and full_input_sequence_cols:
@@ -716,7 +716,7 @@ def main():
                 continue  # Should not happen if logic is correct
             match = re.search(r"(FR[1-4]|CDR[1-3])", frag_seq_col, re.IGNORECASE)  # More specific match
             core_region_name = match.group(1).upper() if match else "UNKNOWN_REGION"
-            new_liab_col = f"{frag_seq_col} liabilities"  # e.g. "Heavy CDR1 aa liabilities"
+            new_liab_col = f"{frag_seq_col} liabilities"  # e.g. "A CDR1 aa liabilities"
             generated_liability_summary_col_names.append(new_liab_col)
             liability_expressions.append(
                 pl.col(frag_seq_col)
@@ -746,7 +746,11 @@ def main():
             print(f"Generating sequence liabilities summary from columns: {summary_struct_cols}")
             df_processed = df_processed.with_columns(
                 pl.struct(summary_struct_cols)
-                .map_elements(_create_sequence_liabilities_summary_str, return_dtype=pl.Utf8, skip_nulls=False)
+                .map_elements(
+                    lambda row, _cl=chain_labels: _create_sequence_liabilities_summary_str(row, _cl),
+                    return_dtype=pl.Utf8,
+                    skip_nulls=False,
+                )
                 .fill_null("None")
                 .alias("Sequence liabilities summary")
             )
@@ -821,8 +825,8 @@ def main():
                 ]
             )
 
-        df_processed = _combine_heavy_light_prefixed_columns(df_processed, "risk")
-        df_processed = _combine_heavy_light_prefixed_columns(df_processed, "liabilities")
+        df_processed = _combine_chain_prefixed_columns(df_processed, "risk", chain_labels)
+        df_processed = _combine_chain_prefixed_columns(df_processed, "liabilities", chain_labels)
 
     # Output Column Selection & Final Write
     # Include clonotypeKey if it exists, otherwise use empty list
@@ -833,13 +837,13 @@ def main():
     # Handle CDR3 sequence columns
     final_cdr3_seq_cols = []
     if df_processed.width > 0:  # Normal case - find existing columns
-        heavy_light_cdr3 = sorted(
-            [c for c in df_processed.columns if re.search(r"^(heavy|light) cdr3 aa$", c, re.IGNORECASE)]
+        per_chain_cdr3 = sorted(
+            [c for c in df_processed.columns if re.search(r"^(a|b) cdr3 aa$", c, re.IGNORECASE)]
         )
         general_cdr3 = sorted(
-            [c for c in df_processed.columns if re.search(r"cdr3 aa$", c, re.IGNORECASE) and c not in heavy_light_cdr3]
+            [c for c in df_processed.columns if re.search(r"cdr3 aa$", c, re.IGNORECASE) and c not in per_chain_cdr3]
         )
-        final_cdr3_seq_cols = heavy_light_cdr3 + general_cdr3
+        final_cdr3_seq_cols = per_chain_cdr3 + general_cdr3
         if not final_cdr3_seq_cols:
             potential_cdr3 = sorted(
                 [c for c in df_processed.columns if "cdr3" in c.lower() and c.lower().endswith("aa")]
@@ -869,14 +873,14 @@ def main():
                 [
                     c
                     for c in all_liab_cols
-                    if c.lower() in ["heavy liabilities", "light liabilities"] and c not in individual_frag_liabs
+                    if c.lower() in ["a liabilities", "b liabilities"] and c not in individual_frag_liabs
                 ]
             )
             combined_chain_risks = sorted(
                 [
                     c
                     for c in all_risk_cols
-                    if c.lower() in ["heavy risk", "light risk"] and c not in individual_frag_risks
+                    if c.lower() in ["a risk", "b risk"] and c not in individual_frag_risks
                 ]
             )
 
