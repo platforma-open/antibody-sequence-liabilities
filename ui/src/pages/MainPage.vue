@@ -351,6 +351,7 @@ watch(
       <PlDropdownMulti
         v-model="selectedRegions"
         :options="regionScopeOptions"
+        placeholder="All columns"
         label="Regions to scan"
       >
         <template #tooltip>
