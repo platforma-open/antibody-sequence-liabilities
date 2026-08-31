@@ -7,7 +7,6 @@
   "type": "module",
   "scripts": {
     "build": "block-tools software build",
-    "prepublish": "pl-pkg prepublish",
     "do-pack": "shx rm -f *.tgz && block-tools software build && pnpm pack && shx mv platforma-open*.tgz package.tgz",
     "changeset": "changeset",
     "version-packages": "changeset version"
