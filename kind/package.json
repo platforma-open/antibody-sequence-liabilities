@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.kind",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Block kind: identity and init-params contract",
   "type": "module",
