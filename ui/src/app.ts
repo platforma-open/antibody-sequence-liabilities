@@ -1,24 +1,29 @@
-import { allLiabilityTypeValues, allRegions, getDefaultBlockLabel, platforma } from '@platforma-open/milaboratories.antibody-sequence-liabilities.model';
-import { defineAppV3 } from '@platforma-sdk/ui-vue';
-import { watchEffect } from 'vue';
-import MainPage from './pages/MainPage.vue';
+import {
+  allLiabilityTypeValues,
+  allRegions,
+  getDefaultBlockLabel,
+  platforma,
+} from "@platforma-open/milaboratories.antibody-sequence-liabilities.model";
+import { defineAppV3 } from "@platforma-sdk/ui-vue";
+import { watchEffect } from "vue";
+import MainPage from "./pages/MainPage.vue";
 
 export const sdkPlugin = defineAppV3(platforma, (app) => {
-  app.model.data.customBlockLabel ??= '';
+  app.model.data.customBlockLabel ??= "";
 
   syncDefaultBlockLabel(app.model);
   syncModality(app.model);
 
   return {
     routes: {
-      '/': () => MainPage,
+      "/": () => MainPage,
     },
   };
 });
 
 export const useApp = sdkPlugin.useApp;
 
-type AppModel = ReturnType<typeof useApp>['model'];
+type AppModel = ReturnType<typeof useApp>["model"];
 
 function syncModality(model: AppModel) {
   watchEffect(() => {
@@ -38,7 +43,7 @@ function syncDefaultBlockLabel(model: AppModel) {
       customLiabilities: model.data.customLiabilities ?? [],
       // Whole-sequence modes have no regions; a scope here would linger from a previous input.
       regions:
-        model.data.modality === 'peptide' || model.data.modality === 'amplicon'
+        model.data.modality === "peptide" || model.data.modality === "amplicon"
           ? undefined
           : model.data.regions,
       allRegions,
