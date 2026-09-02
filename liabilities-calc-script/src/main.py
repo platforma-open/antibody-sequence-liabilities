@@ -636,6 +636,13 @@ def main():
                 f" excluded {scope_dropped_cols}"
             )
 
+    # Two chain-letter prefixes on the analysis columns means paired data: each chain is reported
+    # in its own columns. Otherwise the single/bulk columns stay unprefixed.
+    analysis_chain_prefixes = sorted(
+        {c.split(" ", 1)[0] for c in cols_for_liability_analysis if c.split(" ", 1)[0] in CHAIN_LETTERS}
+    )
+    paired = len(analysis_chain_prefixes) >= 2
+
     # Runs once the scope is final — the fallback above may have widened it. Out-of-scope hits are
     # dropped so the annotation track highlights the same regions the results table reports on.
     for ann_col_name, pending_rows in pending_annotation_updates.items():
@@ -740,9 +747,27 @@ def main():
         if liability_expressions:
             df_processed = df_processed.with_columns(liability_expressions)
 
-        # ---- START: New section to create "Sequence liabilities summary" ----
+        # ---- START: sequence liabilities summary (per chain when paired, else one combined) ----
         summary_struct_cols = [c for c in generated_liability_summary_col_names if c in df_processed.columns]
-        if summary_struct_cols:
+        if paired:
+            # One summary per chain, built from that chain's columns with the chain prefix stripped
+            # so the per-chain string carries no redundant "Heavy chain:" label.
+            for chain in analysis_chain_prefixes:
+                chain_cols = [c for c in summary_struct_cols if c.split(" ", 1)[0] == chain]
+                if not chain_cols:
+                    continue
+                stripped = [pl.col(c).alias(c[len(chain) + 1 :]) for c in chain_cols]
+                df_processed = df_processed.with_columns(
+                    pl.struct(stripped)
+                    .map_elements(
+                        lambda row, _cl=chain_labels: _create_sequence_liabilities_summary_str(row, _cl),
+                        return_dtype=pl.Utf8,
+                        skip_nulls=False,
+                    )
+                    .fill_null("None")
+                    .alias(f"{chain} Sequence liabilities summary")
+                )
+        elif summary_struct_cols:
             print(f"Generating sequence liabilities summary from columns: {summary_struct_cols}")
             df_processed = df_processed.with_columns(
                 pl.struct(summary_struct_cols)
@@ -825,8 +850,11 @@ def main():
                 ]
             )
 
-        df_processed = _combine_chain_prefixed_columns(df_processed, "risk", chain_labels)
-        df_processed = _combine_chain_prefixed_columns(df_processed, "liabilities", chain_labels)
+        # Paired data keeps each chain's per-region columns separate; single/bulk merges (and strips
+        # a lone chain prefix) into one column per region.
+        if not paired:
+            df_processed = _combine_chain_prefixed_columns(df_processed, "risk", chain_labels)
+            df_processed = _combine_chain_prefixed_columns(df_processed, "liabilities", chain_labels)
 
     # Output Column Selection & Final Write
     # Include clonotypeKey if it exists, otherwise use empty list
@@ -909,9 +937,9 @@ def main():
                 for c in ["Is Productive", "Structural liabilities", "Developability risk", "Developability cost"]
                 if c in df_processed.columns
             ]
-            overall_summary_cols = _new_global
-            if "Sequence liabilities summary" in df_processed.columns:
-                overall_summary_cols = overall_summary_cols + ["Sequence liabilities summary"]
+            overall_summary_cols = _new_global + sorted(
+                c for c in df_processed.columns if c.endswith("Sequence liabilities summary")
+            )
         else:  # Empty input case - generate expected column names
             expected_regions = ["CDR1", "CDR2", "CDR3", "FR1"]
             for region in expected_regions:
@@ -1051,19 +1079,25 @@ def main():
                 print(f"Error writing empty output TSV to '{args.output_tsv}': {e}", file=sys.stderr)
 
     if args.output_regions_found:
-        found_regions_set = set()
-        if cols_for_liability_analysis:  # Based on what was analyzed
-            for col_name in cols_for_liability_analysis:
-                region_canonical_name = _column_region(col_name)
-                if region_canonical_name:
-                    found_regions_set.add(region_canonical_name)
-            list_of_found_regions = sorted(list(found_regions_set), key=lambda x: REGION_ORDER_MAP.get(x, 99))
-        else:
-            list_of_found_regions = []
+        # Per-chain map: "A"/"B" keys when paired, "" otherwise. Keyed so the workflow builds only
+        # the (chain, region) columns that actually exist rather than assuming both chains match.
+        found_by_chain: dict[str, set] = {}
+        for col_name in cols_for_liability_analysis:
+            region_canonical_name = _column_region(col_name)
+            if not region_canonical_name:
+                continue
+            prefix = col_name.split(" ", 1)[0]
+            # Columns are chain-prefixed only when liabilities were actually calculated on paired
+            # data; the not-calculated fallback force-generates them unprefixed.
+            chain_key = prefix if (paired and CALCULATE_LIABILITIES and prefix in CHAIN_LETTERS) else ""
+            found_by_chain.setdefault(chain_key, set()).add(region_canonical_name)
+        regions_found_out = {
+            k: sorted(v, key=lambda x: REGION_ORDER_MAP.get(x, 99)) for k, v in found_by_chain.items()
+        }
         try:
             with open(args.output_regions_found, "w") as f:
-                json.dump(list_of_found_regions, f, indent=2)  # sort_keys=True for dicts, not lists
-            print(f"List of found regions {list_of_found_regions} written to {args.output_regions_found}")
+                json.dump(regions_found_out, f, indent=2, sort_keys=True)
+            print(f"Found regions {regions_found_out} written to {args.output_regions_found}")
         except IOError as e:
             print(f"Error writing found regions list to '{args.output_regions_found}': {e}", file=sys.stderr)
 
