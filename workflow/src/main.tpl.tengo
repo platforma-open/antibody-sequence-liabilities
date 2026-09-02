@@ -259,15 +259,21 @@ wf.body(func(args) {
 
 	hasAnnotations := len(annotations) > 0
 
-	// features per chain. Bulk annotations have no chain, they are indexed by ""
-	annotationFeatures := {}
-	for ann_entry in annotations {
-		chain := ann_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
-		annFeature := ann_entry.spec.domain["pl7.app/vdj/feature"]
-		if !is_undefined(annFeature) && annFeature != "" {
-			annotationFeatures[is_undefined(chain) ? "" : chain] = annFeature
+	// CDR3 and CDRs-annotation specs taken straight from the input columns, keyed by chain ("" for bulk).
+	cdr3Specs := {}
+	annotationSpecs := {}
+	// Only the primary chain is echoed, and the first match per chain wins.
+	recordPrimary := func(dst, entry) {
+		idx := entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"]
+		if is_undefined(idx) || idx == "primary" {
+			c := entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
+			key := is_undefined(c) ? "" : c
+			if is_undefined(dst[key]) { dst[key] = entry.spec }
 		}
 	}
+	for entry in sequences { if featureOf(entry.spec) == "CDR3" { recordPrimary(cdr3Specs, entry) } }
+	for entry in additionalSequences { if featureOf(entry.spec) == "CDR3" { recordPrimary(cdr3Specs, entry) } }
+	for ann_entry in annotations { recordPrimary(annotationSpecs, ann_entry) }
 
 	// Whether the chains are separated by the pl7.app/vdj/scClonotypeChain COLUMN domain rather
 	// than by the frame. Single-cell data is the long-standing case; import-vdj-data's bare
@@ -510,7 +516,8 @@ wf.body(func(args) {
 			primaryChains: primaryChains,
 			chainLabels: chainLabels,
 			cdr3SeqPrefixed: cdr3SeqPrefixed,
-			annotationFeatures: annotationFeatures
+			cdr3Specs: cdr3Specs,
+			annotationSpecs: annotationSpecs
 		})
 	}, {
 		metaInputs: { mem: args.mem }

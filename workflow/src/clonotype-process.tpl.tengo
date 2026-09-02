@@ -38,7 +38,8 @@ self.body(func(args) {
     primaryChains := params.primaryChains
     chainLabels := is_undefined(params.chainLabels) ? { "A": "Heavy", "B": "Light" } : params.chainLabels
     cdr3SeqPrefixed := params.cdr3SeqPrefixed
-    annotationFeatures := params.annotationFeatures
+    cdr3Specs := params.cdr3Specs
+    annotationSpecs := params.annotationSpecs
     newMapping := canonical.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
 
@@ -221,19 +222,15 @@ self.body(func(args) {
 			// non-scFv data (bare "CDR3 aa"), but keeps it for scFv or multi-chain ("A CDR3 aa").
 			cdr3SeqColumn := cdr3SeqPrefixed ? (chain_val + " CDR3 aa") : "CDR3 aa"
 
-			// Sequence column (Python script selects these based on input like "A CDR3 aa")
+			// Name and domain taken straight from this chain's input CDR3 column.
+			cdr3Spec := cdr3Specs[chain_val]
 			sequenceColumns += [{
 				column: cdr3SeqColumn,
 				id: "cdr3-aa-primary-" + text.to_lower(chain_val),
 				spec: {
-					name: "pl7.app/vdj/sequence",
+					name: cdr3Spec.name,
 					valueType: "String",
-					domain: {
-						"pl7.app/alphabet": "aminoacid",
-						"pl7.app/vdj/feature": "CDR3",
-						"pl7.app/vdj/scClonotypeChain": chain_val,
-						"pl7.app/vdj/scClonotypeChain/index": "primary"
-					},
+					domain: cdr3Spec.domain,
 					annotations: {
 						"pl7.app/label": chainLabel + " CDR3 aa",
 						"pl7.app/table/visibility": "default",
@@ -242,28 +239,16 @@ self.body(func(args) {
 				}
 			}]
 
-			// Annotation column (Python script outputs e.g., "A annotations")
+			// Name and domain taken straight from this chain's input CDRs annotation column.
             if hasAnnotations {
-                // Feature of the sequence the offsets index into, inherited from the upstream
-                // track. Omitted when the upstream declares none, rather than guessed: a wrong
-                // feature pairs the annotation with a sequence its coordinates overrun.
-                annDomain := {
-                    "pl7.app/alphabet": "aminoacid",
-                    "pl7.app/vdj/scClonotypeChain": chain_val,
-                    "pl7.app/vdj/scClonotypeChain/index": "primary",
-                    "pl7.app/sequence/annotation/type": "CDRs" // Type of annotation
-                }
-				annFeature := annotationFeatures[chain_val]
-				if !is_undefined(annFeature) {
-					annDomain["pl7.app/vdj/feature"] = annFeature
-				}
+                annSpec := annotationSpecs[chain_val]
                 sequenceColumns += [{
                     column: chain_val + " annotations",
                     id: "annotations-cdrs-primary-" + text.to_lower(chain_val),
                     spec: {
-                        name: "pl7.app/vdj/sequence/annotation",
+                        name: annSpec.name,
                         valueType: "String",
-                        domain: annDomain,
+                        domain: annSpec.domain,
                         annotations: {
                             "pl7.app/label": chainLabel + " CDRs Annotations",
                             "pl7.app/table/visibility": "hidden",
@@ -277,17 +262,15 @@ self.body(func(args) {
             }
         }
 	} else { // Bulk data
-		// Sequence column (Python script outputs e.g., "CDR3 aa")
+		// Name and domain taken straight from the input bulk CDR3 column.
+		cdr3Spec := cdr3Specs[""]
 		sequenceColumns += [{
 			column: "CDR3 aa",
 			id: "cdr3-aa",
 			spec: {
-				name: "pl7.app/vdj/sequence",
+				name: cdr3Spec.name,
 				valueType: "String",
-				domain: {
-					"pl7.app/alphabet": "aminoacid",
-					"pl7.app/vdj/feature": "CDR3"
-				},
+				domain: cdr3Spec.domain,
 				annotations: {
 					"pl7.app/label": "CDR3 aa",
 					"pl7.app/table/visibility": "default",
@@ -296,24 +279,16 @@ self.body(func(args) {
 			}
 		}]
 
-		// Annotation column (Python script outputs "CDRs Annotations")
+		// Name and domain taken straight from the input bulk CDRs annotation column.
 		if hasAnnotations {
-			// See the single-cell branch above: the feature is inherited, not assumed.
-			annDomain := {
-				"pl7.app/alphabet": "aminoacid",
-				"pl7.app/sequence/annotation/type": "CDRs"
-			}
-			annFeature := annotationFeatures[""]
-			if !is_undefined(annFeature) {
-				annDomain["pl7.app/vdj/feature"] = annFeature
-			}
+			annSpec := annotationSpecs[""]
 			sequenceColumns += [{
 				column: "Annotations",
 				id: "annotations-cdrs",
 				spec: {
-				name: "pl7.app/vdj/sequence/annotation",
+				name: annSpec.name,
 				valueType: "String",
-				domain: annDomain,
+				domain: annSpec.domain,
 				annotations: {
 					"pl7.app/label": "annotations",
 					"pl7.app/table/visibility": "hidden",
