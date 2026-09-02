@@ -28,6 +28,14 @@ CHAIN_LABELS := {
 	"TCRGD": { "A": "Delta", "B": "Gamma" }
 }
 
+// Left-to-right chain order in the results table, by naming convention: Heavy then Light,
+// alpha then beta, gamma then delta (the non-D chain leads for TCR, the D chain for IG).
+CHAIN_ORDER := {
+	"IG": ["A", "B"],
+	"TCRAB": ["B", "A"],
+	"TCRGD": ["B", "A"]
+}
+
 regionFeature := func(feature) {
 	return feature == "FR4InFrame" ? "FR4" : feature
 }
@@ -460,13 +468,13 @@ wf.body(func(args) {
 
 	features := maps.getKeys(coveredFeatures)
 
-	// Get the chain order list
+	// Chains in table order (receptor naming convention), keeping only those actually present.
+	chainOrder := is_undefined(CHAIN_ORDER[receptor]) ? ["A", "B"] : CHAIN_ORDER[receptor]
 	primaryChains := []
-	if primaryChainsSet["A"] {
-		primaryChains += ["A"]
-	}
-	if primaryChainsSet["B"] {
-		primaryChains += ["B"]
+	for c in chainOrder {
+		if primaryChainsSet[c] {
+			primaryChains += [c]
+		}
 	}
 	// A fed CDR3 region column is always chain-prefixed; only the annotation-extracted one
 	// drops the prefix, and only when a single chain is present.
@@ -515,6 +523,7 @@ wf.body(func(args) {
 			hasAnnotations: hasAnnotations,
 			primaryChains: primaryChains,
 			chainLabels: chainLabels,
+			chainOrder: chainOrder,
 			cdr3SeqPrefixed: cdr3SeqPrefixed,
 			cdr3Specs: cdr3Specs,
 			annotationSpecs: annotationSpecs
