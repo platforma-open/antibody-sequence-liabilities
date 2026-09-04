@@ -303,14 +303,15 @@ def test_output_regions_found_writes_json(tmp_path):
     regions_file = tmp_path / "regions.json"
     run_main(tmp_path, ["--output-regions-found", str(regions_file)])
     regions = json.loads(regions_file.read_text())
-    assert set(regions) >= {"CDR1", "CDR2", "CDR3", "FR1"}
+    # Bulk data is unprefixed, so the per-chain map carries a single "" key.
+    assert set(regions[""]) >= {"CDR1", "CDR2", "CDR3", "FR1"}
 
 
 def test_output_regions_found_ordering(tmp_path):
     """Regions are returned in anatomical order (FR1, CDR1, CDR2, CDR3, ...)."""
     regions_file = tmp_path / "regions.json"
     run_main(tmp_path, ["--output-regions-found", str(regions_file)])
-    regions = json.loads(regions_file.read_text())
+    regions = json.loads(regions_file.read_text())[""]
     cdr_indices = {r: regions.index(r) for r in ["FR1", "CDR1", "CDR2", "CDR3"] if r in regions}
     assert cdr_indices["FR1"] < cdr_indices["CDR1"] < cdr_indices["CDR2"] < cdr_indices["CDR3"]
 
@@ -423,28 +424,40 @@ def test_sc_heavy_chain_liability_detected(tmp_path):
     assert r["Developability cost"] == pytest.approx(1.5)
 
 
-def test_sc_summary_has_chain_prefix(tmp_path):
-    """Multi-chain summary uses 'Heavy chain:' / 'Light chain:' prefixes."""
+def test_sc_summary_split_per_chain(tmp_path):
+    """Paired data reports one summary column per chain (keyed by wire letter A/B), with no
+    combined column and no redundant 'Heavy chain:' prefix inside the value."""
     df = run_main(tmp_path, data_path=DATA_SC)
     r = row(df, "sc_heavy_met_cdr3")
-    summary = r["Sequence liabilities summary"]
-    assert "Heavy chain" in summary
-    assert "Methionine Oxidation (M)" in summary
+    assert "Methionine Oxidation (M)" in r["A Sequence liabilities summary"]
+    assert "chain" not in r["A Sequence liabilities summary"]
+    assert "Sequence liabilities summary" not in df.columns
+
+
+def test_sc_summary_columns_use_wire_chain_letters(tmp_path):
+    """Per-chain summary columns are keyed by the wire letters A/B; display labels are applied
+    downstream, so --chain-labels changes neither the column names nor the values."""
+    df = run_main(tmp_path, ["--chain-labels", "A=Beta,B=Alpha"], data_path=DATA_SC)
+    r = row(df, "sc_both_chains_liab")
+    assert "A Sequence liabilities summary" in df.columns
+    assert "B Sequence liabilities summary" in df.columns
+    assert "Beta" not in r["A Sequence liabilities summary"]
+    assert "Alpha" not in r["B Sequence liabilities summary"]
 
 
 def test_sc_clean_summary_is_none(tmp_path):
     df = run_main(tmp_path, data_path=DATA_SC)
     r = row(df, "sc_clean")
-    assert r["Sequence liabilities summary"] == "None"
+    assert r["A Sequence liabilities summary"] == "None"
+    assert r["B Sequence liabilities summary"] == "None"
 
 
 def test_sc_both_chains_liabilities(tmp_path):
-    """Liabilities in both Heavy and Light chains appear in the summary."""
+    """Liabilities in both chains appear in their respective per-chain summaries."""
     df = run_main(tmp_path, data_path=DATA_SC)
     r = row(df, "sc_both_chains_liab")
-    summary = r["Sequence liabilities summary"]
-    assert "Heavy chain" in summary
-    assert "Light chain" in summary
+    assert r["A Sequence liabilities summary"] != "None"
+    assert r["B Sequence liabilities summary"] != "None"
 
 
 # ---------------------------------------------------------------------------
@@ -691,7 +704,7 @@ def test_regions_found_output_reflects_scope(tmp_path):
         ["--regions", "CDR3", "--output-regions-found", str(out_regions)],
         data_path=_parental_data(tmp_path),
     )
-    assert json.loads(out_regions.read_text()) == ["CDR3"]
+    assert json.loads(out_regions.read_text()) == {"": ["CDR3"]}
 
 
 def test_regions_excludes_parental_liabilities_from_score(tmp_path):
@@ -769,7 +782,7 @@ def test_regions_all_absent_reports_every_found_region(tmp_path):
         ["--regions", "FR2", "--output-regions-found", str(out_regions)],
         data_path=_parental_data(tmp_path),
     )
-    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "CDR2", "CDR3"]
+    assert json.loads(out_regions.read_text()) == {"": ["FR1", "CDR1", "CDR2", "CDR3"]}
 
 
 def test_regions_partially_absent_still_narrows(tmp_path):
@@ -902,7 +915,7 @@ def test_fr4_scope_is_honoured_not_widened(tmp_path):
         ["--regions", "FR4", "--output-regions-found", str(out_regions)],
         data_path=_fr4_data(tmp_path),
     )
-    assert json.loads(out_regions.read_text()) == ["FR4"]
+    assert json.loads(out_regions.read_text()) == {"": ["FR4"]}
     assert "FR4 aa liabilities" in df.columns
     for absent in ("CDR1 aa liabilities", "CDR2 aa liabilities", "CDR3 aa liabilities", "FR1 aa liabilities"):
         assert absent not in df.columns
@@ -953,7 +966,7 @@ def test_single_chain_values_carry_no_chain_label(tmp_path):
     """
     data = tmp_path / "single_chain.tsv"
     data.write_text(
-        "clonotypeKey\tHeavy CDR3 aa\tHeavy FR1 aa\tHeavy FR4 aa\n"
+        "clonotypeKey\tA CDR3 aa\tA FR1 aa\tA FR4 aa\n"
         "one\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\tWGQGTCVTVSS\n"
     )
     r = row(run_main(tmp_path, data_path=data), "one")
@@ -963,22 +976,28 @@ def test_single_chain_values_carry_no_chain_label(tmp_path):
     assert r["FR4 aa risk"] == "High"
 
 
-def test_region_on_one_chain_still_emits_combined_column(tmp_path):
-    """The Tengo side declares "<region> aa liabilities" for every region in --output-regions-found,
-    never chain-prefixed, so a one-sided region must still produce that name.
+def test_region_on_one_chain_emits_only_that_chains_column(tmp_path):
+    """Paired data reports each chain's regions separately: a region only one chain carries
+    produces just that chain's column, never a combined one. --output-regions-found is a per-chain
+    map, and the Tengo side builds "<chain> <region> aa liabilities" from it.
     """
     out_regions = tmp_path / "regions.json"
     data = tmp_path / "asym.tsv"
     data.write_text(
-        "clonotypeKey\tHeavy CDR3 aa\tHeavy FR1 aa\tHeavy FR4 aa\tLight CDR3 aa\tLight FR1 aa\n"
+        "clonotypeKey\tA CDR3 aa\tA FR1 aa\tA FR4 aa\tB CDR3 aa\tB FR1 aa\n"
         "asym\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\tWGQGTCVTVSS\tCARYALD\tQVQLVQSGAEVKKPDPSVKVSCKAS\n"
     )
     df = run_main(tmp_path, ["--output-regions-found", str(out_regions)], data_path=data)
-    assert row(df, "asym")["FR4 aa liabilities"] == "Heavy: Extra Cysteines"
-    assert "Heavy FR4 aa liabilities" not in df.columns
-    for region in json.loads(out_regions.read_text()):
-        assert f"{region} aa liabilities" in df.columns
-        assert f"{region} aa risk" in df.columns
+    assert row(df, "asym")["A FR4 aa liabilities"] == "Extra Cysteines"
+    assert "B FR4 aa liabilities" not in df.columns
+    assert "FR4 aa liabilities" not in df.columns
+    regions = json.loads(out_regions.read_text())
+    assert "FR4" in regions["A"]
+    assert "FR4" not in regions.get("B", [])
+    for chain, chain_regions in regions.items():
+        for region in chain_regions:
+            assert f"{chain} {region} aa liabilities" in df.columns
+            assert f"{chain} {region} aa risk" in df.columns
 
 
 # ---------------------------------------------------------------------------
@@ -1003,7 +1022,7 @@ def _sc_table(tmp_path: Path, regions: dict, name: str = "sc_regions.tsv") -> Pa
     annotation, and the per-chain region columns.
     """
     header, values = ["clonotypeKey"], ["k1"]
-    for chain in ("Heavy", "Light"):
+    for chain in ("A", "B"):
         header += [f"{chain}  sequence aa", f"{chain} annotations"]
         values += [SC_CHAIN_SEQ, SC_ANN]
         header += [f"{chain} {region}" for region in regions]
@@ -1025,13 +1044,15 @@ def test_sc_region_columns_cover_every_region(tmp_path):
         ["-m", str(label_map_file), "--output-regions-found", str(out_regions)],
         data_path=_sc_table(tmp_path, SC_REGIONS),
     )
-    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "FR2", "CDR2", "FR3", "CDR3", "FR4"]
-    for region in ("FR1", "CDR1", "FR2", "CDR2", "FR3", "CDR3", "FR4"):
-        assert f"{region} aa liabilities" in df.columns
-        assert f"{region} aa risk" in df.columns
+    all_regions = ["FR1", "CDR1", "FR2", "CDR2", "FR3", "CDR3", "FR4"]
+    assert json.loads(out_regions.read_text()) == {"A": all_regions, "B": all_regions}
+    for chain in ("A", "B"):
+        for region in all_regions:
+            assert f"{chain} {region} aa liabilities" in df.columns
+            assert f"{chain} {region} aa risk" in df.columns
     # cdr3SeqPrefixed: a fed CDR3 column keeps its chain prefix, and the Tengo side declares it so.
-    assert "Heavy CDR3 aa" in df.columns
-    assert "Light CDR3 aa" in df.columns
+    assert "A CDR3 aa" in df.columns
+    assert "B CDR3 aa" in df.columns
 
 
 def test_sc_partial_region_columns_do_not_collide_with_extraction(tmp_path):
@@ -1047,9 +1068,11 @@ def test_sc_partial_region_columns_do_not_collide_with_extraction(tmp_path):
         ["-m", str(label_map_file), "--output-regions-found", str(out_regions)],
         data_path=_sc_table(tmp_path, partial, name="sc_partial.tsv"),
     )
-    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "CDR2", "CDR3", "FR4"]
-    assert row(df, "k1")["FR4 aa liabilities"] == "Heavy: Extra Cysteines | Light: Extra Cysteines"
-    assert row(df, "k1")["CDR1 aa liabilities"] == "Heavy: None | Light: None"
+    partial_regions = ["FR1", "CDR1", "CDR2", "CDR3", "FR4"]
+    assert json.loads(out_regions.read_text()) == {"A": partial_regions, "B": partial_regions}
+    assert row(df, "k1")["A FR4 aa liabilities"] == "Extra Cysteines"
+    assert row(df, "k1")["B FR4 aa liabilities"] == "Extra Cysteines"
+    assert row(df, "k1")["A CDR1 aa liabilities"] == "None"
 
 
 def test_sc_single_chain_fed_region_is_not_extracted_again(tmp_path):
@@ -1062,7 +1085,7 @@ def test_sc_single_chain_fed_region_is_not_extracted_again(tmp_path):
     out_regions = tmp_path / "regions.json"
     data = tmp_path / "sc_one_chain.tsv"
     data.write_text(
-        "clonotypeKey\tHeavy  sequence aa\tHeavy annotations\tHeavy CDR3 aa\tHeavy FR4 aa\n"
+        "clonotypeKey\tA  sequence aa\tA annotations\tA CDR3 aa\tA FR4 aa\n"
         f"k1\t{SC_CHAIN_SEQ}\t{SC_ANN}\tCARYALD\tWGQGTCVTVSS\n"
     )
     df = run_main(
@@ -1070,11 +1093,12 @@ def test_sc_single_chain_fed_region_is_not_extracted_again(tmp_path):
         ["-m", str(label_map_file), "--output-regions-found", str(out_regions)],
         data_path=data,
     )
-    assert json.loads(out_regions.read_text()) == ["FR1", "CDR1", "CDR2", "CDR3", "FR4"]
+    # Single chain -> unprefixed, so the per-chain map has one "" key.
+    assert json.loads(out_regions.read_text()) == {"": ["FR1", "CDR1", "CDR2", "CDR3", "FR4"]}
     # One CDR3 scan, from the fed column, and no second unprefixed copy of it.
-    assert "Heavy CDR3 aa liabilities" not in df.columns
+    assert "A CDR3 aa liabilities" not in df.columns
     assert "CDR3 aa" not in df.columns
-    assert "Heavy CDR3 aa" in df.columns
+    assert "A CDR3 aa" in df.columns
     r = row(df, "k1")
     assert r["CDR3 aa liabilities"] == "None"
     assert r["FR4 aa liabilities"] == "Extra Cysteines"
@@ -1087,7 +1111,7 @@ def test_unscannable_input_fails_instead_of_reporting_clean(tmp_path):
     scanned, and blank global columns would read as a clean result.
     """
     data = tmp_path / "whole_chain_only.tsv"
-    data.write_text("clonotypeKey\tHeavy  sequence aa\nk1\tQVQLVQSGAEVKKPGASVKVSCKASCARMGDFWGQGT\n")
+    data.write_text("clonotypeKey\tA  sequence aa\nk1\tQVQLVQSGAEVKKPGASVKVSCKASCARMGDFWGQGT\n")
     with pytest.raises(SystemExit):
         run_main(tmp_path, data_path=data)
 
@@ -1100,7 +1124,7 @@ SC_REGIONS_HIT = {**SC_REGIONS, "CDR3 aa": "CARYNGF"}
 
 def _sc_table_hit(tmp_path: Path) -> Path:
     header, values = ["clonotypeKey"], ["k1"]
-    for chain in ("Heavy", "Light"):
+    for chain in ("A", "B"):
         header += [f"{chain}  sequence aa", f"{chain} annotations"]
         values += [SC_CHAIN_SEQ_HIT, SC_ANN]
         header += [f"{chain} {region}" for region in SC_REGIONS_HIT]
@@ -1130,14 +1154,14 @@ def test_sc_fed_region_columns_still_annotate_liabilities(tmp_path):
 
     hits = [
         (lab, start)
-        for lab, start, _length in parse_annotations(r["Heavy annotations"])
+        for lab, start, _length in parse_annotations(r["A annotations"])
         if lab not in LABEL_MAP
     ]
-    assert hits, f"annotation carries no liability entries: {r['Heavy annotations']}"
+    assert hits, f"annotation carries no liability entries: {r['A annotations']}"
 
     final_map = json.loads(out_map.read_text())
     assert "Deamidation (N[GS])" in final_map.values()
 
     # The fed columns are still what gets scanned, and extraction adds no duplicate of them.
-    assert "Deamidation (N[GS])" in r["CDR3 aa liabilities"]
+    assert "Deamidation (N[GS])" in r["A CDR3 aa liabilities"]
     assert len(set(df.columns)) == len(df.columns)

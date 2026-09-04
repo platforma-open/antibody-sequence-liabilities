@@ -17,6 +17,7 @@ self.body(func(args) {
 	inputTable := args.table
     mapping := args.mapping
 	numberingSchema := args.numberingSchema
+	chainLabels := args.chainLabels
 	customLiabilities := args.customLiabilities
 	usePredefinedLiabilities := args.usePredefinedLiabilities
 	disabledPredefinedLiabilities := args.disabledPredefinedLiabilities
@@ -47,6 +48,10 @@ self.body(func(args) {
 
 	if numberingSchema {
 		liabilitiesCalcCmd.arg("--numbering-schema").arg(numberingSchema)
+	}
+
+	if chainLabels {
+		liabilitiesCalcCmd.arg("--chain-labels").arg(chainLabels)
 	}
 
 	if customLiabilities && len(customLiabilities) > 0 {

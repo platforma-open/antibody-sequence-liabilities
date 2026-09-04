@@ -354,6 +354,7 @@ watch([importedFileBytes, importedFileData] as const, ([bytes, data]) => {
       <PlDropdownMulti
         v-model="selectedRegions"
         :options="regionScopeOptions"
+        placeholder="All columns"
         label="Regions to scan"
       >
         <template #tooltip>
