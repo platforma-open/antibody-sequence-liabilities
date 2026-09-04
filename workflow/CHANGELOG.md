@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.workflow
 
+## 6.2.3
+
+### Patch Changes
+
+- 72afc54: Report paired-chain liabilities per chain instead of concatenating them. For two-chain data (single-cell and paired VDJ, IG/TCR AB/TCR GD) the per-region Liabilities and Risk columns and the Sequence liabilities summary are now emitted separately per chain (e.g. "Heavy FR1 Liabilities", "Light FR1 Liabilities", "Heavy sequence liabilities summary") using the receptor's chain labels, rather than one combined column carrying "Heavy chain: ... | Light chain: ...". Single-chain and bulk data are unchanged. Whole-molecule columns (Is Productive, Structural liabilities, Developability risk/cost) stay single. The regions-found handoff between the Python script and the workflow is now a per-chain map. Per-chain columns are ordered left to right by the receptor's naming convention (Heavy before Light, Alpha before Beta, Gamma before Delta) rather than by the internal A/B chain letter. Per-region framework (FR1-FR4) Liabilities and Risk columns are off by default (table visibility "optional", so they stay in the column selector) to keep the table focused on the CDRs; the framework signal also remains in the whole-molecule Structural/Developability columns and the per-chain summary, and the FR columns stay exported.
+- eb2fb5b: Echo the CDR3 sequence and CDRs annotation columns using each input column's own name and domain instead of re-deriving them in clonotype-process. VDJ inputs are unchanged; amplicon (Amplicon Profiling) inputs now keep their native pl7.app/sequence namespace on the echoed CDR3 column in the block's own table. Only the primary chain's specs are echoed, so a secondary single-cell chain can no longer leak into the exported annotation.
+- 5960707: Name TCR chain columns after the receptor instead of Heavy/Light. Chains now travel to the liabilities script as receptor-neutral A/B chain letters, with the display names (Heavy/Light, Alpha/Beta, Gamma/Delta) derived from `pl7.app/vdj/receptor` and passed in via `--chain-labels`.
+- Updated dependencies [72afc54]
+- Updated dependencies [5960707]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script@6.1.3
+
 ## 6.2.2
 
 ### Patch Changes
