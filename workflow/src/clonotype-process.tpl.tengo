@@ -36,8 +36,11 @@ self.body(func(args) {
     coveredFeatures := params.coveredFeatures
     hasAnnotations := params.hasAnnotations
     primaryChains := params.primaryChains
+    chainLabels := is_undefined(params.chainLabels) ? { "A": "Heavy", "B": "Light" } : params.chainLabels
+    chainOrder := is_undefined(params.chainOrder) ? ["A", "B"] : params.chainOrder
     cdr3SeqPrefixed := params.cdr3SeqPrefixed
-    annotationFeatures := params.annotationFeatures
+    cdr3Specs := params.cdr3Specs
+    annotationSpecs := params.annotationSpecs
     newMapping := canonical.encode(args.newMapping.getDataAsJson())
     regionsFound := args.regionsFound.getDataAsJson()
 
@@ -142,128 +145,148 @@ self.body(func(args) {
 
     orderPriorityBase := 99
 
-	for f_name in regionsFound {
-		liabColNameFromPy := f_name + " aa liabilities"
-		riskColNameFromPy := f_name + " aa risk"
+	// regionsFound is keyed by chain ("A"/"B" for paired data, "" otherwise). Emit chains in table
+	// order: the receptor's chain order, then the unprefixed key. Each gets per-region + summary.
+	orderedChainKeys := []
+	for c in chainOrder {
+		if !is_undefined(regionsFound[c]) {
+			orderedChainKeys += [c]
+		}
+	}
+	if !is_undefined(regionsFound[""]) {
+		orderedChainKeys += [""]
+	}
+	summaryChainKeys := orderedChainKeys
+	if len(summaryChainKeys) == 0 {
+		summaryChainKeys = [""]
+	}
 
-		liabilityColumns += [
-			{
-				column: liabColNameFromPy,
-				id: text.to_lower(f_name) + "-liabilities",
-				naRegex: "",
-				allowNA: true,
-				spec: {
-					name: "pl7.app/vdj/Liabilities",
-					valueType: "String",
-					domain: { "pl7.app/vdj/feature": f_name },
-					annotations: {
-						"pl7.app/label": f_name + " Liabilities",
-						"pl7.app/table/visibility": "default",
-						"pl7.app/table/orderPriority": string(orderPriorityBase)
+	for chainKey in orderedChainKeys {
+		isPref := chainKey != ""
+		labelPrefix := isPref ? chainLabels[chainKey] + " " : ""
+		idPrefix := isPref ? text.to_lower(chainKey) + "-" : ""
+		for f_name in regionsFound[chainKey] {
+			colBase := isPref ? chainKey + " " + f_name + " aa" : f_name + " aa"
+			// Framework per-region columns are off by default but stay in the column selector
+			// ("optional"); their signal is also in the global columns and the per-chain summary.
+			regionVisibility := text.has_prefix(f_name, "FR") ? "optional" : "default"
+			liabDomain := { "pl7.app/vdj/feature": f_name }
+			riskDomain := { "pl7.app/vdj/feature": f_name }
+			if isPref {
+				liabDomain["pl7.app/vdj/scClonotypeChain"] = chainKey
+				riskDomain["pl7.app/vdj/scClonotypeChain"] = chainKey
+			}
+			liabilityColumns += [
+				{
+					column: colBase + " liabilities",
+					id: idPrefix + text.to_lower(f_name) + "-liabilities",
+					naRegex: "",
+					allowNA: true,
+					spec: {
+						name: "pl7.app/vdj/Liabilities",
+						valueType: "String",
+						domain: liabDomain,
+						annotations: {
+							"pl7.app/label": labelPrefix + f_name + " Liabilities",
+							"pl7.app/table/visibility": regionVisibility,
+							"pl7.app/table/orderPriority": string(orderPriorityBase)
+						}
+					}
+				},
+				{
+					column: colBase + " risk",
+					id: idPrefix + text.to_lower(f_name) + "-risk",
+					naRegex: "",
+					allowNA: true,
+					spec: {
+						name: "pl7.app/vdj/liabilitiesRisk",
+						valueType: "String",
+						domain: riskDomain,
+						annotations: {
+							"pl7.app/label": labelPrefix + f_name + " Risk",
+							"pl7.app/table/visibility": regionVisibility,
+							"pl7.app/isScore": "true",
+							"pl7.app/isDiscreteFilter": "true",
+							"pl7.app/discreteValues": perRegionDiscreteValues,
+							"pl7.app/table/orderPriority": string(orderPriorityBase - 1)
+						}
 					}
 				}
-			},
+			]
+			orderPriorityBase -= 2
+		}
+	}
+
+	for chainKey in summaryChainKeys {
+		isPref := chainKey != ""
+		summaryDomain := {}
+		if isPref {
+			summaryDomain["pl7.app/vdj/scClonotypeChain"] = chainKey
+		}
+		liabilityColumns += [
 			{
-				column: riskColNameFromPy,
-				id: text.to_lower(f_name) + "-risk",
+				column: isPref ? chainKey + " Sequence liabilities summary" : "Sequence liabilities summary",
+				id: (isPref ? text.to_lower(chainKey) + "-" : "") + "sequence-liabilities-summary",
 				naRegex: "",
 				allowNA: true,
 				spec: {
-					name: "pl7.app/vdj/liabilitiesRisk",
+					name: "pl7.app/sequenceLiabilitiesSummary",
 					valueType: "String",
-					domain: { "pl7.app/vdj/feature": f_name },
+					domain: summaryDomain,
 					annotations: {
-						"pl7.app/label": f_name + " Risk",
+						"pl7.app/label": isPref ? chainLabels[chainKey] + " sequence liabilities summary" : "Sequence liabilities summary",
+						"pl7.app/isSummary": "true",
 						"pl7.app/table/visibility": "default",
-						"pl7.app/isScore": "true",
-						"pl7.app/isDiscreteFilter": "true",
-						"pl7.app/discreteValues": perRegionDiscreteValues,
 						"pl7.app/table/orderPriority": string(orderPriorityBase - 1)
 					}
 				}
 			}
 		]
-		orderPriorityBase -= 2
+		orderPriorityBase -= 1
 	}
-
-	liabilityColumns += [
-		{
-			column: "Sequence liabilities summary",
-			id: "sequence-liabilities-summary",
-			naRegex: "",
-			allowNA: true,
-			spec: {
-				name: "pl7.app/sequenceLiabilitiesSummary",
-				valueType: "String",
-				annotations: {
-					"pl7.app/label": "Sequence liabilities summary",
-					"pl7.app/isSummary": "true",
-					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": string(orderPriorityBase - 1)
-				}
-			}
-		}
-	]
 
     sequenceColumns := []
 
 	// Add sequence and annotation columns. Python script always outputs annotation columns.
 	if perChain {
 		// Chain-separated input: show each present chain's sequence and annotations. Iterate
-		// only the chains that actually exist (primaryChains) so heavy-only input — a VHH
-		// single-cell set, or a bare set with one chain mapped — doesn't request a Light chain
+		// only the chains that actually exist (primaryChains) so single-chain input — a VHH
+		// single-cell set, or a bare set with one chain mapped — doesn't request a second chain
 		// that was never there.
-		for chain_val in primaryChains {
-			chainLabel := (chain_val == "A" ? "Heavy" : "Light")
+		for i, chain_val in primaryChains {
+			chainLabel := chainLabels[chain_val]
 
 			// main.py drops the chain prefix on the extracted CDR3 sequence for single-chain
-			// non-scFv data (bare "CDR3 aa"), but keeps it for scFv or multi-chain ("Heavy
-			// CDR3 aa").
-			cdr3SeqColumn := cdr3SeqPrefixed ? (chainLabel + " " + "CDR3 aa") : "CDR3 aa"
+			// non-scFv data (bare "CDR3 aa"), but keeps it for scFv or multi-chain ("A CDR3 aa").
+			cdr3SeqColumn := cdr3SeqPrefixed ? (chain_val + " CDR3 aa") : "CDR3 aa"
 
-			// Sequence column (Python script selects these based on input like "Heavy CDR3 aa")
+			// Name and domain taken straight from this chain's input CDR3 column.
+			cdr3Spec := cdr3Specs[chain_val]
 			sequenceColumns += [{
 				column: cdr3SeqColumn,
-				id: "cdr3-aa-primary-" + text.to_lower(chainLabel),
+				id: "cdr3-aa-primary-" + text.to_lower(chain_val),
 				spec: {
-					name: "pl7.app/vdj/sequence",
+					name: cdr3Spec.name,
 					valueType: "String",
-					domain: {
-						"pl7.app/alphabet": "aminoacid",
-						"pl7.app/vdj/feature": "CDR3",
-						"pl7.app/vdj/scClonotypeChain": chain_val,
-						"pl7.app/vdj/scClonotypeChain/index": "primary"
-					},
+					domain: cdr3Spec.domain,
 					annotations: {
-						"pl7.app/label": chainLabel + " " + "CDR3 aa",
+						"pl7.app/label": chainLabel + " CDR3 aa",
 						"pl7.app/table/visibility": "default",
-						"pl7.app/table/orderPriority": (chain_val == "A" ? "101" : "100")
+						"pl7.app/table/orderPriority": string(101 - i)
 					}
 				}
 			}]
 
-			// Annotation column (Python script outputs e.g., "Heavy CDRs Annotations")
+			// Name and domain taken straight from this chain's input CDRs annotation column.
             if hasAnnotations {
-                // Feature of the sequence the offsets index into, inherited from the upstream
-                // track. Omitted when the upstream declares none, rather than guessed: a wrong
-                // feature pairs the annotation with a sequence its coordinates overrun.
-                annDomain := {
-                    "pl7.app/alphabet": "aminoacid",
-                    "pl7.app/vdj/scClonotypeChain": chain_val,
-                    "pl7.app/vdj/scClonotypeChain/index": "primary",
-                    "pl7.app/sequence/annotation/type": "CDRs" // Type of annotation
-                }
-				annFeature := annotationFeatures[chain_val]
-				if !is_undefined(annFeature) {
-					annDomain["pl7.app/vdj/feature"] = annFeature
-				}
+                annSpec := annotationSpecs[chain_val]
                 sequenceColumns += [{
-                    column: chainLabel + " annotations",
-                    id: "annotations-cdrs-primary-" + text.to_lower(chainLabel),
+                    column: chain_val + " annotations",
+                    id: "annotations-cdrs-primary-" + text.to_lower(chain_val),
                     spec: {
-                        name: "pl7.app/vdj/sequence/annotation",
+                        name: annSpec.name,
                         valueType: "String",
-                        domain: annDomain,
+                        domain: annSpec.domain,
                         annotations: {
                             "pl7.app/label": chainLabel + " CDRs Annotations",
                             "pl7.app/table/visibility": "hidden",
@@ -277,17 +300,15 @@ self.body(func(args) {
             }
         }
 	} else { // Bulk data
-		// Sequence column (Python script outputs e.g., "CDR3 aa")
+		// Name and domain taken straight from the input bulk CDR3 column.
+		cdr3Spec := cdr3Specs[""]
 		sequenceColumns += [{
 			column: "CDR3 aa",
 			id: "cdr3-aa",
 			spec: {
-				name: "pl7.app/vdj/sequence",
+				name: cdr3Spec.name,
 				valueType: "String",
-				domain: {
-					"pl7.app/alphabet": "aminoacid",
-					"pl7.app/vdj/feature": "CDR3"
-				},
+				domain: cdr3Spec.domain,
 				annotations: {
 					"pl7.app/label": "CDR3 aa",
 					"pl7.app/table/visibility": "default",
@@ -296,24 +317,16 @@ self.body(func(args) {
 			}
 		}]
 
-		// Annotation column (Python script outputs "CDRs Annotations")
+		// Name and domain taken straight from the input bulk CDRs annotation column.
 		if hasAnnotations {
-			// See the single-cell branch above: the feature is inherited, not assumed.
-			annDomain := {
-				"pl7.app/alphabet": "aminoacid",
-				"pl7.app/sequence/annotation/type": "CDRs"
-			}
-			annFeature := annotationFeatures[""]
-			if !is_undefined(annFeature) {
-				annDomain["pl7.app/vdj/feature"] = annFeature
-			}
+			annSpec := annotationSpecs[""]
 			sequenceColumns += [{
 				column: "Annotations",
 				id: "annotations-cdrs",
 				spec: {
-				name: "pl7.app/vdj/sequence/annotation",
+				name: annSpec.name,
 				valueType: "String",
-				domain: annDomain,
+				domain: annSpec.domain,
 				annotations: {
 					"pl7.app/label": "annotations",
 					"pl7.app/table/visibility": "hidden",
