@@ -39,6 +39,8 @@ self.body(func(args) {
     chainLabels := is_undefined(params.chainLabels) ? { "A": "Heavy", "B": "Light" } : params.chainLabels
     chainOrder := is_undefined(params.chainOrder) ? ["A", "B"] : params.chainOrder
     cdr3SeqPrefixed := params.cdr3SeqPrefixed
+    // Whether the results TSV carries a CDR3 aa column to echo
+    cdr3Available := is_undefined(params.cdr3Available) ? true : params.cdr3Available
     cdr3Specs := params.cdr3Specs
     annotationSpecs := params.annotationSpecs
     newMapping := canonical.encode(args.newMapping.getDataAsJson())
@@ -256,26 +258,28 @@ self.body(func(args) {
 		for i, chain_val in primaryChains {
 			chainLabel := chainLabels[chain_val]
 
-			// main.py drops the chain prefix on the extracted CDR3 sequence for single-chain
-			// non-scFv data (bare "CDR3 aa"), but keeps it for scFv or multi-chain ("A CDR3 aa").
-			cdr3SeqColumn := cdr3SeqPrefixed ? (chain_val + " CDR3 aa") : "CDR3 aa"
+			if cdr3Available {
+				// main.py drops the chain prefix on the extracted CDR3 sequence for single-chain
+				// non-scFv data (bare "CDR3 aa"), but keeps it for scFv or multi-chain ("A CDR3 aa").
+				cdr3SeqColumn := cdr3SeqPrefixed ? (chain_val + " CDR3 aa") : "CDR3 aa"
 
-			// Name and domain taken straight from this chain's input CDR3 column.
-			cdr3Spec := cdr3Specs[chain_val]
-			sequenceColumns += [{
-				column: cdr3SeqColumn,
-				id: "cdr3-aa-primary-" + text.to_lower(chain_val),
-				spec: {
-					name: cdr3Spec.name,
-					valueType: "String",
-					domain: cdr3Spec.domain,
-					annotations: {
-						"pl7.app/label": chainLabel + " CDR3 aa",
-						"pl7.app/table/visibility": "default",
-						"pl7.app/table/orderPriority": string(101 - i)
+				// Name and domain taken straight from this chain's input CDR3 column.
+				cdr3Spec := cdr3Specs[chain_val]
+				sequenceColumns += [{
+					column: cdr3SeqColumn,
+					id: "cdr3-aa-primary-" + text.to_lower(chain_val),
+					spec: {
+						name: cdr3Spec.name,
+						valueType: "String",
+						domain: cdr3Spec.domain,
+						annotations: {
+							"pl7.app/label": chainLabel + " CDR3 aa",
+							"pl7.app/table/visibility": "default",
+							"pl7.app/table/orderPriority": string(101 - i)
+						}
 					}
-				}
-			}]
+				}]
+			}
 
 			// Name and domain taken straight from this chain's input CDRs annotation column.
             if hasAnnotations {
@@ -300,22 +304,24 @@ self.body(func(args) {
             }
         }
 	} else { // Bulk data
-		// Name and domain taken straight from the input bulk CDR3 column.
-		cdr3Spec := cdr3Specs[""]
-		sequenceColumns += [{
-			column: "CDR3 aa",
-			id: "cdr3-aa",
-			spec: {
-				name: cdr3Spec.name,
-				valueType: "String",
-				domain: cdr3Spec.domain,
-				annotations: {
-					"pl7.app/label": "CDR3 aa",
-					"pl7.app/table/visibility": "default",
-					"pl7.app/table/orderPriority": "101"
+		if cdr3Available {
+			// Name and domain taken straight from the input bulk CDR3 column.
+			cdr3Spec := cdr3Specs[""]
+			sequenceColumns += [{
+				column: "CDR3 aa",
+				id: "cdr3-aa",
+				spec: {
+					name: cdr3Spec.name,
+					valueType: "String",
+					domain: cdr3Spec.domain,
+					annotations: {
+						"pl7.app/label": "CDR3 aa",
+						"pl7.app/table/visibility": "default",
+						"pl7.app/table/orderPriority": "101"
+					}
 				}
-			}
-		}]
+			}]
+		}
 
 		// Name and domain taken straight from the input bulk CDRs annotation column.
 		if hasAnnotations {
