@@ -189,14 +189,13 @@ wf.body(func(args) {
 		if declaredModality == "amplicon" {
 			repertoireIsWholeSeq = true
 		} else if declaredModality == "vdj" {
-			// A VDJ run always partitions FR1-FR4, so a missing CDR3 column is a producer-side
-			// gap, not something the scientist chose. Say so instead of quietly scanning whole
-			// sequences: clonotype-process declares a "CDR3 aa" output column unconditionally on
-			// the bulk path, so the region branch cannot run without one either.
-			ll.assert(!is_undefined(repertoireRegions["CDR3"]),
-				"Input declares pl7.app/modality: vdj but carries no CDR3 aa region column. Expected pl7.app/sequence with domain.pl7.app/feature: CDR3 and pl7.app/alphabet: aminoacid on the variant axis.")
+			// Region-scanned over whatever canonical regions the input carries
+			ll.assert(len(repertoireRegions) > 0,
+				"Input declares pl7.app/modality: vdj but carries no FR/CDR aa region column. Expected pl7.app/sequence with domain.pl7.app/feature one of FR1-FR4 / CDR1-CDR3 and pl7.app/alphabet: aminoacid on the variant axis.")
 		} else {
-			// CDR3 is required: clonotype-process echoes that column unconditionally on the bulk path.
+			// No declaration: projects made before it landed. CDR3 presence is the only signal
+			// left, and the model infers modality by the same rule, so both sides have to keep
+			// reading it the same way.
 			repertoireIsWholeSeq = is_undefined(repertoireRegions["CDR3"])
 		}
 	}
@@ -310,6 +309,9 @@ wf.body(func(args) {
 	for entry in sequences { if featureOf(entry.spec) == "CDR3" { recordPrimary(cdr3Specs, entry) } }
 	for entry in additionalSequences { if featureOf(entry.spec) == "CDR3" { recordPrimary(cdr3Specs, entry) } }
 	for ann_entry in annotations { recordPrimary(annotationSpecs, ann_entry) }
+
+	// Whether a CDR3 aa column will exist in the results TSV
+	cdr3Available := len(cdr3Specs) > 0
 
 	// Whether the chains are separated by the pl7.app/vdj/scClonotypeChain COLUMN domain rather
 	// than by the frame. Single-cell data is the long-standing case; import-vdj-data's bare
@@ -553,6 +555,7 @@ wf.body(func(args) {
 			chainLabels: chainLabels,
 			chainOrder: chainOrder,
 			cdr3SeqPrefixed: cdr3SeqPrefixed,
+			cdr3Available: cdr3Available,
 			cdr3Specs: cdr3Specs,
 			annotationSpecs: annotationSpecs
 		})
