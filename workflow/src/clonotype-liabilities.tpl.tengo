@@ -9,7 +9,7 @@ math := import("math")
 
 liabilitiesCalcSw := assets.importSoftware("@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script:main")
 
-self.defineOutputs("result", "newMapping", "regionsFound")
+self.defineOutputs("result", "newMapping", "regionsFound", "nonCanonicalRegions")
 
 
 self.body(func(args) {
@@ -40,7 +40,9 @@ self.body(func(args) {
 		arg("-o").arg("output.json").
 		saveFileContent("output.json").
 		arg("--output-regions-found").arg("regions-found.json").
-		saveFileContent("regions-found.json")
+		saveFileContent("regions-found.json").
+		arg("--output-non-canonical-regions").arg("non-canonical-regions.json").
+		saveFileContent("non-canonical-regions.json")
 
 	if mapping {
 		liabilitiesCalcCmd.arg("-m").arg(mapping)
@@ -82,10 +84,13 @@ self.body(func(args) {
 
 	regionsFound := liabilitiesResult.getFileContent("regions-found.json")
 
+	nonCanonicalRegions := liabilitiesResult.getFileContent("non-canonical-regions.json")
+
     return {
         result: result,
         newMapping: newMapping,
-		regionsFound: regionsFound
+		regionsFound: regionsFound,
+		nonCanonicalRegions: nonCanonicalRegions
     }
 	
 	
