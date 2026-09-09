@@ -39,6 +39,15 @@ PEPTIDE_LIABILITY_NAMES = frozenset(
         "Integrin binding",
     }
 )
+# The set that applies to a NON-CANONICAL region. It is the peptide set plus
+# N-linked glycosylation: a synthetic peptide never passes through an ER, so the peptide
+# path drops the sequon, but a grafted scaffold is secreted from a mammalian line and the
+# sequon is real.
+#
+# Delta from the canonical set is exactly:
+#   {"Fragmentation (TS)", "Missing Cysteines", "Extra Cysteines"}
+NON_CANONICAL_LIABILITY_NAMES = PEPTIDE_LIABILITY_NAMES | {"N-linked Glycosylation (N[^P][ST])"}
+
 # Format: name → pattern  (fixability is always "disqualifying")
 ORIG_EXTRA_PATTERNS = {
     "Contains stop codon": r"\*",
