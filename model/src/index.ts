@@ -412,7 +412,14 @@ export const platforma = BlockModelV3.create({ dataModel, kind })
   /** Scanned regions carrying a sub-region partition (keyed by chain), and the active
    *  liabilities those regions did not get. Absent for peptide input. */
   .output("nonCanonicalRegions", (ctx) =>
-    ctx.outputs?.resolve("nonCanonicalRegions")?.getDataAsJsonOrUndefined<NonCanonicalReport>(),
+    ctx.outputs
+      // allowPermanentAbsence: a project last run before this output existed has no such field,
+      ?.resolve({
+        field: "nonCanonicalRegions",
+        assertFieldType: "Input",
+        allowPermanentAbsence: true,
+      })
+      ?.getDataAsJsonOrUndefined<NonCanonicalReport>(),
   )
 
   .outputWithStatus("pt", (ctx) => {
