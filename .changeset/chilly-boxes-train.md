@@ -23,6 +23,11 @@ rules still apply there. N-linked glycosylation is kept because the peptide path
 grounds that a synthetic peptide never passes through an ER, whereas a grafted scaffold is secreted
 from a mammalian line and the sequon is real.
 
+A subdivided **framework** region gets less than that, deliberately. The predefined motif set has
+always been CDR-scoped: a canonical FR region receives the cysteine checks, the disqualifying
+patterns and any custom rules, but never the motif rules. Withholding its cysteine checks therefore
+leaves a subdivided FR region with the disqualifying patterns and custom rules alone. 
+
 Which regions those are is resolved per variant rather than per run. The fact is a property of the
 parent reference and two scaffolds in one run can graft into different regions, so a single shared
 `aaSeqCDR2` column holds a graft for one parent and a genuine CDR2 for another. It is read from
