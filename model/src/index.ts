@@ -21,6 +21,12 @@ export type {
 
 export type Modality = "antibody" | "peptide" | "amplicon";
 
+/** As main.py writes it into non-canonical-regions.json. */
+export type NonCanonicalReport = {
+  regions: Record<string, string[]>;
+  skippedLiabilities: string[];
+};
+
 type OldArgs = {
   defaultBlockLabel: string;
   customBlockLabel: string;
@@ -401,6 +407,12 @@ export const platforma = BlockModelV3.create({ dataModel, kind })
       return allRegions.filter((r) => found.has(r));
     },
     { retentive: true },
+  )
+
+  /** Scanned regions carrying a sub-region partition (keyed by chain), and the active
+   *  liabilities those regions did not get. Absent for peptide input. */
+  .output("nonCanonicalRegions", (ctx) =>
+    ctx.outputs?.resolve("nonCanonicalRegions")?.getDataAsJsonOrUndefined<NonCanonicalReport>(),
   )
 
   .outputWithStatus("pt", (ctx) => {

@@ -265,6 +265,11 @@ def main():
         "--output-regions-found", type=str, help="Path to output a JSON list of found regions (CDR1, CDR2, CDR3, FR1)."
     )
     p.add_argument(
+        "--output-non-canonical-regions",
+        type=str,
+        help="Path to output a JSON list of scanned regions that carry a sub-region partition.",
+    )
+    p.add_argument(
         "--regions",
         type=str,
         help=(
@@ -1157,6 +1162,41 @@ def main():
             print(f"Found regions {regions_found_out} written to {args.output_regions_found}")
         except IOError as e:
             print(f"Error writing found regions list to '{args.output_regions_found}': {e}", file=sys.stderr)
+
+    if args.output_non_canonical_regions:
+        # Scanned regions that carry a sub-region partition, so the non-canonical rule set applied
+        # to them. Same per-chain shape as regions-found.json.
+        containers: set[str] = set()
+        if CONTAINER_REGIONS_COL in df_processed.columns:
+            for raw in df_processed[CONTAINER_REGIONS_COL].unique().to_list():
+                containers |= _containers(raw)
+        nc_by_chain: dict[str, set] = {}
+        for col_name in cols_for_liability_analysis:
+            region_canonical_name = _column_region(col_name)
+            if not region_canonical_name or region_canonical_name not in containers:
+                continue
+            prefix = col_name.split(" ", 1)[0]
+            chain_key = prefix if (paired and CALCULATE_LIABILITIES and prefix in CHAIN_LETTERS) else ""
+            nc_by_chain.setdefault(chain_key, set()).add(region_canonical_name)
+        # The active liabilities a container region does NOT get: derived from the same set the
+        # scan filters by, so it stays correct if the rule sets change. Empty when the user had
+        # none of them enabled, in which case nothing was actually lost.
+        skipped = sorted((set(active_cdr_defs) - NON_CANONICAL_LIABILITY_NAMES) | set(active_cys_defs))
+        non_canonical_out = {
+            "regions": {
+                k: sorted(v, key=lambda x: REGION_ORDER_MAP.get(x, 99)) for k, v in nc_by_chain.items()
+            },
+            "skippedLiabilities": skipped,
+        }
+        try:
+            with open(args.output_non_canonical_regions, "w") as f:
+                json.dump(non_canonical_out, f, indent=2, sort_keys=True)
+            print(f"Non-canonical regions {non_canonical_out} written to {args.output_non_canonical_regions}")
+        except IOError as e:
+            print(
+                f"Error writing non-canonical regions to '{args.output_non_canonical_regions}': {e}",
+                file=sys.stderr,
+            )
 
     if not has_input_ann_cols and not CALCULATE_LIABILITIES:  # No annotations and no calculation attempt
         _output_final_label_map(

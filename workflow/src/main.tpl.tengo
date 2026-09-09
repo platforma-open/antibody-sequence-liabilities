@@ -600,6 +600,7 @@ wf.body(func(args) {
 	liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
 	newMapping := liabilitiesResultCalc.output("newMapping", 24 * 60 * 60 * 1000)
 	regionsFound := liabilitiesResultCalc.output("regionsFound", 24 * 60 * 60 * 1000)
+	nonCanonicalRegions := liabilitiesResultCalc.output("nonCanonicalRegions", 24 * 60 * 60 * 1000)
 
 	processResult := render.create(processTpl, {
 		liabilitiesTable: liabilitiesResult,
@@ -633,7 +634,8 @@ wf.body(func(args) {
 
 	return {
 		outputs: {
-			outputLiabilities: outputLiabilities
+			outputLiabilities: outputLiabilities,
+			nonCanonicalRegions: nonCanonicalRegions
 		},
 		exports: {
 			exportPframe: exportPframe
