@@ -83,6 +83,18 @@ const selectedRegions = computed({
 
 // PlDropdownMulti hides values absent from `:options`, so these narrow the scan invisibly.
 // Cleared by user action, not by a watcher — that would be a hairpin (output -> data write).
+// Scanned regions holding a sub-region partition, de-duplicated across chains. The workflow
+// already orders each chain's list canonically, so first-seen order is kept.
+const nonCanonicalRegions = computed(() => [
+  ...new Set(Object.values(app.model.outputs.nonCanonicalRegions?.regions ?? {}).flat()),
+]);
+
+// The active liabilities those regions did not get. Empty when the user had none of them
+// enabled, in which case nothing was lost and the notice stays hidden.
+const skippedLiabilities = computed(
+  () => app.model.outputs.nonCanonicalRegions?.skippedLiabilities ?? [],
+);
+
 const staleRegions = computed(() => {
   const available = new Set<string>(app.model.outputs.availableRegions ?? []);
   if (available.size === 0) return [];
@@ -331,6 +343,11 @@ watch([importedFileBytes, importedFileData] as const, ([bytes, data]) => {
         </template>
       </PlBtnGhost>
     </template>
+    <PlAlert v-if="nonCanonicalRegions.length > 0 && skippedLiabilities.length > 0" type="info">
+      Some scanned regions contain user-defined sub-regions ({{ nonCanonicalRegions.join(", ") }}),
+      so these checks were not applied there: {{ skippedLiabilities.join(", ") }}. They assume a
+      canonical antibody region. All other liabilities were applied as normal.
+    </PlAlert>
     <PlAgDataTableV2
       v-model="app.model.data.tableState"
       :settings="tableSettings"

@@ -120,7 +120,19 @@ wf.prepare(func(args) {
 	}, "repertoireSequences")
 
 		return {
-			columns: bundleBuilder.build()
+			columns: bundleBuilder.build(),
+
+			// Queried here rather than through the bundle: neither column shares an axis with
+			// the anchor, which bquery.anchoredQuery requires. Prepare rather than body so the
+			// results arrive unmarshalled as {ref, spec, data}.
+			parentLinkQuery: wf.query({
+				type: "Name",
+				name: "pl7.app/repertoire/parentLink"
+			}),
+			subdividedRegionsQuery: wf.query({
+				type: "Name",
+				name: "pl7.app/repertoire/subdividedRegions"
+			})
 		}
 	}
 )
@@ -513,6 +525,59 @@ wf.body(func(args) {
 		ll.assert(len(primaryChains) > 0, "chain-separated input has no primary-chain sequences")
 	}
 
+	// Gives each variant the list of its regions that hold a sub-region partition. The builder
+	// joins on shared axes: the linker's [parentId, variantKey] ties the parent axis to the
+	// table's key, and subdividedRegions ([parentId]) rides along. No column written => the
+	// calc script treats every region as canonical.
+	if isRepertoire {
+		runScope := {
+			"pl7.app/repertoire/extractionRunId": axis1Domain["pl7.app/repertoire/extractionRunId"],
+			"pl7.app/modality": declaredModality
+		}
+		// Domain subset check: the run-scope keys must agree, extra keys are fine.
+		scopedTo := func(domain) {
+			if is_undefined(domain) { return false }
+			for k, v in runScope {
+				if domain[k] != v { return false }
+			}
+			return true
+		}
+		// The linker's run scope is on its variantKey axis, not on the column. Its other axis is
+		// the parent one, found by elimination since axis order is the producer's choice.
+		linkerCol := undefined
+		parentAxis := undefined
+		for entry in args.parentLinkQuery {
+			scopedHere := false
+			other := undefined
+			for ax in entry.spec.axesSpec {
+				if ax.name == datasetSpec.axesSpec[1].name {
+					scopedHere = scopedHere || scopedTo(ax.domain)
+				} else {
+					other = ax
+				}
+			}
+			if scopedHere {
+				linkerCol = entry
+				parentAxis = other
+				break
+			}
+		}
+		// This one carries the run scope in its column domain.
+		subRegionsCol := undefined
+		for entry in args.subdividedRegionsQuery {
+			if scopedTo(entry.spec.domain) {
+				subRegionsCol = entry
+				break
+			}
+		}
+		if !is_undefined(linkerCol) && !is_undefined(parentAxis) && !is_undefined(subRegionsCol) {
+			// Add the parentID axis and the containerRegions column using the linker
+			seqTableBuilder.setAxisHeader(parentAxis, "parentId")
+			seqTableBuilder.add({ spec: linkerCol.spec, data: linkerCol.data }, { header: "parentLink" })
+			seqTableBuilder.add({ spec: subRegionsCol.spec, data: subRegionsCol.data }, { header: "containerRegions" })
+		}
+	}
+
 	seqTableBuilder.mem(string(int(math.max(16, baseMemGiB / 4))) + "GiB")
 	seqTableBuilder.cpu(1)
 	seqTable := seqTableBuilder.build()
@@ -535,6 +600,7 @@ wf.body(func(args) {
 	liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
 	newMapping := liabilitiesResultCalc.output("newMapping", 24 * 60 * 60 * 1000)
 	regionsFound := liabilitiesResultCalc.output("regionsFound", 24 * 60 * 60 * 1000)
+	nonCanonicalRegions := liabilitiesResultCalc.output("nonCanonicalRegions", 24 * 60 * 60 * 1000)
 
 	processResult := render.create(processTpl, {
 		liabilitiesTable: liabilitiesResult,
@@ -568,7 +634,8 @@ wf.body(func(args) {
 
 	return {
 		outputs: {
-			outputLiabilities: outputLiabilities
+			outputLiabilities: outputLiabilities,
+			nonCanonicalRegions: nonCanonicalRegions
 		},
 		exports: {
 			exportPframe: exportPframe

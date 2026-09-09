@@ -11,6 +11,7 @@ from polars.exceptions import ShapeError
 from annotations import base36_encode, extract_cdrs_fr1, parse_annotations
 from definitions import (
     FIXABILITY_MAP,
+    NON_CANONICAL_LIABILITY_NAMES,
     ORIG_CYS_LIABILITIES,
     ORIG_EXTRA_PATTERNS,
     ORIG_REGEX_LIABILITIES,
@@ -33,6 +34,9 @@ from scoring import (
 # Canonical region names. _column_region uses whole-word matching.
 CANONICAL_REGIONS = ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"]
 
+# Per-variant list of regions that hold a user-defined sub-region partition, comma-separated.
+CONTAINER_REGIONS_COL = "containerRegions"
+
 # Chains arrive as receptor-neutral letters; --chain-labels carries the display names.
 CHAIN_LETTERS = ("A", "B")
 DEFAULT_CHAIN_LABELS = {"A": "Heavy", "B": "Light"}
@@ -47,6 +51,13 @@ def _column_region(col_name: str) -> str | None:
         if re.search(r"\b" + re.escape(region) + r"\b", col_name, re.IGNORECASE):
             return region
     return None
+
+
+def _containers(raw: str | None) -> set[str]:
+    """Parse a comma-separated containerRegions cell into an upper-cased set."""
+    if not raw:
+        return set()
+    return {part.strip().upper() for part in raw.split(",") if part.strip()}
 
 
 def _is_productive_expr(
@@ -254,6 +265,11 @@ def main():
         "--output-regions-found", type=str, help="Path to output a JSON list of found regions (CDR1, CDR2, CDR3, FR1)."
     )
     p.add_argument(
+        "--output-non-canonical-regions",
+        type=str,
+        help="Path to output a JSON list of scanned regions that carry a sub-region partition.",
+    )
+    p.add_argument(
         "--regions",
         type=str,
         help=(
@@ -362,6 +378,11 @@ def main():
             print(f"Warning: Could not load --custom-liabilities: {e}", file=sys.stderr)
 
     expected_cys_map = build_expected_cys_map(args.numbering_schema)
+
+    # A region carrying a user-defined sub-region partition is judged by a different rule set.
+    # Derived from the ACTIVE set, not from the predefined one, so the user's include/disable
+    # choices still apply.
+    nc_cdr_defs = {n: d for n, d in active_cdr_defs.items() if n in NON_CANONICAL_LIABILITY_NAMES}
 
     if not (
         active_cdr_defs or active_extra_defs or active_cys_defs or active_custom_defs or active_extra_defs_full_seq
@@ -718,6 +739,10 @@ def main():
                     .alias(liab_col_name)
                 )
 
+        # Present only for repertoire-profiler input, and empty for a parent that subdivides
+        # nothing. Either way: every region canonical.
+        has_container_col = CONTAINER_REGIONS_COL in df_processed.columns
+
         for frag_seq_col in cols_for_liability_analysis:
             if frag_seq_col not in df_processed.columns:
                 continue  # Should not happen if logic is correct
@@ -725,22 +750,59 @@ def main():
             core_region_name = match.group(1).upper() if match else "UNKNOWN_REGION"
             new_liab_col = f"{frag_seq_col} liabilities"  # e.g. "A CDR1 aa liabilities"
             generated_liability_summary_col_names.append(new_liab_col)
-            liability_expressions.append(
-                pl.col(frag_seq_col)
-                .cast(pl.Utf8)
-                .map_elements(
-                    lambda s, crn=core_region_name: identify_liabilities(
-                        s,
+
+            if not has_container_col:
+                liability_expressions.append(
+                    pl.col(frag_seq_col)
+                    .cast(pl.Utf8)
+                    .map_elements(
+                        lambda s, crn=core_region_name: identify_liabilities(
+                            s,
+                            crn,
+                            active_cdr_defs,
+                            active_extra_defs_for_per_region,
+                            active_cys_defs,
+                            expected_cys_map,
+                            active_custom_defs=active_custom_defs,
+                        ),
+                        return_dtype=pl.Utf8,
+                        skip_nulls=False,
+                    )
+                    .fill_null("Unknown")
+                    .alias(new_liab_col)
+                )
+                continue
+
+            # Same call, with the rule set chosen per row. map_elements over one column cannot
+            # see a sibling, so the pair goes through a struct.
+            def _scan(row, _seq=frag_seq_col, crn=core_region_name):
+                # If this column's region is a container for this row's parent
+                if crn in _containers(row[CONTAINER_REGIONS_COL]):
+                    # Empty active set, which every region branch in identify_liabilities
+                    # gates on. Emptying expected_cys_map[region] instead would flag every
+                    # cysteine present.
+                    return identify_liabilities(
+                        row[_seq],
                         crn,
-                        active_cdr_defs,
+                        nc_cdr_defs,
                         active_extra_defs_for_per_region,
-                        active_cys_defs,
+                        {},
                         expected_cys_map,
                         active_custom_defs=active_custom_defs,
-                    ),
-                    return_dtype=pl.Utf8,
-                    skip_nulls=False,
+                    )
+                return identify_liabilities(
+                    row[_seq],
+                    crn,
+                    active_cdr_defs,
+                    active_extra_defs_for_per_region,
+                    active_cys_defs,
+                    expected_cys_map,
+                    active_custom_defs=active_custom_defs,
                 )
+
+            liability_expressions.append(
+                pl.struct([pl.col(frag_seq_col).cast(pl.Utf8), pl.col(CONTAINER_REGIONS_COL).cast(pl.Utf8)])
+                .map_elements(_scan, return_dtype=pl.Utf8, skip_nulls=False)
                 .fill_null("Unknown")
                 .alias(new_liab_col)
             )
@@ -1100,6 +1162,41 @@ def main():
             print(f"Found regions {regions_found_out} written to {args.output_regions_found}")
         except IOError as e:
             print(f"Error writing found regions list to '{args.output_regions_found}': {e}", file=sys.stderr)
+
+    if args.output_non_canonical_regions:
+        # Scanned regions that carry a sub-region partition, so the non-canonical rule set applied
+        # to them. Same per-chain shape as regions-found.json.
+        containers: set[str] = set()
+        if CONTAINER_REGIONS_COL in df_processed.columns:
+            for raw in df_processed[CONTAINER_REGIONS_COL].unique().to_list():
+                containers |= _containers(raw)
+        nc_by_chain: dict[str, set] = {}
+        for col_name in cols_for_liability_analysis:
+            region_canonical_name = _column_region(col_name)
+            if not region_canonical_name or region_canonical_name not in containers:
+                continue
+            prefix = col_name.split(" ", 1)[0]
+            chain_key = prefix if (paired and CALCULATE_LIABILITIES and prefix in CHAIN_LETTERS) else ""
+            nc_by_chain.setdefault(chain_key, set()).add(region_canonical_name)
+        # The active liabilities a container region does NOT get: derived from the same set the
+        # scan filters by, so it stays correct if the rule sets change. Empty when the user had
+        # none of them enabled, in which case nothing was actually lost.
+        skipped = sorted((set(active_cdr_defs) - NON_CANONICAL_LIABILITY_NAMES) | set(active_cys_defs))
+        non_canonical_out = {
+            "regions": {
+                k: sorted(v, key=lambda x: REGION_ORDER_MAP.get(x, 99)) for k, v in nc_by_chain.items()
+            },
+            "skippedLiabilities": skipped,
+        }
+        try:
+            with open(args.output_non_canonical_regions, "w") as f:
+                json.dump(non_canonical_out, f, indent=2, sort_keys=True)
+            print(f"Non-canonical regions {non_canonical_out} written to {args.output_non_canonical_regions}")
+        except IOError as e:
+            print(
+                f"Error writing non-canonical regions to '{args.output_non_canonical_regions}': {e}",
+                file=sys.stderr,
+            )
 
     if not has_input_ann_cols and not CALCULATE_LIABILITIES:  # No annotations and no calculation attempt
         _output_final_label_map(
