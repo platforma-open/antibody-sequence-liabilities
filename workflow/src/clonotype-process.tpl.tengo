@@ -6,6 +6,7 @@ xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
 pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities
 canonical := import("@platforma-sdk/workflow-tengo:canonical") // Deterministic, key-sorted JSON encoding
+maps := import("@platforma-sdk/workflow-tengo:maps") // Map helpers
 text := import("text")                                   // Text manipulation utilities
 json := import("json")
 math := import("math")
@@ -290,9 +291,9 @@ self.body(func(args) {
                     spec: {
                         name: annSpec.name,
                         valueType: "String",
-                        domain: annSpec.domain,
+                        domain: maps.merge(annSpec.domain, { "pl7.app/sequence/annotation/type": "Liabilities" }),
                         annotations: {
-                            "pl7.app/label": chainLabel + " CDRs Annotations",
+                            "pl7.app/label": chainLabel + " Liabilities Annotations",
                             "pl7.app/table/visibility": "hidden",
                             "pl7.app/table/orderPriority": "102",
                             "pl7.app/sequence/annotation/mapping": string(newMapping), // Use the mapping from python
@@ -332,9 +333,9 @@ self.body(func(args) {
 				spec: {
 				name: annSpec.name,
 				valueType: "String",
-				domain: annSpec.domain,
+				domain: maps.merge(annSpec.domain, { "pl7.app/sequence/annotation/type": "Liabilities" }),
 				annotations: {
-					"pl7.app/label": "annotations",
+					"pl7.app/label": "Liabilities annotations",
 					"pl7.app/table/visibility": "hidden",
 					"pl7.app/table/orderPriority": "102",
 					"pl7.app/sequence/annotation/mapping": string(newMapping), // Use mapping from python
