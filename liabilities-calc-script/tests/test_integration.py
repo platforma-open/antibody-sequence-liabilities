@@ -1165,3 +1165,74 @@ def test_sc_fed_region_columns_still_annotate_liabilities(tmp_path):
     # The fed columns are still what gets scanned, and extraction adds no duplicate of them.
     assert "Deamidation (N[GS])" in r["A CDR3 aa liabilities"]
     assert len(set(df.columns)) == len(df.columns)
+
+
+# ---------------------------------------------------------------------------
+# Whole-sequence flags in place of the whole-sequence column
+# ---------------------------------------------------------------------------
+# A repertoire input cannot carry its whole-variant sequence into the analysis table: at tens of
+# millions of variants that one column passes the 2 GiB an Arrow string array holds, and the frame
+# fails to materialise. The workflow evaluates the two checks the script reads that column for and
+# sends the flags instead. These tests pin the contract: same run, same output, either way.
+
+WS_REGIONS = {
+    "CDR1 aa": "GYTFTRY",
+    "CDR2 aa": "ISPGRGIT",
+    "CDR3 aa": "CARYALD",
+    "FR1 aa": "QVQLVQSGAEVKKPGASVKVSCKAS",
+}
+# Clean regions throughout, so every difference between these rows comes from the whole chain.
+WS_CLEAN = "QVQLVQSGAEVKKPGASVKVSCKASGYTFTRYWVRQ"
+WS_ROWS = [
+    ("ws_clean", WS_CLEAN, 0, 0),
+    ("ws_stop", WS_CLEAN + "*RGQ", 1, 0),
+    ("ws_oof", WS_CLEAN + "_RGQ", 0, 1),
+    ("ws_both", WS_CLEAN + "*RG_", 1, 1),
+]
+
+
+def _ws_tsv(tmp_path: Path, name: str, with_sequence: bool) -> Path:
+    """The same four rows, carrying either the whole-chain sequence or its two flags."""
+    tail = ["sequence aa"] if with_sequence else [m.WHOLE_SEQ_HAS_STOP_COL, m.WHOLE_SEQ_OUT_OF_FRAME_COL]
+    header = ["clonotypeKey"] + list(WS_REGIONS) + tail
+    lines = ["\t".join(header)]
+    for key, seq, has_stop, oof in WS_ROWS:
+        values = [key] + list(WS_REGIONS.values())
+        values += [seq] if with_sequence else [str(has_stop), str(oof)]
+        lines.append("\t".join(values))
+    p = tmp_path / name
+    p.write_text("\n".join(lines) + "\n")
+    return p
+
+
+def test_whole_seq_flags_reproduce_the_sequence_column_output(tmp_path):
+    """The flags path and the sequence path must produce the same table, column for column."""
+    seq_dir = tmp_path / "seq"
+    flag_dir = tmp_path / "flags"
+    seq_dir.mkdir()
+    flag_dir.mkdir()
+
+    df_seq = run_main(seq_dir, data_path=_ws_tsv(tmp_path, "with_seq.tsv", True))
+    df_flags = run_main(flag_dir, data_path=_ws_tsv(tmp_path, "with_flags.tsv", False))
+
+    assert df_seq.columns == df_flags.columns
+    assert df_seq.equals(df_flags)
+
+
+def test_whole_seq_flags_drive_productivity(tmp_path):
+    """Guards the test above: it only proves equivalence if the flags actually decide something."""
+    df = run_main(tmp_path, data_path=_ws_tsv(tmp_path, "with_flags.tsv", False))
+
+    assert row(df, "ws_clean")["Is Productive"] == "Pass"
+    assert row(df, "ws_stop")["Is Productive"] == "Fail"
+    assert row(df, "ws_oof")["Is Productive"] == "Fail"
+    assert row(df, "ws_both")["Is Productive"] == "Fail"
+
+    # The summary names the source column, so it has to keep reading "sequence".
+    assert "sequence: Contains stop codon" in row(df, "ws_stop")["Sequence liabilities summary"]
+    assert "sequence: Out of frame" in row(df, "ws_oof")["Sequence liabilities summary"]
+    assert row(df, "ws_clean")["Sequence liabilities summary"] == "None"
+
+    # The flags are a wire detail; they have no place in the results table.
+    assert m.WHOLE_SEQ_HAS_STOP_COL not in df.columns
+    assert m.WHOLE_SEQ_OUT_OF_FRAME_COL not in df.columns

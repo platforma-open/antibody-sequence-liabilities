@@ -1,0 +1,76 @@
+// Stop-codon / out-of-frame flags for the whole variant sequence.
+//
+// The calc script reads the whole-chain sequence column for exactly one thing: two literal
+// substring checks ("*" and "_") that become the "sequence aa liabilities" column feeding
+// the summary, Is Productive and the developability score (main.py, full_input_sequence_cols).
+
+ll := import("@platforma-sdk/workflow-tengo:ll")
+pt := import("@platforma-sdk/workflow-tengo:pt")
+pUtil := import("@platforma-sdk/workflow-tengo:pframes.util")
+
+// In-frame column names. The calc script looks the flags up under these exact names, so the
+// two sides have to agree; they carry no " aa" / region / "annotations" suffix, which keeps
+// them out of every name-based column filter the script applies.
+HAS_STOP := "wholeSeqHasStop"
+OUT_OF_FRAME := "wholeSeqOutOfFrame"
+
+/**
+* Evaluates the whole-sequence stop-codon and out-of-frame checks.
+*
+* @param seqColumn - the whole-variant aa sequence PColumn, as `{ spec, data }`.
+* @param keyAxisSpec - the variant-key axis spec the column is keyed on.
+* @return { hasStop: <PColumn>, outOfFrame: <PColumn> } - Int 0/1, keyed on the same axis.
+*/
+computeFlags := func(seqColumn, keyAxisSpec) {
+	ll.assert(!is_undefined(seqColumn), "computeFlags: no sequence column given")
+
+	ptWf := pt.workflow()
+
+	// The same two patterns the script applies: `\*` and `_` as regexes match a literal
+	// asterisk and a literal underscore, so a literal search is equivalent and cheaper.
+	// A null sequence yields null flags, which the script reads as "None" — the branch the
+	// sequence-based path reaches through its own is_null() check.
+	df := ptWf.frame(pt.p.full(pt.p.column("seq", { spec: seqColumn.spec, data: seqColumn.data }))).
+		select(
+			pt.sc.axis(keyAxisSpec).alias("variantKey"),
+			pt.col("seq").strContains("*", { literal: true }).cast("Int").alias(HAS_STOP),
+			pt.col("seq").strContains("_", { literal: true }).cast("Int").alias(OUT_OF_FRAME))
+
+	df.saveFrameDirect("wholeSeqFlags", {
+		axes: [{ column: "variantKey", spec: keyAxisSpec }],
+		columns: [
+			{
+				column: HAS_STOP,
+				spec: {
+					kind: "PColumn",
+					name: "pl7.app/liabilities/wholeSeqHasStop",
+					valueType: "Int",
+					annotations: { "pl7.app/label": "Whole sequence contains a stop codon" }
+				}
+			},
+			{
+				column: OUT_OF_FRAME,
+				spec: {
+					kind: "PColumn",
+					name: "pl7.app/liabilities/wholeSeqOutOfFrame",
+					valueType: "Int",
+					annotations: { "pl7.app/label": "Whole sequence is out of frame" }
+				}
+			}
+		],
+		partitionKeyLength: 0
+	})
+
+	cols := pUtil.pFrameToColumnsMap(ptWf.run().getFrameDirect("wholeSeqFlags"))
+
+	return {
+		hasStop: cols[HAS_STOP],
+		outOfFrame: cols[OUT_OF_FRAME]
+	}
+}
+
+export ll.toStrict({
+	HAS_STOP: HAS_STOP,
+	OUT_OF_FRAME: OUT_OF_FRAME,
+	computeFlags: computeFlags
+})
