@@ -37,6 +37,15 @@ CANONICAL_REGIONS = ["CDR1", "CDR2", "CDR3", "FR1", "FR2", "FR3", "FR4"]
 # Per-variant list of regions that hold a user-defined sub-region partition, comma-separated.
 CONTAINER_REGIONS_COL = "containerRegions"
 
+# Whole-sequence stop-codon / out-of-frame flags (Int 0/1).
+WHOLE_SEQ_HAS_STOP_COL = "wholeSeqHasStop"
+WHOLE_SEQ_OUT_OF_FRAME_COL = "wholeSeqOutOfFrame"
+
+# The liability column those flags stand in for. Derived from the sequence column's own name
+# everywhere else (f"{full_seq_col} liabilities"), so it has to be spelled out where that column
+# never arrives.
+WHOLE_SEQ_LIABILITY_COL = "sequence aa liabilities"
+
 # Chains arrive as receptor-neutral letters; --chain-labels carries the display names.
 CHAIN_LETTERS = ("A", "B")
 DEFAULT_CHAIN_LABELS = {"A": "Heavy", "B": "Light"}
@@ -738,6 +747,29 @@ def main():
                     .otherwise(pl.lit("None"))
                     .alias(liab_col_name)
                 )
+
+        elif (
+            active_extra_defs_full_seq
+            and WHOLE_SEQ_HAS_STOP_COL in df_processed.columns
+            and WHOLE_SEQ_OUT_OF_FRAME_COL in df_processed.columns
+        ):
+            # Same check, same column name, same four values — read off the flags the input
+            # carried instead of re-deriving them from a sequence column that never arrived.
+            # A null flag means the sequence was null, which the branch above reports as "None".
+            liab_col_name = WHOLE_SEQ_LIABILITY_COL
+            generated_liability_summary_col_names.append(liab_col_name)
+            _stop = pl.col(WHOLE_SEQ_HAS_STOP_COL).cast(pl.Int64, strict=False).fill_null(0) == 1
+            _oof = pl.col(WHOLE_SEQ_OUT_OF_FRAME_COL).cast(pl.Int64, strict=False).fill_null(0) == 1
+            liability_expressions.append(
+                pl.when(_stop & _oof)
+                .then(pl.lit("Contains stop codon, Out of frame"))
+                .when(_stop)
+                .then(pl.lit("Contains stop codon"))
+                .when(_oof)
+                .then(pl.lit("Out of frame"))
+                .otherwise(pl.lit("None"))
+                .alias(liab_col_name)
+            )
 
         # Present only for repertoire-profiler input, and empty for a parent that subdivides
         # nothing. Either way: every region canonical.
