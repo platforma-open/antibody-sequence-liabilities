@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities",
-  "version": "5.4.0",
+  "version": "5.4.1",
   "files": [
     "dist",
     "block-pack"
