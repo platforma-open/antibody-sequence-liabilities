@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.antibody-sequence-liabilities.workflow",
-  "version": "6.4.0",
+  "version": "6.5.0",
   "private": true,
   "description": "Block Workflow",
   "type": "module",
