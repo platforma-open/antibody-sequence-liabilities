@@ -10,6 +10,7 @@ pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 pFrames := import("@platforma-sdk/workflow-tengo:pframes")
 maps := import("@platforma-sdk/workflow-tengo:maps")
 liabilityConfig := import(":liability-config")
+wholeSeqFlags := import(":whole-seq-flags")
 text := import("text")
 math := import("math")
 
@@ -484,6 +485,11 @@ wf.body(func(args) {
 			if sequences[0].spec.domain["pl7.app/vdj/feature"] == "CDR3" {
 				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "CDR3 aa"})
 				coveredFeatures["CDR3"] = 1
+			} else if isRepertoire {
+				flags := wholeSeqFlags.computeFlags(
+					columnsWithSequences.getColumn(sequences[0].key), datasetSpec.axesSpec[1])
+				seqTableBuilder.add(flags.hasStop, {header: wholeSeqFlags.HAS_STOP})
+				seqTableBuilder.add(flags.outOfFrame, {header: wholeSeqFlags.OUT_OF_FRAME})
 			} else {
 				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "sequence aa"})
 			}
