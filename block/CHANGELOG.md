@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 5.4.2
+
+### Patch Changes
+
+- 886b5b5: Update SDK: PlAgDataTable no longer recreates its grid in an endless loop
+
 ## 5.4.1
 
 ### Patch Changes
