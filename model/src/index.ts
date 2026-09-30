@@ -13,6 +13,7 @@ import {
   DataModelBuilder,
   createPlDataTableStateV2,
   createPlDataTableV3,
+  createGlobalPObjectId,
   isPColumnSpec,
   plRefsEqual,
 } from "@platforma-sdk/model";
@@ -283,10 +284,6 @@ const dataModel = new DataModelBuilder({ kind })
     };
   });
 
-/** A result-pool column id: the canonical JSON of its PlRef (keys in sorted order). */
-const columnIdFromPlRef = (ref: PlRef): string =>
-  JSON.stringify({ __isRef: true, blockId: ref.blockId, name: ref.name });
-
 export const platforma = BlockModelV3.create({ dataModel, kind })
 
   .args((data) => {
@@ -329,7 +326,9 @@ export const platforma = BlockModelV3.create({ dataModel, kind })
       inputAnchor: data.inputAnchor,
       // Column-id form (canonical JSON of the PlRef): the workflow stamps this exact string as
       // the outputs' `pl7.app/subset`. Absent without a filter, so unfiltered args are unchanged.
-      ...(data.filterRef !== undefined && { inputFilter: columnIdFromPlRef(data.filterRef) }),
+      ...(data.filterRef !== undefined && {
+        inputFilter: createGlobalPObjectId(data.filterRef.blockId, data.filterRef.name),
+      }),
       usePredefinedLiabilities: data.usePredefinedLiabilities,
       disabledPredefinedLiabilities: data.disabledPredefinedLiabilities,
       customLiabilities: data.customLiabilities,
