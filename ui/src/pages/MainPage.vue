@@ -5,7 +5,8 @@ import {
   liabilityTypes,
   predefinedLiabilityNames,
 } from "@platforma-open/milaboratories.antibody-sequence-liabilities.model";
-import type { PlRef } from "@platforma-sdk/model";
+import type { DatasetSelection } from "@platforma-sdk/model";
+import { createDatasetSelection, createPrimaryRef } from "@platforma-sdk/model";
 import {
   PlAccordionSection,
   PlAgDataTableV2,
@@ -14,9 +15,9 @@ import {
   PlBtnGhost,
   PlBtnSecondary,
   PlCheckbox,
+  PlDatasetSelector,
   PlDropdown,
   PlDropdownMulti,
-  PlDropdownRef,
   PlElementList,
   PlFileInput,
   PlMaskIcon24,
@@ -32,10 +33,20 @@ import { useApp } from "../app";
 
 const app = useApp();
 
-function setInput(inputRef?: PlRef) {
-  if (!inputRef) return;
-  app.model.data.inputAnchor = inputRef;
-}
+// The selector picks a dataset, or a dataset narrowed by one of its subset columns. Not
+// clearable: an empty selection is ignored, as before.
+const datasetSelection = computed<DatasetSelection | undefined>({
+  get: () => {
+    const { inputAnchor, filterRef } = app.model.data;
+    if (inputAnchor === undefined) return undefined;
+    return createDatasetSelection(createPrimaryRef(inputAnchor, filterRef));
+  },
+  set: (selection) => {
+    if (!selection) return;
+    app.model.data.inputAnchor = selection.primary.column;
+    app.model.data.filterRef = selection.primary.filter;
+  },
+});
 
 const tableSettings = usePlDataTableSettingsV2({
   model: () => app.model.outputs.pt,
@@ -359,12 +370,11 @@ watch([importedFileBytes, importedFileData] as const, ([bytes, data]) => {
 
   <PlSlideModal v-model="settingsIsShown">
     <template #title>{{ strings.titles.settings }}</template>
-    <PlDropdownRef
-      v-model="app.model.data.inputAnchor"
-      :options="app.model.outputs.inputOptions ?? []"
+    <PlDatasetSelector
+      v-model="datasetSelection"
+      :options="app.model.outputs.inputOptions"
       :label="strings.titles.dataset"
       required
-      @update:model-value="setInput"
     />
 
     <template v-if="isAntibody">

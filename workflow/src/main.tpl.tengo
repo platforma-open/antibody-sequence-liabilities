@@ -11,6 +11,8 @@ pFrames := import("@platforma-sdk/workflow-tengo:pframes")
 maps := import("@platforma-sdk/workflow-tengo:maps")
 liabilityConfig := import(":liability-config")
 wholeSeqFlags := import(":whole-seq-flags")
+subsetTable := import(":subset-table")
+json := import("json")
 text := import("text")
 math := import("math")
 
@@ -120,6 +122,11 @@ wf.prepare(func(args) {
 		}
 	}, "repertoireSequences")
 
+	// Optional subset column picked alongside the dataset (PlDatasetSelector)
+	if !is_undefined(args.inputFilter) {
+		bundleBuilder.addRef(json.decode(args.inputFilter))
+	}
+
 		return {
 			columns: bundleBuilder.build(),
 
@@ -144,6 +151,15 @@ wf.body(func(args) {
 
 	columnsWithSequences := args.columns
 	datasetSpec := columnsWithSequences.getSpec(args.inputAnchor)
+
+	// Optional subset filter: only its entities enter the sequence tables.
+	filterColumn := undefined
+	traceSpec := datasetSpec
+	if !is_undefined(args.inputFilter) {
+		f := columnsWithSequences.getColumn(json.decode(args.inputFilter))
+		filterColumn = { spec: f.spec, data: f.data }
+		traceSpec = f.spec
+	}
 
 	baseMemGiB := 16
 	if !is_undefined(args.mem) {
@@ -235,7 +251,7 @@ wf.body(func(args) {
 		}
 		wholeSeqCol := seqCols[0]
 
-		seqTableBuilder := pFrames.tsvFileBuilder()
+		seqTableBuilder := subsetTable.newTableBuilder(filterColumn)
 		seqTableBuilder.setAxisHeader(datasetSpec.axesSpec[1].name, "variantKey")
 		seqTableBuilder.add(columnsWithSequences.getColumn(wholeSeqCol.key), {header: "sequence aa"})
 		seqTableBuilder.mem(string(int(math.max(8, baseMemGiB / 4))) + "GiB")
@@ -255,7 +271,7 @@ wf.body(func(args) {
 		})
 		liabilitiesResult := liabilitiesResultCalc.output("result", 24 * 60 * 60 * 1000)
 
-		peptideProcess := render.create(peptideProcessTpl, {
+		peptideProcessInputs := {
 			liabilitiesTable: liabilitiesResult,
 			blockId: blockId,
 			customBlockLabel: args.customBlockLabel,
@@ -263,7 +279,13 @@ wf.body(func(args) {
 			datasetSpec: datasetSpec,
 			seqFeature: seqFeature,
 			seqLabel: seqLabel
-		}, {
+		}
+		// Only for a subset run, so a full-data run keeps exactly its previous inputs
+		if !is_undefined(filterColumn) {
+			peptideProcessInputs.traceSpec = traceSpec
+			peptideProcessInputs.subset = args.inputFilter
+		}
+		peptideProcess := render.create(peptideProcessTpl, peptideProcessInputs, {
 			metaInputs: { mem: args.mem }
 		})
 
@@ -293,7 +315,7 @@ wf.body(func(args) {
 	// Determine if we're working with single cell data
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
 
-	seqTableBuilder := pFrames.tsvFileBuilder()
+	seqTableBuilder := subsetTable.newTableBuilder(filterColumn)
 	seqTableBuilder.setAxisHeader(datasetSpec.axesSpec[1], "clonotypeKey")
 
 	// Determine the primary assembling feature (e.g., CDR3)
@@ -531,6 +553,8 @@ wf.body(func(args) {
 		ll.assert(len(primaryChains) > 0, "chain-separated input has no primary-chain sequences")
 	}
 
+	// Set when a column keyed on parentId alone joins the table (repertoire input).
+	hasParentOnlyColumn := false
 	// Gives each variant the list of its regions that hold a sub-region partition. The builder
 	// joins on shared axes: the linker's [parentId, variantKey] ties the parent axis to the
 	// table's key, and subdividedRegions ([parentId]) rides along. No column written => the
@@ -580,13 +604,20 @@ wf.body(func(args) {
 			// Add the parentID axis and the containerRegions column using the linker
 			seqTableBuilder.setAxisHeader(parentAxis, "parentId")
 			seqTableBuilder.add({ spec: linkerCol.spec, data: linkerCol.data }, { header: "parentLink" })
-			seqTableBuilder.add({ spec: subRegionsCol.spec, data: subRegionsCol.data }, { header: "containerRegions" })
+			// Keyed on parentId alone, so the filter can't apply to it: see dropRowsWithoutKey below.
+			seqTableBuilder.addUnfiltered({ spec: subRegionsCol.spec, data: subRegionsCol.data }, { header: "containerRegions" })
+			hasParentOnlyColumn = true
 		}
 	}
 
 	seqTableBuilder.mem(string(int(math.max(16, baseMemGiB / 4))) + "GiB")
 	seqTableBuilder.cpu(1)
 	seqTable := seqTableBuilder.build()
+	// A parentId-only column joins back parents whose entities the subset removed, as rows with
+	// no clonotype key. Drop them; entities in the subset keep their containerRegions.
+	if hasParentOnlyColumn && !is_undefined(filterColumn) {
+		seqTable = subsetTable.dropRowsWithoutKey(seqTable, "clonotypeKey")
+	}
 
 	liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities, args.regions)
 
@@ -608,6 +639,27 @@ wf.body(func(args) {
 	regionsFound := liabilitiesResultCalc.output("regionsFound", 24 * 60 * 60 * 1000)
 	nonCanonicalRegions := liabilitiesResultCalc.output("nonCanonicalRegions", 24 * 60 * 60 * 1000)
 
+	processParams := {
+		datasetSpec: datasetSpec,
+		// Drives whether the echoed sequence columns are emitted per chain. Follows the chain
+		// domain rather than the axis, same as the table shape above.
+		perChain: perChain,
+		isSingleCell: isSingleCell,
+		coveredFeatures: features,
+		hasAnnotations: hasAnnotations,
+		primaryChains: primaryChains,
+		chainLabels: chainLabels,
+		chainOrder: chainOrder,
+		cdr3SeqPrefixed: cdr3SeqPrefixed,
+		cdr3Available: cdr3Available,
+		cdr3Specs: cdr3Specs,
+		annotationSpecs: annotationSpecs
+	}
+	// Only for a subset run, so a full-data run keeps exactly its previous params
+	if !is_undefined(filterColumn) {
+		processParams.traceSpec = traceSpec
+		processParams.subset = args.inputFilter
+	}
 	processResult := render.create(processTpl, {
 		liabilitiesTable: liabilitiesResult,
 		newMapping: newMapping,
@@ -615,22 +667,7 @@ wf.body(func(args) {
 		blockId: blockId,
 		customBlockLabel: args.customBlockLabel,
 		defaultBlockLabel: args.defaultBlockLabel,
-		params: smart.createJsonResource({
-			datasetSpec: datasetSpec,
-			// Drives whether the echoed sequence columns are emitted per chain. Follows the chain
-			// domain rather than the axis, same as the table shape above.
-			perChain: perChain,
-			isSingleCell: isSingleCell,
-			coveredFeatures: features,
-			hasAnnotations: hasAnnotations,
-			primaryChains: primaryChains,
-			chainLabels: chainLabels,
-			chainOrder: chainOrder,
-			cdr3SeqPrefixed: cdr3SeqPrefixed,
-			cdr3Available: cdr3Available,
-			cdr3Specs: cdr3Specs,
-			annotationSpecs: annotationSpecs
-		})
+		params: smart.createJsonResource(processParams)
 	}, {
 		metaInputs: { mem: args.mem }
 	})

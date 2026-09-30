@@ -1,11 +1,21 @@
-import type { ImportFileHandle, PlDataTableStateV2, PlRef, ResultPool } from "@platforma-sdk/model";
+import type {
+  DatasetOption,
+  ImportFileHandle,
+  PlDataTableStateV2,
+  PlRef,
+  ResultPool,
+} from "@platforma-sdk/model";
 import type { CustomLiability } from "@platforma-open/milaboratories.antibody-sequence-liabilities.kind";
 import {
   BlockModelV3,
+  buildDatasetOptions,
   DataColumn,
   DataModelBuilder,
   createPlDataTableStateV2,
   createPlDataTableV3,
+  createGlobalPObjectId,
+  isPColumnSpec,
+  plRefsEqual,
 } from "@platforma-sdk/model";
 import { kind } from "@platforma-open/milaboratories.antibody-sequence-liabilities.kind";
 import { getDefaultBlockLabel } from "./label";
@@ -50,6 +60,9 @@ export type BlockData = {
   defaultBlockLabel: string;
   customBlockLabel: string;
   inputAnchor?: PlRef;
+  // Optional `pl7.app/isSubset` column picked alongside the dataset (e.g. a
+  // repertoire-labeling label). Only clonotypes present in it are scanned.
+  filterRef?: PlRef;
   modality?: Modality;
   usePredefinedLiabilities?: boolean;
   disabledPredefinedLiabilities?: string[];
@@ -311,6 +324,11 @@ export const platforma = BlockModelV3.create({ dataModel, kind })
       defaultBlockLabel: data.defaultBlockLabel,
       customBlockLabel: data.customBlockLabel,
       inputAnchor: data.inputAnchor,
+      // Column-id form (canonical JSON of the PlRef): the workflow stamps this exact string as
+      // the outputs' `pl7.app/inputSubset`. Absent without a filter, so unfiltered args are unchanged.
+      ...(data.filterRef !== undefined && {
+        inputFilter: createGlobalPObjectId(data.filterRef.blockId, data.filterRef.name),
+      }),
       usePredefinedLiabilities: data.usePredefinedLiabilities,
       disabledPredefinedLiabilities: data.disabledPredefinedLiabilities,
       customLiabilities: data.customLiabilities,
@@ -323,8 +341,8 @@ export const platforma = BlockModelV3.create({ dataModel, kind })
   // prerunArgs allows file import to run independently of whether inputAnchor is set
   .prerunArgs((data) => ({ importFileHandle: data.importFileHandle }))
 
-  .output("inputOptions", (ctx) =>
-    ctx.resultPool.getOptions([
+  .output("inputOptions", (ctx): DatasetOption[] => {
+    const options = ctx.resultPool.getOptions([
       {
         axes: [{ name: "pl7.app/sampleId" }, { name: "pl7.app/vdj/clonotypeKey" }],
         annotations: { "pl7.app/isAnchor": "true" },
@@ -337,8 +355,32 @@ export const platforma = BlockModelV3.create({ dataModel, kind })
         axes: [{ name: "pl7.app/sampleId" }, { name: "pl7.app/variantKey" }],
         annotations: { "pl7.app/isAnchor": "true" },
       },
-    ]),
-  )
+    ]);
+
+    // Subset columns (`pl7.app/isSubset`) on each dataset's axes, e.g. repertoire-labeling
+    // labels or Lead Selection picks. Only the filters are taken from here: its primary refs
+    // carry `requireEnrichments`, which would make this block depend on every block between
+    // it and the dataset. The primary predicate only has to cover the datasets above: results
+    // are matched to them by ref.
+    const withFilters =
+      buildDatasetOptions(ctx, {
+        primary: (spec) =>
+          isPColumnSpec(spec) &&
+          spec.annotations?.["pl7.app/isAnchor"] === "true" &&
+          spec.axesSpec[0]?.name === "pl7.app/sampleId",
+        // Only subsets keyed by the clonotype axis alone: liabilities are per clonotype.
+        filter: (spec) =>
+          isPColumnSpec(spec) &&
+          spec.axesSpec.length === 1 &&
+          spec.axesSpec[0]?.name !== "pl7.app/sampleId",
+      }) ?? [];
+    return options.map((primary) => {
+      const filters = withFilters.find((o) =>
+        plRefsEqual(o.primary.ref, primary.ref, true),
+      )?.filters;
+      return filters === undefined ? { primary } : { primary, filters };
+    });
+  })
 
   .output(
     "modality",
