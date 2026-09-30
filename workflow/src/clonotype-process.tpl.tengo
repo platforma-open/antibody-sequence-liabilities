@@ -361,6 +361,10 @@ self.body(func(args) {
 				col.spec.domain = {}
 			}
 			col.spec.domain["pl7.app/blockId"] = blockId
+			// A run on a subset says so: its outputs cover only the subset's clonotypes.
+			if !is_undefined(params.subset) {
+				col.spec.domain["pl7.app/inputSubset"] = params.subset
+			}
 			
 			exportColumns += [col]
 		}
@@ -408,7 +412,9 @@ self.body(func(args) {
 	}]
 
 	// Create the trace with all steps. Spread operator is used to pass the trace steps as individual arguments.
-	liabilityTrace := pSpec.makeTrace(datasetSpec, traceSteps...)
+	// A subset run roots the trace in the filter (dataset -> the block that made the subset).
+	traceSpec := is_undefined(params.traceSpec) ? datasetSpec : params.traceSpec
+	liabilityTrace := pSpec.makeTrace(traceSpec, traceSteps...)
 
 	exportPframe := pframes.pFrameBuilder()
 
