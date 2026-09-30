@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 5.5.0
+
+### Minor Changes
+
+- 2616dda: Allow selection of filtered inputs
+
 ## 5.4.2
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.workflow
 
+## 6.6.0
+
+### Minor Changes
+
+- 2616dda: Allow selection of filtered inputs
+
 ## 6.5.0
 
 ### Minor Changes
