@@ -325,7 +325,7 @@ export const platforma = BlockModelV3.create({ dataModel, kind })
       customBlockLabel: data.customBlockLabel,
       inputAnchor: data.inputAnchor,
       // Column-id form (canonical JSON of the PlRef): the workflow stamps this exact string as
-      // the outputs' `pl7.app/subset`. Absent without a filter, so unfiltered args are unchanged.
+      // the outputs' `pl7.app/inputSubset`. Absent without a filter, so unfiltered args are unchanged.
       ...(data.filterRef !== undefined && {
         inputFilter: createGlobalPObjectId(data.filterRef.blockId, data.filterRef.name),
       }),

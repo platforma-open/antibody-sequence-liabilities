@@ -363,7 +363,7 @@ self.body(func(args) {
 			col.spec.domain["pl7.app/blockId"] = blockId
 			// A run on a subset says so: its outputs cover only the subset's clonotypes.
 			if !is_undefined(params.subset) {
-				col.spec.domain["pl7.app/subset"] = params.subset
+				col.spec.domain["pl7.app/inputSubset"] = params.subset
 			}
 			
 			exportColumns += [col]
