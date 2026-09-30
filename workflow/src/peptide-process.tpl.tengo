@@ -139,7 +139,7 @@ self.body(func(args) {
             col.spec.domain["pl7.app/blockId"] = blockId
             // A run on a subset says so: its outputs cover only the subset's variants.
             if !is_undefined(args.subset) {
-                col.spec.domain["pl7.app/subset"] = args.subset
+                col.spec.domain["pl7.app/inputSubset"] = args.subset
             }
             exportColumns += [col]
         }
