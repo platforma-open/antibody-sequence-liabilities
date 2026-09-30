@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 6.3.0
+
+### Minor Changes
+
+- 2616dda: Allow selection of filtered inputs
+
+### Patch Changes
+
+- Updated dependencies [2616dda]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@6.3.0
+
 ## 6.2.0
 
 ### Minor Changes
