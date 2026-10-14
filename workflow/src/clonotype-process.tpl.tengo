@@ -1,7 +1,4 @@
 self := import("@platforma-sdk/workflow-tengo:tpl")
-file := import("@platforma-sdk/workflow-tengo:file")
-exec := import("@platforma-sdk/workflow-tengo:exec")    // Command execution utilities
-assets:= import("@platforma-sdk/workflow-tengo:assets") // Asset management
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv") // CSV/TSV handling
 pframes := import("@platforma-sdk/workflow-tengo:pframes") // Data frames handling
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec") // Specification utilities

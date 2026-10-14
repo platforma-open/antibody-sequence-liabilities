@@ -15,7 +15,6 @@ import {
   createPlDataTableV3,
   createGlobalPObjectId,
   isPColumnSpec,
-  plRefsEqual,
 } from "@platforma-sdk/model";
 import { kind } from "@platforma-open/milaboratories.antibody-sequence-liabilities.kind";
 import { getDefaultBlockLabel } from "./label";
@@ -284,6 +283,13 @@ const dataModel = new DataModelBuilder({ kind })
     };
   });
 
+// Key axes of the datasets this block scans: bulk and single-cell clonotypes, and variants.
+const DATASET_KEY_AXES: ReadonlySet<string> = new Set([
+  "pl7.app/vdj/clonotypeKey",
+  "pl7.app/vdj/scClonotypeKey",
+  "pl7.app/variantKey",
+]);
+
 export const platforma = BlockModelV3.create({ dataModel, kind })
 
   .args((data) => {
@@ -341,46 +347,27 @@ export const platforma = BlockModelV3.create({ dataModel, kind })
   // prerunArgs allows file import to run independently of whether inputAnchor is set
   .prerunArgs((data) => ({ importFileHandle: data.importFileHandle }))
 
-  .output("inputOptions", (ctx): DatasetOption[] => {
-    const options = ctx.resultPool.getOptions([
-      {
-        axes: [{ name: "pl7.app/sampleId" }, { name: "pl7.app/vdj/clonotypeKey" }],
-        annotations: { "pl7.app/isAnchor": "true" },
-      },
-      {
-        axes: [{ name: "pl7.app/sampleId" }, { name: "pl7.app/vdj/scClonotypeKey" }],
-        annotations: { "pl7.app/isAnchor": "true" },
-      },
-      {
-        axes: [{ name: "pl7.app/sampleId" }, { name: "pl7.app/variantKey" }],
-        annotations: { "pl7.app/isAnchor": "true" },
-      },
-    ]);
-
-    // Subset columns (`pl7.app/isSubset`) on each dataset's axes, e.g. repertoire-labeling
-    // labels or Lead Selection picks. Only the filters are taken from here: its primary refs
-    // carry `requireEnrichments`, which would make this block depend on every block between
-    // it and the dataset. The primary predicate only has to cover the datasets above: results
-    // are matched to them by ref.
-    const withFilters =
+  // Datasets, each with its subset columns (`pl7.app/isSubset`, e.g. repertoire-labeling labels
+  // or Lead Selection picks) as filters. `requireEnrichments: false`: a stored dataset ref must
+  // not make this block depend on every block that enriches the dataset.
+  .output(
+    "inputOptions",
+    (ctx): DatasetOption[] =>
       buildDatasetOptions(ctx, {
         primary: (spec) =>
           isPColumnSpec(spec) &&
           spec.annotations?.["pl7.app/isAnchor"] === "true" &&
-          spec.axesSpec[0]?.name === "pl7.app/sampleId",
+          spec.axesSpec.length === 2 &&
+          spec.axesSpec[0].name === "pl7.app/sampleId" &&
+          DATASET_KEY_AXES.has(spec.axesSpec[1].name),
         // Only subsets keyed by the clonotype axis alone: liabilities are per clonotype.
         filter: (spec) =>
           isPColumnSpec(spec) &&
           spec.axesSpec.length === 1 &&
-          spec.axesSpec[0]?.name !== "pl7.app/sampleId",
-      }) ?? [];
-    return options.map((primary) => {
-      const filters = withFilters.find((o) =>
-        plRefsEqual(o.primary.ref, primary.ref, true),
-      )?.filters;
-      return filters === undefined ? { primary } : { primary, filters };
-    });
-  })
+          DATASET_KEY_AXES.has(spec.axesSpec[0].name),
+        requireEnrichments: false,
+      }) ?? [],
+  )
 
   .output(
     "modality",

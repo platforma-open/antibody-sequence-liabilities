@@ -1,19 +1,13 @@
 wf := import("@platforma-sdk/workflow-tengo:workflow")
 render := import("@platforma-sdk/workflow-tengo:render")
 smart := import("@platforma-sdk/workflow-tengo:smart")
-file := import("@platforma-sdk/workflow-tengo:file")
-exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
-xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 ll := import("@platforma-sdk/workflow-tengo:ll")
-pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
-pFrames := import("@platforma-sdk/workflow-tengo:pframes")
 maps := import("@platforma-sdk/workflow-tengo:maps")
 liabilityConfig := import(":liability-config")
 wholeSeqFlags := import(":whole-seq-flags")
 subsetTable := import(":subset-table")
 json := import("json")
-text := import("text")
 math := import("math")
 
 calculateLiabilitiesTpl := assets.importTemplate(":clonotype-liabilities")
@@ -553,8 +547,6 @@ wf.body(func(args) {
 		ll.assert(len(primaryChains) > 0, "chain-separated input has no primary-chain sequences")
 	}
 
-	// Set when a column keyed on parentId alone joins the table (repertoire input).
-	hasParentOnlyColumn := false
 	// Gives each variant the list of its regions that hold a sub-region partition. The builder
 	// joins on shared axes: the linker's [parentId, variantKey] ties the parent axis to the
 	// table's key, and subdividedRegions ([parentId]) rides along. No column written => the
@@ -604,20 +596,14 @@ wf.body(func(args) {
 			// Add the parentID axis and the containerRegions column using the linker
 			seqTableBuilder.setAxisHeader(parentAxis, "parentId")
 			seqTableBuilder.add({ spec: linkerCol.spec, data: linkerCol.data }, { header: "parentLink" })
-			// Keyed on parentId alone, so the filter can't apply to it: see dropRowsWithoutKey below.
-			seqTableBuilder.addUnfiltered({ spec: subRegionsCol.spec, data: subRegionsCol.data }, { header: "containerRegions" })
-			hasParentOnlyColumn = true
+			// Keyed on parentId only: filled into the existing rows (see addLookup).
+			seqTableBuilder.addLookup({ spec: subRegionsCol.spec, data: subRegionsCol.data }, { header: "containerRegions" })
 		}
 	}
 
 	seqTableBuilder.mem(string(int(math.max(16, baseMemGiB / 4))) + "GiB")
 	seqTableBuilder.cpu(1)
 	seqTable := seqTableBuilder.build()
-	// A parentId-only column joins back parents whose entities the subset removed, as rows with
-	// no clonotype key. Drop them; entities in the subset keep their containerRegions.
-	if hasParentOnlyColumn && !is_undefined(filterColumn) {
-		seqTable = subsetTable.dropRowsWithoutKey(seqTable, "clonotypeKey")
-	}
 
 	liabCfg := liabilityConfig.normalize(args.customLiabilities, args.usePredefinedLiabilities, args.disabledPredefinedLiabilities, args.regions)
 
