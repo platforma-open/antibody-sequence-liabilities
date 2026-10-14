@@ -1,6 +1,4 @@
 self := import("@platforma-sdk/workflow-tengo:tpl")
-smart := import("@platforma-sdk/workflow-tengo:smart")
-ll := import("@platforma-sdk/workflow-tengo:ll")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 text := import("text")
