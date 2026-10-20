@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 5.5.1
+
+### Patch Changes
+
+- ed87da6: Release every package through npm trusted publishing (OIDC) so each package's trusted publisher is used before it expires.
+
 ## 5.5.0
 
 ### Minor Changes
