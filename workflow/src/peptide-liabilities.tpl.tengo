@@ -3,7 +3,6 @@
 // no CDR-boundary annotations, no Cys-position checks).
 
 self := import("@platforma-sdk/workflow-tengo:tpl")
-ll := import("@platforma-sdk/workflow-tengo:ll")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 json := import("json")

@@ -1,30 +1,30 @@
 // Tables restricted to an optional subset column (a `pl7.app/isSubset` column on the entity
 // axis, picked in PlDatasetSelector).
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
-pt := import("@platforma-sdk/workflow-tengo:pt")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 
-// A TSV builder restricted to the rows of an optional subset column. Without one it is the
-// plain xsv builder, and addUnfiltered is add. With one, every column added by add becomes
-// its own primary carrying the filter, full-joined: tableBuilder full-joins addColumn entries
-// onto the filtered primary, which would bring the filtered-out rows back.
+// A TSV builder that keeps only the entities in an optional subset column. Without a subset it
+// is the plain xsv builder.
 //
-// addUnfiltered is for a column with no entity axis to filter on (the repertoire parentId
-// column). It joins back rows the filter removed, so the table then needs
-// dropRowsWithoutKey.
+// add: a column keyed on the entity. It is filtered to the subset, and the table's rows are
+// all entities found in any added column (an entity may lack a chain or a feature).
+//
+// addLookup: a column not keyed on the entity (e.g. keyed on the repertoire parentId), so the
+// filter can't apply to it. It adds no rows: it only fills its values into the rows from add,
+// matched through a shared axis (setColumnJoin("left")).
 newTableBuilder := func(filterColumn) {
 	if is_undefined(filterColumn) {
 		b := pframes.tsvFileBuilder()
 		return {
 			add: b.add,
-			addUnfiltered: b.add,
+			addLookup: b.add,
 			setAxisHeader: b.setAxisHeader,
 			mem: b.mem,
 			cpu: b.cpu,
 			build: b.build
 		}
 	}
-	tb := pframes.tableBuilder("tsv").setJoinMode("full")
+	tb := pframes.tableBuilder("tsv").setJoinMode("full").setColumnJoin("left")
 	nColumns := 0
 	return {
 		add: func(column, opts) {
@@ -35,10 +35,7 @@ newTableBuilder := func(filterColumn) {
 			}, opts)
 			nColumns += 1
 		},
-		addUnfiltered: func(column, opts) {
-			tb.addPrimary("col" + string(nColumns), column, opts)
-			nColumns += 1
-		},
+		addLookup: func(column, opts) { tb.addColumn(column, opts) },
 		setAxisHeader: func(matcher, header) { tb.setAxisHeader(matcher, header) },
 		mem: func(amount) { tb.mem(amount) },
 		cpu: func(amount) { tb.cpu(amount) },
@@ -46,18 +43,6 @@ newTableBuilder := func(filterColumn) {
 	}
 }
 
-// Drops the rows whose `keyHeader` column is empty: those an addUnfiltered column joined back
-// for entities outside the subset. The filtered table writes a missing key as an empty field,
-// which ptabler reads as null. No cpu/mem: unset, pt sizes the step from its input.
-dropRowsWithoutKey := func(tsv, keyHeader) {
-	ptWf := pt.workflow()
-	ptWf.frame(tsv, { xsvType: "tsv", inferSchema: false }).
-		filter(pt.col(keyHeader).isNotNull()).
-		save("table.tsv")
-	return ptWf.run().getFile("table.tsv")
-}
-
 export ll.toStrict({
-	newTableBuilder: newTableBuilder,
-	dropRowsWithoutKey: dropRowsWithoutKey
+	newTableBuilder: newTableBuilder
 })
