@@ -2,6 +2,7 @@
 import strings from "@milaboratories/strings";
 import type { CustomLiability } from "@platforma-open/milaboratories.antibody-sequence-liabilities.model";
 import {
+  labelFromParams,
   liabilityTypes,
   predefinedLiabilityNames,
 } from "@platforma-open/milaboratories.antibody-sequence-liabilities.model";
@@ -343,7 +344,7 @@ watch([importedFileBytes, importedFileData] as const, ([bytes, data]) => {
 <template>
   <PlBlockPage
     v-model:subtitle="app.model.data.customBlockLabel"
-    :subtitle-placeholder="app.model.data.defaultBlockLabel"
+    :subtitle-placeholder="labelFromParams(app.model.data)"
     title="Sequence Liabilities"
   >
     <template #append>

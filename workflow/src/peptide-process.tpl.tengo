@@ -15,8 +15,7 @@ self.defineOutputs("outputLiabilities", "exportPframe")
 self.body(func(args) {
 
     blockId := args.blockId
-    customBlockLabel := args.customBlockLabel
-    defaultBlockLabel := args.defaultBlockLabel
+    traceLabel := args.traceLabel
     liabilitiesTable := args.liabilitiesTable
     datasetSpec := args.datasetSpec
 
@@ -173,14 +172,12 @@ self.body(func(args) {
         { splitDataAndSpec: true, cpu: 1, mem: convMemGiB }
     )
 
-    blockLabel := customBlockLabel || defaultBlockLabel || "Sequence liabilities"
-
     // Trace type matches the antibody pipeline so downstream consumers
     // (lead-selection's score collection) treat the two modalities uniformly.
     traceSteps := [{
         type: "milaboratories.sequence-liabilities",
         importance: 30,
-        label: blockLabel,
+        label: traceLabel,
         id: blockId
     }]
     // A subset run roots the trace in the filter (dataset -> the block that made the subset).

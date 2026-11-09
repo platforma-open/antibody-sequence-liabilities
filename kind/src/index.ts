@@ -31,7 +31,7 @@ export type CustomLiability = {
  * rules to add, and which regions to scan. A team with a house liability panel
  * can pin it in a template and only pick the dataset afterwards.
  *
- * Four groups of `BlockData` fields are deliberately left out.
+ * Three groups of `BlockData` fields are deliberately left out.
  *
  * - **Project-local handles.** `inputAnchor` is a `PlRef` into one project's
  *   result pool and `importFileHandle` is an `ImportFileHandle` naming a blob in
@@ -40,8 +40,6 @@ export type CustomLiability = {
  * - **Facts about the input.** `modality` is a snapshot of a model output; it
  *   describes the dataset the user picked, so a template cannot state it in
  *   advance.
- * - **Derived state.** `defaultBlockLabel` is computed by the UI from the fields
- *   above, so carrying it would let a template contradict its own settings.
  * - **View state.** `customBlockLabel` and `tableState` exist for the UI alone.
  *
  * `mem` is left out on operator decision: the memory override is a property of
