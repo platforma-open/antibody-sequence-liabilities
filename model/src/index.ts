@@ -17,7 +17,7 @@ import {
   isPColumnSpec,
 } from "@platforma-sdk/model";
 import { kind } from "@platforma-open/milaboratories.antibody-sequence-liabilities.kind";
-import { getDefaultBlockLabel } from "./label";
+import { liabilityScanLabel } from "./label";
 export type * from "@milaboratories/helpers";
 
 // The custom-liability shape is part of the kind's init-params contract, so the
@@ -56,7 +56,6 @@ export const allRegions = ["FR1", "CDR1", "FR2", "CDR2", "FR3", "CDR3", "FR4"] a
 export type Region = (typeof allRegions)[number];
 
 export type BlockData = {
-  defaultBlockLabel: string;
   customBlockLabel: string;
   inputAnchor?: PlRef;
   // Optional `pl7.app/isSubset` column picked alongside the dataset (e.g. a
@@ -72,6 +71,11 @@ export type BlockData = {
   importFileHandle?: ImportFileHandle;
   mem?: number;
   tableState: PlDataTableStateV2;
+};
+
+/** v1 also stored the block label the UI derived from the liability settings. */
+type BlockDataV1 = BlockData & {
+  defaultBlockLabel: string;
 };
 
 export const liabilityTypes: {
@@ -247,12 +251,28 @@ function regionsOf(pool: ResultPool, ref: PlRef, name: string, featureKey: strin
   return out;
 }
 
+/** What tells two instances apart: the liability set and, for antibodies, the region scope. */
+export function labelFromParams(data: BlockData): string {
+  return liabilityScanLabel({
+    usePredefinedLiabilities: data.usePredefinedLiabilities ?? true,
+    disabledPredefinedLiabilities: data.disabledPredefinedLiabilities ?? [],
+    allLiabilityTypes: allLiabilityTypeValues,
+    customLiabilities: data.customLiabilities ?? [],
+    // Whole-sequence modes have no regions; a scope here would linger from a previous input.
+    regions: data.modality === "peptide" || data.modality === "amplicon" ? undefined : data.regions,
+    allRegions,
+  });
+}
+
 const dataModel = new DataModelBuilder({ kind })
-  .from<BlockData>("v1")
+  .from<BlockDataV1>("v1")
   .upgradeLegacy<OldArgs, OldUiState>(({ args, uiState }) => ({
     ...args,
     tableState: uiState.tableState,
   }))
+  // v1 stored a label the UI derived from the liability settings; the model now
+  // derives it on demand, so the stored copy is dropped.
+  .migrate<BlockData>("v2", ({ defaultBlockLabel: _, ...rest }) => rest)
   // The first group of fields is the kind's init-params contract, field for field,
   // and `.templateParams(...)` below projects those same fields back out. `params`
   // is optional — a block may be created without a template — so every field keeps
@@ -268,14 +288,6 @@ const dataModel = new DataModelBuilder({ kind })
       // Undefined = scan everything, so a template that says nothing keeps the
       // pre-contract behaviour.
       regions: params?.regions,
-
-      // Derived from the four fields above, so it is not a param of its own.
-      defaultBlockLabel: getDefaultBlockLabel({
-        usePredefinedLiabilities,
-        disabledPredefinedLiabilities,
-        allLiabilityTypes: allLiabilityTypeValues,
-        customLiabilities,
-      }),
 
       // Not init params: view state. See the kind for why each group stays out.
       customBlockLabel: "",
@@ -326,9 +338,11 @@ export const platforma = BlockModelV3.create({ dataModel, kind })
         ? allRegions.filter((r) => selectedRegions.includes(r))
         : undefined;
 
+    const params = labelFromParams(data);
     return {
-      defaultBlockLabel: data.defaultBlockLabel,
-      customBlockLabel: data.customBlockLabel,
+      traceLabel:
+        data.customBlockLabel ||
+        (params ? `Sequence Liabilities (${params})` : "Sequence Liabilities"),
       inputAnchor: data.inputAnchor,
       // Column-id form (canonical JSON of the PlRef): the workflow stamps this exact string as
       // the outputs' `pl7.app/inputSubset`. Absent without a filter, so unfiltered args are unchanged.
@@ -499,11 +513,10 @@ export const platforma = BlockModelV3.create({ dataModel, kind })
 
   .title(() => "Sequence Liabilities")
 
-  .subtitle((ctx) => ctx.data.customBlockLabel || ctx.data.defaultBlockLabel)
+  .subtitle((ctx) => ctx.data.customBlockLabel || labelFromParams(ctx.data))
 
   .sections((_) => [{ type: "link", href: "/", label: "Table" }])
 
   .done();
 
-export { getDefaultBlockLabel } from "./label";
 export { allLiabilityTypeValues, predefinedLiabilityNames };

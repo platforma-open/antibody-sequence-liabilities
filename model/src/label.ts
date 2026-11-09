@@ -46,7 +46,7 @@ function regionScopeSuffix(
   return isAllCDRs ? " @CDRs" : ` @${scoped.join("/")}`;
 }
 
-export function getDefaultBlockLabel(data: {
+export function liabilityScanLabel(data: {
   usePredefinedLiabilities: boolean;
   disabledPredefinedLiabilities: string[];
   allLiabilityTypes: string[];

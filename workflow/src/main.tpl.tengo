@@ -268,8 +268,7 @@ wf.body(func(args) {
 		peptideProcessInputs := {
 			liabilitiesTable: liabilitiesResult,
 			blockId: blockId,
-			customBlockLabel: args.customBlockLabel,
-			defaultBlockLabel: args.defaultBlockLabel,
+			traceLabel: args.traceLabel,
 			datasetSpec: datasetSpec,
 			seqFeature: seqFeature,
 			seqLabel: seqLabel
@@ -651,8 +650,7 @@ wf.body(func(args) {
 		newMapping: newMapping,
 		regionsFound: regionsFound,
 		blockId: blockId,
-		customBlockLabel: args.customBlockLabel,
-		defaultBlockLabel: args.defaultBlockLabel,
+		traceLabel: args.traceLabel,
 		params: smart.createJsonResource(processParams)
 	}, {
 		metaInputs: { mem: args.mem }
