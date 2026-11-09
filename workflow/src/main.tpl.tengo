@@ -43,6 +43,33 @@ featureOf := func(spec) {
 	return regionFeature(is_undefined(f) ? spec.domain["pl7.app/feature"] : f)
 }
 
+// Columns whose `axisSpec.name` axis carries exactly `axisSpec`'s domain. The bundle ignores
+// missing domains, so a dataset derived from the input (the same axis plus extra keys, such as a
+// clustering centroid dataset) also matches queries anchored on the input.
+onAxisExactly := func(cols, axisSpec) {
+	want := is_undefined(axisSpec.domain) ? {} : axisSpec.domain
+	res := []
+	for col in cols {
+		for ax in col.spec.axesSpec {
+			if ax.name != axisSpec.name {
+				continue
+			}
+			have := is_undefined(ax.domain) ? {} : ax.domain
+			same := len(have) == len(want)
+			for k, v in want {
+				if have[k] != v {
+					same = false
+				}
+			}
+			if same {
+				res = append(res, col)
+			}
+			break
+		}
+	}
+	return res
+}
+
 wf.setPreRun(prerunTpl)
 
 // Prepare phase of the workflow - collects and sets up required data
@@ -82,6 +109,20 @@ wf.prepare(func(args) {
 			"pl7.app/alphabet": "aminoacid"
 		}
 	}, "additionalSequences")
+
+	// Main amino-acid sequence of each entity, whatever its feature: peptide-extraction,
+	// synthetic-repertoire-profiler and clustering centroid datasets all mark it. Read first
+	// in whole-sequence mode; the feature-named collectors below cover data without the marker.
+	bundleBuilder.addMulti({
+		axes: [{ anchor: "main", idx: 1 }],
+		name: "pl7.app/sequence",
+		annotations: {
+			"pl7.app/isMainSequence": "true"
+		},
+		domain: {
+			"pl7.app/alphabet": "aminoacid"
+		}
+	}, "mainSequences")
 
 	// aa peptide sequence
 	bundleBuilder.addMulti({
@@ -227,18 +268,22 @@ wf.body(func(args) {
 		(!is_undefined(axis1Domain["pl7.app/peptide/extractionRunId"]) || repertoireIsWholeSeq)
 
 	if isWholeSequence {
-		seqCols := undefined
+		seqCols := onAxisExactly(columnsWithSequences.getColumns("mainSequences"), axis1)
 		seqFeature := "peptide"
 		seqLabel := "Peptide aa"
 		if isRepertoire {
-			seqCols = columnsWithSequences.getColumns("ampliconSequences")
+			if len(seqCols) == 0 {
+				seqCols = columnsWithSequences.getColumns("ampliconSequences")
+			}
 			seqFeature = "amplicon-sequence"
 			seqLabel = "Sequence aa"
 			if len(seqCols) == 0 {
 				ll.panic("No amplicon aa sequence found on variantKey axis. Expected pl7.app/sequence with domain.pl7.app/feature: amplicon-sequence and pl7.app/alphabet: aminoacid.")
 			}
 		} else {
-			seqCols = columnsWithSequences.getColumns("peptideSequences")
+			if len(seqCols) == 0 {
+				seqCols = columnsWithSequences.getColumns("peptideSequences")
+			}
 			if len(seqCols) == 0 {
 				ll.panic("No peptide aa sequence found on variantKey axis. Expected pl7.app/sequence with domain.pl7.app/feature: peptide and pl7.app/alphabet: aminoacid.")
 			}
