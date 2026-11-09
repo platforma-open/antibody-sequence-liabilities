@@ -1,5 +1,20 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 6.3.3
+
+### Patch Changes
+
+- 94f1c1a: Compute the block label without the UI
+
+  The trace label and the subtitle are now built by the model from the liability
+  settings, so opening the block no longer changes its arguments and a block that was
+  never opened gets the same label. The trace label now names the block, e.g.
+  "Sequence Liabilities (All Predefined)". Existing blocks show as stale once after the
+  update because the arguments change shape.
+
+- Updated dependencies [94f1c1a]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@6.4.1
+
 ## 6.3.2
 
 ### Patch Changes
