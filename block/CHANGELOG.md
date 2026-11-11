@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 6.7.3
+
+### Patch Changes
+
+- 55fe507: Amplicon scFV support
+
 ## 6.7.2
 
 ### Patch Changes
