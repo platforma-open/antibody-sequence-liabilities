@@ -43,6 +43,27 @@ featureOf := func(spec) {
 	return regionFeature(is_undefined(f) ? spec.domain["pl7.app/feature"] : f)
 }
 
+// The A/B chain slot for a column. Some producers carry it as the A/B letter on
+// `pl7.app/vdj/scClonotypeChain`; others carry the bare chain name on `pl7.app/vdj/chain`, which this
+// maps — the VDJ chains (Heavy/Beta/Delta) to A, the VJ chains (Light/Alpha/Gamma) to B.
+// Returns undefined for a column with no chain (a bulk / whole-variant column).
+chainLetterOf := func(spec) {
+	sc := spec.domain["pl7.app/vdj/scClonotypeChain"]
+	if !is_undefined(sc) { return sc }
+	ch := spec.domain["pl7.app/vdj/chain"]
+	if ch == "Heavy" || ch == "Beta" || ch == "Delta" { return "A" }
+	if ch == "Light" || ch == "Alpha" || ch == "Gamma" { return "B" }
+	return undefined
+}
+
+// Whether a per-chain column is the chain's primary (only) rearrangement. The rank exists only under
+// pairing (a cell); a construct (scFv) or a bare set carries no rank, so an absent rank means the
+// single rearrangement.
+isPrimaryChainCol := func(spec) {
+	idx := spec.domain["pl7.app/vdj/scClonotypeChain/index"]
+	return is_undefined(idx) || idx == "primary"
+}
+
 // Columns whose `axisSpec.name` axis carries exactly `axisSpec`'s domain. The bundle ignores
 // missing domains, so a dataset derived from the input (the same axis plus extra keys, such as a
 // clustering centroid dataset) also matches queries anchored on the input.
@@ -237,10 +258,17 @@ wf.body(func(args) {
 	declaredModality := axis1Domain["pl7.app/modality"]
 
 	repertoireRegions := {}
+	// Every repertoire region column, both chains. repertoireRegions (feature -> entry) is only a
+	// presence map for the gate below; an scFv has two columns per feature (one per chain), so the
+	// full list — not the collapsed map — feeds the table.
+	repertoireRegionCols := []
 	if isRepertoire {
 		for entry in columnsWithSequences.getColumns("repertoireSequences") {
 			for fr in REGIONS {
-				if featureOf(entry.spec) == fr { repertoireRegions[fr] = entry }
+				if featureOf(entry.spec) == fr {
+					repertoireRegions[fr] = entry
+					repertoireRegionCols = append(repertoireRegionCols, entry)
+				}
 			}
 		}
 	}
@@ -346,9 +374,7 @@ wf.body(func(args) {
 	// Region-scanned repertoire input: the whole variant stands in for the assembling feature.
 	if isRepertoire {
 		sequences = columnsWithSequences.getColumns("ampliconSequences")
-		for fr in REGIONS {
-			if !is_undefined(repertoireRegions[fr]) { additionalSequences = append(additionalSequences, repertoireRegions[fr]) }
-		}
+		for entry in repertoireRegionCols { additionalSequences = append(additionalSequences, entry) }
 	}
 	// Determine if we're working with single cell data
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
@@ -372,9 +398,8 @@ wf.body(func(args) {
 	annotationSpecs := {}
 	// Only the primary chain is echoed, and the first match per chain wins.
 	recordPrimary := func(dst, entry) {
-		idx := entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"]
-		if is_undefined(idx) || idx == "primary" {
-			c := entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
+		if isPrimaryChainCol(entry.spec) {
+			c := chainLetterOf(entry.spec)
 			key := is_undefined(c) ? "" : c
 			if is_undefined(dst[key]) { dst[key] = entry.spec }
 		}
@@ -396,10 +421,10 @@ wf.body(func(args) {
 	// axis name.
 	hasChainColumns := false
 	for entry in sequences {
-		if !is_undefined(entry.spec.domain["pl7.app/vdj/scClonotypeChain"]) { hasChainColumns = true }
+		if !is_undefined(chainLetterOf(entry.spec)) { hasChainColumns = true }
 	}
 	for entry in additionalSequences {
-		if !is_undefined(entry.spec.domain["pl7.app/vdj/scClonotypeChain"]) { hasChainColumns = true }
+		if !is_undefined(chainLetterOf(entry.spec)) { hasChainColumns = true }
 	}
 	perChain := isSingleCell || hasChainColumns
 
@@ -492,12 +517,12 @@ wf.body(func(args) {
 		// column; the headers simply have to agree with it.
 		chainSet := {}
 		for entry in sequences {
-			c := entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
-			if !is_undefined(c) && entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" { chainSet[c] = true }
+			c := chainLetterOf(entry.spec)
+			if !is_undefined(c) && isPrimaryChainCol(entry.spec) { chainSet[c] = true }
 		}
 		for entry in additionalSequences {
-			c := entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
-			if !is_undefined(c) && entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" { chainSet[c] = true }
+			c := chainLetterOf(entry.spec)
+			if !is_undefined(c) && isPrimaryChainCol(entry.spec) { chainSet[c] = true }
 		}
 		prefixChains := len(chainSet) > 1
 
@@ -513,16 +538,16 @@ wf.body(func(args) {
 		// domain, because for a bare set the regions are the whole point — ANARCI located them
 		// at import and there are no annotation columns to re-derive them from.
 		for seq_entry in sequences {
-			if seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
-				chain := seq_entry.spec.domain["pl7.app/vdj/scClonotypeChain"]
+			chain := chainLetterOf(seq_entry.spec)
+			if !is_undefined(chain) && isPrimaryChainCol(seq_entry.spec) {
 				primaryChainsSet[chain] = true
 				seqTableBuilder.add(columnsWithSequences.getColumn(seq_entry.key), {header: prefixChains ? chain + " sequence aa" : "sequence aa"})
 			}
 		}
 		for additionalSeq in additionalSequences {
-			chain := additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain"]
+			chain := chainLetterOf(additionalSeq.spec)
 			if is_undefined(chain) { continue }
-			if additionalSeq.spec.domain["pl7.app/vdj/scClonotypeChain/index"] != "primary" { continue }
+			if !isPrimaryChainCol(additionalSeq.spec) { continue }
 			for fr in REGIONS {
 				if featureOf(additionalSeq.spec) == fr {
 					primaryChainsSet[chain] = true
