@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 6.7.4
+
+### Patch Changes
+
+- 19fac50: Republish the block kind under a new version so the block can release. The kind source and the version stored in the block registry had drifted apart, which blocked publishing.
+
 ## 6.7.3
 
 ### Patch Changes

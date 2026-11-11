@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 6.7.4
+
+### Patch Changes
+
+- @platforma-open/milaboratories.antibody-sequence-liabilities.model@6.7.4
+
 ## 6.7.3
 
 ### Patch Changes
