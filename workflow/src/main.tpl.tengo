@@ -484,6 +484,23 @@ wf.body(func(args) {
 		}
 	}
 
+	// The whole-variant amplicon sequence spans the entire construct, including spans outside the
+	// supplied FR/CDR regions — an scFv linker, for example. Its productivity flags are the only
+	// check that catches a stop codon or frame break there, so compute them for a repertoire input
+	// regardless of the chain branch below. The whole construct carries no chain (an scFv spans
+	// both), so the per-chain branches skip it.
+	if isRepertoire {
+		for seq_entry in sequences {
+			if seq_entry.spec.domain["pl7.app/feature"] == "amplicon-sequence" {
+				flags := wholeSeqFlags.computeFlags(
+					columnsWithSequences.getColumn(seq_entry.key), datasetSpec.axesSpec[1])
+				seqTableBuilder.add(flags.hasStop, {header: wholeSeqFlags.HAS_STOP})
+				seqTableBuilder.add(flags.outOfFrame, {header: wholeSeqFlags.OUT_OF_FRAME})
+				break
+			}
+		}
+	}
+
 	if isSingleCell {
 		// Single-cell data handling
 		// Add primary chain sequences
@@ -570,14 +587,11 @@ wf.body(func(args) {
 			if sequences[0].spec.domain["pl7.app/vdj/feature"] == "CDR3" {
 				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "CDR3 aa"})
 				coveredFeatures["CDR3"] = 1
-			} else if isRepertoire {
-				flags := wholeSeqFlags.computeFlags(
-					columnsWithSequences.getColumn(sequences[0].key), datasetSpec.axesSpec[1])
-				seqTableBuilder.add(flags.hasStop, {header: wholeSeqFlags.HAS_STOP})
-				seqTableBuilder.add(flags.outOfFrame, {header: wholeSeqFlags.OUT_OF_FRAME})
-			} else {
+			} else if !isRepertoire {
 				seqTableBuilder.add(columnsWithSequences.getColumn(sequences[0].key), {header: "sequence aa"})
 			}
+			// A repertoire whole-variant: its productivity flags are added by the shared pre-step
+			// above (it spans the construct, including the linker); the raw aa sequence is not echoed.
 		}
 		// Add FR/CDR sequences from additionalSequences (bulk, no annotations)
 		for additionalSeq in additionalSequences {
