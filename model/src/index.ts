@@ -282,6 +282,8 @@ const dataModel = new DataModelBuilder({ kind })
     const disabledPredefinedLiabilities = params?.disabledPredefinedLiabilities ?? defaultDisabled;
     const customLiabilities = params?.customLiabilities ?? [];
     return {
+      inputAnchor: params?.inputAnchor,
+      filterRef: params?.filterRef,
       usePredefinedLiabilities,
       disabledPredefinedLiabilities,
       customLiabilities,
@@ -503,8 +505,11 @@ export const platforma = BlockModelV3.create({ dataModel, kind })
   )
 
   // The inverse of `init` above: the same fields, so a project exported as a
-  // template and re-applied comes back with the liability panel it went out with.
+  // template and re-applied comes back with the dataset and the liability panel it
+  // went out with.
   .templateParams((data) => ({
+    inputAnchor: data.inputAnchor,
+    filterRef: data.filterRef,
     usePredefinedLiabilities: data.usePredefinedLiabilities,
     disabledPredefinedLiabilities: data.disabledPredefinedLiabilities,
     customLiabilities: data.customLiabilities,
