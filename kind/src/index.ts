@@ -1,4 +1,6 @@
 import { assertParamsObject, defineBlockKind } from "@platforma-sdk/block-kind";
+import type { PlRef } from "@platforma-sdk/model";
+import { isPlRef } from "@platforma-sdk/model";
 import { name, version } from "../package.json" with { type: "json" };
 
 /** How likely a liability is to be a real problem. */
@@ -27,16 +29,21 @@ export type CustomLiability = {
  * This block's init-params contract — what a creator or a project template
  * supplies to seed a new instance. A subset of the model's `BlockData`.
  *
- * The subset is the liability panel: which predefined rules are on, which custom
- * rules to add, and which regions to scan. A team with a house liability panel
- * can pin it in a template and only pick the dataset afterwards.
+ * The subset is the dataset the block scans and the liability panel: which
+ * predefined rules are on, which custom rules to add, and which regions to scan.
+ *
+ * `inputAnchor` and `filterRef` are references to columns of an upstream block:
+ * the dataset, and the subset of it the scan is narrowed to. A project template
+ * names its blocks, and a block created from one receives each reference pointing
+ * at the block made from the same entry, so a project made from a template scans
+ * the dataset the original one did. A team with a house liability panel may leave
+ * both out of a template and have the dataset picked afterwards.
  *
  * Three groups of `BlockData` fields are deliberately left out.
  *
- * - **Project-local handles.** `inputAnchor` is a `PlRef` into one project's
- *   result pool and `importFileHandle` is an `ImportFileHandle` naming a blob in
- *   one project's storage. Neither means anything in another project, so no
- *   template can carry one.
+ * - **Uploaded files.** `importFileHandle` is an `ImportFileHandle` naming a blob
+ *   in one project's storage. It means nothing in another project, so no template
+ *   can carry one.
  * - **Facts about the input.** `modality` is a snapshot of a model output; it
  *   describes the dataset the user picked, so a template cannot state it in
  *   advance.
@@ -49,6 +56,11 @@ export type CustomLiability = {
  * all — the model's `init` keeps its own default for each.
  */
 export type BlockParams = {
+  /** The dataset to scan: a reference to an upstream block's column. */
+  inputAnchor?: PlRef;
+  /** A subset column (`pl7.app/isSubset`) the scan is restricted to. */
+  filterRef?: PlRef;
+
   usePredefinedLiabilities?: boolean;
   disabledPredefinedLiabilities?: string[];
   customLiabilities?: CustomLiability[];
@@ -78,10 +90,19 @@ const FIXABILITIES: readonly Fixability[] = ["easily_fixable", "fixable", "hard_
 function parseInitializationParams(value: unknown): BlockParams {
   assertParamsObject(value);
 
-  const { usePredefinedLiabilities, disabledPredefinedLiabilities, customLiabilities, regions } =
-    value;
+  const {
+    inputAnchor,
+    filterRef,
+    usePredefinedLiabilities,
+    disabledPredefinedLiabilities,
+    customLiabilities,
+    regions,
+  } = value;
 
   return {
+    inputAnchor: optionalRef(inputAnchor, "inputAnchor", "column"),
+    filterRef: optionalRef(filterRef, "filterRef", "subset column"),
+
     usePredefinedLiabilities: optionalBoolean(usePredefinedLiabilities, "usePredefinedLiabilities"),
     disabledPredefinedLiabilities: optionalStringList(
       disabledPredefinedLiabilities,
@@ -90,6 +111,15 @@ function parseInitializationParams(value: unknown): BlockParams {
     customLiabilities: optionalCustomLiabilities(customLiabilities),
     regions: optionalStringList(regions, "regions"),
   };
+}
+
+function optionalRef(value: unknown, field: string, what: string): PlRef | undefined {
+  if (value === undefined) return undefined;
+  if (!isPlRef(value))
+    throw new Error(
+      `'${field}' must be a reference to an upstream ${what}, written as { block, name }.`,
+    );
+  return value;
 }
 
 function optionalBoolean(value: unknown, field: string): boolean | undefined {
