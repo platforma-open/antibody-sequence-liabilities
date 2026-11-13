@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities.ui
 
+## 6.7.5
+
+### Patch Changes
+
+- Updated dependencies [1a61876]
+  - @platforma-open/milaboratories.antibody-sequence-liabilities.model@6.7.5
+
 ## 6.7.4
 
 ### Patch Changes

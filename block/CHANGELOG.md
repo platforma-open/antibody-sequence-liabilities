@@ -1,5 +1,7 @@
 # @platforma-open/milaboratories.antibody-sequence-liabilities
 
+## 6.7.5
+
 ## 6.7.4
 
 ### Patch Changes
