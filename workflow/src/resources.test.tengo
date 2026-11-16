@@ -71,7 +71,10 @@ MEASURED := [
 	{ mode: "peptide", rows: 3000000, peak: 816043786 },
 	{ mode: "peptide", rows: 10000000, peak: 2544768123 },
 	{ mode: "peptide", rows: 1000000, peak: 3124588708 },
-	{ mode: "peptide", rows: 3000000, peak: 8976481649 }
+	{ mode: "peptide", rows: 3000000, peak: 8976481649 },
+	{ mode: "peptide", rows: 10000000, peak: 29431263396 },
+	{ mode: "peptide", rows: 20000000, peak: 58647778427 },
+	{ mode: "peptide", rows: 20000000, peak: 5014374318 }
 ]
 
 TestTwiceMeasuredPeak := func() {
