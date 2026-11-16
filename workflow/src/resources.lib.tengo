@@ -7,7 +7,7 @@ f := exec.formula
 
 // Peak memory grows linearly with the row count of the input file (one row per
 // clonotype or variant plus a header). Each row requests at least 2x the
-// measured peak: clonotype mode on a real bulk heavy-chain repertoire, peptide
+// measured peak: clonotype mode on a public bulk IGH repertoire, peptide
 // mode on ~250 aa sequences. Shorter inputs get more headroom. No upper bound.
 ROWS := {
 	clonotype: { perRow: 6144, interceptGiB: 1, floorGiB: 16 },

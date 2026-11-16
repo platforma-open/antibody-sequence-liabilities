@@ -61,8 +61,9 @@ TestStaticFallback := func() {
 }
 
 // Measured peak resident memory in bytes (synthetic inputs on Linux,
-// /usr/bin/time -v; the 4846603-row point is a real bulk heavy-chain
-// repertoire on a production cluster). Every request is at least 2x its peak.
+// /usr/bin/time -v; the 4846603-row point is the public bulk IGH repertoire
+// of SRA BioProject PRJNA531326, run on an internal Platforma deployment).
+// Every request is at least 2x its peak.
 MEASURED := [
 	{ mode: "clonotype", rows: 1000000, peak: 1481763717 },
 	{ mode: "clonotype", rows: 3000000, peak: 3811783475 },
