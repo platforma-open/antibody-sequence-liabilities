@@ -61,30 +61,30 @@ TestStaticFallback := func() {
 }
 
 // Measured peak resident memory in bytes (synthetic inputs on Linux,
-// /usr/bin/time -v; the 4846603-row point is the public bulk IGH repertoire
+// /usr/bin/time -v; the 4846603-clonotype point is the public bulk IGH repertoire
 // of SRA BioProject PRJNA531326, run on an internal Platforma deployment).
 // Every request is at least 2x its peak.
 MEASURED := [
-	{ mode: "clonotype", rows: 1000000, peak: 1481763717 },
-	{ mode: "clonotype", rows: 3000000, peak: 3811783475 },
-	{ mode: "clonotype", rows: 1000000, peak: 2630667469 },
-	{ mode: "clonotype", rows: 3000000, peak: 6861210255 },
-	{ mode: "clonotype", rows: 4846603, peak: 12176232284 },
-	{ mode: "peptide", rows: 1000000, peak: 311385129 },
-	{ mode: "peptide", rows: 3000000, peak: 816043786 },
-	{ mode: "peptide", rows: 10000000, peak: 2544768123 },
-	{ mode: "peptide", rows: 1000000, peak: 3124588708 },
-	{ mode: "peptide", rows: 3000000, peak: 8976481649 },
-	{ mode: "peptide", rows: 10000000, peak: 29431263396 },
-	{ mode: "peptide", rows: 20000000, peak: 58647778427 },
-	{ mode: "peptide", rows: 20000000, peak: 5014374318 }
+	{ mode: "clonotype", clonotypes: 1000000, peak: 1481763717 },
+	{ mode: "clonotype", clonotypes: 3000000, peak: 3811783475 },
+	{ mode: "clonotype", clonotypes: 1000000, peak: 2630667469 },
+	{ mode: "clonotype", clonotypes: 3000000, peak: 6861210255 },
+	{ mode: "clonotype", clonotypes: 4846603, peak: 12176232284 },
+	{ mode: "peptide", clonotypes: 1000000, peak: 311385129 },
+	{ mode: "peptide", clonotypes: 3000000, peak: 816043786 },
+	{ mode: "peptide", clonotypes: 10000000, peak: 2544768123 },
+	{ mode: "peptide", clonotypes: 1000000, peak: 3124588708 },
+	{ mode: "peptide", clonotypes: 3000000, peak: 8976481649 },
+	{ mode: "peptide", clonotypes: 10000000, peak: 29431263396 },
+	{ mode: "peptide", clonotypes: 20000000, peak: 58647778427 },
+	{ mode: "peptide", clonotypes: 20000000, peak: 5014374318 }
 ]
 
 TestTwiceMeasuredPeak := func() {
 	for m in MEASURED {
 		node := m.mode == "clonotype" ? resources.clonotypeRam(undefined) : resources.peptideRam(undefined)
-		got := evalLines(node, m.rows + 1)
+		got := evalLines(node, m.clonotypes + 1)
 		test.isTrue(got >= 2 * m.peak,
-			"request below 2x measured peak: " + m.mode + " at " + string(m.rows) + " rows")
+			"request below 2x measured peak: " + m.mode + " at " + string(m.clonotypes) + " clonotypes")
 	}
 }
