@@ -3,7 +3,7 @@ exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 text := import("text")
 json := import("json")
-math := import("math")
+resources := import(":resources")
 
 liabilitiesCalcSw := assets.importSoftware("@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script:main")
 
@@ -21,16 +21,10 @@ self.body(func(args) {
 	disabledPredefinedLiabilities := args.disabledPredefinedLiabilities
 	regions := args.regions
 
-	baseMemGiB := 16
-	if !is_undefined(args.mem) {
-		baseMemGiB = args.mem
-	}
-
     // Run the liabilities calculation tool on the sequences
 	liabilitiesCalcCmd := exec.builder().
 		software(liabilitiesCalcSw).
-		mem(string(int(math.max(16, baseMemGiB))) + "GiB").
-		cpu(1).
+		resources({ onCPU: { cpu: 1, ram: resources.clonotypeRam(args.mem) } }).
 		addFile("input.tsv", inputTable). // Use the built file
 		arg("input.tsv").
 		arg("result.tsv").

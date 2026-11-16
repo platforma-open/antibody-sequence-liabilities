@@ -1,0 +1,33 @@
+// RAM request for the liabilities calculation steps.
+
+exec := import("@platforma-sdk/workflow-tengo:exec")
+math := import("math")
+
+f := exec.formula
+
+// Peak memory grows linearly with the row count of the input file (one row per
+// clonotype or variant plus a header). Each row requests at least 2x the
+// measured peak: clonotype mode on paired heavy + light chains, peptide mode on
+// ~250 aa sequences. Shorter inputs get more headroom. No upper bound.
+ROWS := {
+	clonotype: { perRow: 4608, interceptGiB: 1, floorGiB: 16 },
+	peptide: { perRow: 6144, interceptGiB: 1, floorGiB: 8 }
+}
+
+// Static request for backends that cannot evaluate formulas.
+FALLBACK_GIB := 16
+
+// A user-set memory value (GiB) replaces the formula and keeps the mode's floor.
+_ram := func(row, userMemGiB) {
+	if !is_undefined(userMemGiB) {
+		return string(int(math.max(row.floorGiB, userMemGiB))) + "GiB"
+	}
+	return f.lineCount().times(row.perRow).plus(f.gib(row.interceptGiB)).
+		atLeast(f.gib(row.floorGiB)).
+		staticFallback(f.gib(FALLBACK_GIB))
+}
+
+export {
+	clonotypeRam: func(userMemGiB) { return _ram(ROWS.clonotype, userMemGiB) },
+	peptideRam: func(userMemGiB) { return _ram(ROWS.peptide, userMemGiB) }
+}
