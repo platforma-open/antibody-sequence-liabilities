@@ -22,12 +22,12 @@ evalLines := func(node, lineCount) {
 
 TestClonotypeFloor := func() {
 	test.isEqual(16 * GIB, evalLines(resources.clonotypeRam(undefined), 0))
-	test.isEqual(16 * GIB, evalLines(resources.clonotypeRam(undefined), 3000001))
+	test.isEqual(16 * GIB, evalLines(resources.clonotypeRam(undefined), 2000001))
 }
 
 TestClonotypeSlope := func() {
 	n := 10000001
-	test.isEqual(n * 4608 + GIB, evalLines(resources.clonotypeRam(undefined), n))
+	test.isEqual(n * 6144 + GIB, evalLines(resources.clonotypeRam(undefined), n))
 }
 
 TestPeptideFloor := func() {
@@ -43,7 +43,7 @@ TestPeptideSlope := func() {
 // The request keeps growing with the input: no upper bound.
 TestNoCap := func() {
 	n := 100000001
-	test.isEqual(n * 4608 + GIB, evalLines(resources.clonotypeRam(undefined), n))
+	test.isEqual(n * 6144 + GIB, evalLines(resources.clonotypeRam(undefined), n))
 	test.isEqual(n * 6144 + GIB, evalLines(resources.peptideRam(undefined), n))
 }
 
@@ -60,13 +60,15 @@ TestStaticFallback := func() {
 	test.isEqual(16 * GIB, f.fallbackOf(resources.peptideRam(undefined)))
 }
 
-// Measured peak resident memory in bytes (synthetic inputs, Linux
-// /usr/bin/time -v). Every request is at least 2x its measured peak.
+// Measured peak resident memory in bytes (synthetic inputs on Linux,
+// /usr/bin/time -v; the 4846603-row point is a real bulk heavy-chain
+// repertoire on a production cluster). Every request is at least 2x its peak.
 MEASURED := [
 	{ mode: "clonotype", rows: 1000000, peak: 1481763717 },
 	{ mode: "clonotype", rows: 3000000, peak: 3811783475 },
 	{ mode: "clonotype", rows: 1000000, peak: 2630667469 },
 	{ mode: "clonotype", rows: 3000000, peak: 6861210255 },
+	{ mode: "clonotype", rows: 4846603, peak: 12176232284 },
 	{ mode: "peptide", rows: 1000000, peak: 311385129 },
 	{ mode: "peptide", rows: 3000000, peak: 816043786 },
 	{ mode: "peptide", rows: 10000000, peak: 2544768123 },
