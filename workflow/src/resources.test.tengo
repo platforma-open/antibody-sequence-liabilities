@@ -1,0 +1,94 @@
+// Unit tests for the liabilities RAM request. Pure Tengo — no backend.
+// Run with `pl-tengo test` from workflow/.
+
+test := import("@platforma-sdk/workflow-tengo:test")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+resources := import(":resources")
+
+f := exec.formula
+
+GIB := 1073741824
+
+// Evaluates a formula the way the exec does: resolve metrics against the
+// exec's only input file, then read lineCount from the given value.
+evalLines := func(node, lineCount) {
+	resolved := f.resolveAst(node, {}, ["input.tsv"])
+	resolver := {
+		size: func(files) { return 0 },
+		lineCount: func(files) { return lineCount }
+	}
+	return f.evaluateResource(resolved, resolver, "test")
+}
+
+TestClonotypeFloor := func() {
+	test.isEqual(16 * GIB, evalLines(resources.clonotypeRam(undefined), 0))
+	test.isEqual(16 * GIB, evalLines(resources.clonotypeRam(undefined), 2000001))
+}
+
+TestClonotypeSlope := func() {
+	n := 10000001
+	test.isEqual(n * 6144 + GIB, evalLines(resources.clonotypeRam(undefined), n))
+}
+
+TestPeptideFloor := func() {
+	test.isEqual(8 * GIB, evalLines(resources.peptideRam(undefined), 0))
+	test.isEqual(8 * GIB, evalLines(resources.peptideRam(undefined), 1000001))
+}
+
+TestPeptideSlope := func() {
+	n := 3000001
+	test.isEqual(n * 6144 + GIB, evalLines(resources.peptideRam(undefined), n))
+}
+
+// The request keeps growing with the input: no upper bound.
+TestNoCap := func() {
+	n := 100000001
+	test.isEqual(n * 6144 + GIB, evalLines(resources.clonotypeRam(undefined), n))
+	test.isEqual(n * 6144 + GIB, evalLines(resources.peptideRam(undefined), n))
+}
+
+// A user-set value replaces the formula; the mode's floor still applies.
+TestUserOverride := func() {
+	test.isEqual("64GiB", resources.clonotypeRam(64))
+	test.isEqual("16GiB", resources.clonotypeRam(4))
+	test.isEqual("32GiB", resources.peptideRam(32))
+	test.isEqual("8GiB", resources.peptideRam(2))
+}
+
+TestStaticFallback := func() {
+	test.isEqual(16 * GIB, f.fallbackOf(resources.clonotypeRam(undefined)))
+	test.isEqual(16 * GIB, f.fallbackOf(resources.peptideRam(undefined)))
+}
+
+// Measured peak resident memory in bytes (synthetic inputs on Linux,
+// /usr/bin/time -v; the 4846603-clonotype point is the public bulk IGH repertoire
+// of SRA BioProject PRJNA531326, run on an internal Platforma deployment).
+// Every request is at least 2x its peak.
+MEASURED := [
+	{ mode: "clonotype", clonotypes: 1000000, peak: 1481763717 },
+	{ mode: "clonotype", clonotypes: 3000000, peak: 3811783475 },
+	{ mode: "clonotype", clonotypes: 1000000, peak: 2630667469 },
+	{ mode: "clonotype", clonotypes: 3000000, peak: 6861210255 },
+	{ mode: "clonotype", clonotypes: 10000000, peak: 21474836480 },
+	{ mode: "clonotype", clonotypes: 20000000, peak: 41961830482 },
+	{ mode: "clonotype", clonotypes: 10000000, peak: 11843372319 },
+	{ mode: "clonotype", clonotypes: 20000000, peak: 23085449216 },
+	{ mode: "clonotype", clonotypes: 4846603, peak: 12176232284 },
+	{ mode: "peptide", clonotypes: 1000000, peak: 311385129 },
+	{ mode: "peptide", clonotypes: 3000000, peak: 816043786 },
+	{ mode: "peptide", clonotypes: 10000000, peak: 2544768123 },
+	{ mode: "peptide", clonotypes: 1000000, peak: 3124588708 },
+	{ mode: "peptide", clonotypes: 3000000, peak: 8976481649 },
+	{ mode: "peptide", clonotypes: 10000000, peak: 29431263396 },
+	{ mode: "peptide", clonotypes: 20000000, peak: 58647778427 },
+	{ mode: "peptide", clonotypes: 20000000, peak: 5014374318 }
+]
+
+TestTwiceMeasuredPeak := func() {
+	for m in MEASURED {
+		node := m.mode == "clonotype" ? resources.clonotypeRam(undefined) : resources.peptideRam(undefined)
+		got := evalLines(node, m.clonotypes + 1)
+		test.isTrue(got >= 2 * m.peak,
+			"request below 2x measured peak: " + m.mode + " at " + string(m.clonotypes) + " clonotypes")
+	}
+}

@@ -6,7 +6,7 @@ self := import("@platforma-sdk/workflow-tengo:tpl")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 json := import("json")
-math := import("math")
+resources := import(":resources")
 
 peptideLiabilitiesSw := assets.importSoftware("@platforma-open/milaboratories.antibody-sequence-liabilities.liabilities-calc-script:peptide")
 
@@ -20,16 +20,10 @@ self.body(func(args) {
 	usePredefinedLiabilities := args.usePredefinedLiabilities
 	disabledPredefinedLiabilities := args.disabledPredefinedLiabilities
 
-	baseMemGiB := 16
-	if !is_undefined(args.mem) {
-		baseMemGiB = args.mem
-	}
-
 	// Run the peptide-only liability scanner.
 	cmd := exec.builder().
 		software(peptideLiabilitiesSw).
-		mem(string(int(math.max(8, baseMemGiB))) + "GiB").
-		cpu(1).
+		resources({ onCPU: { cpu: 1, ram: resources.peptideRam(args.mem) } }).
 		addFile("input.tsv", inputTable).
 		arg("--input_tsv").arg("input.tsv").
 		arg("--output_tsv").arg("result.tsv").
